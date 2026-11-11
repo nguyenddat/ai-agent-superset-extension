@@ -258,6 +258,8 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
   const [datasets, setDatasets] = useState<ExpertRuleDatasetOption[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => takeConceptFocus('rules'));
   const [editing, setEditing] = useState<'new' | 'existing' | null>(creation ? 'new' : null);
+  // The rule opened with 'Sửa': the form stays on it even when the search or filter hides it.
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
   const [stateFilter, setStateFilter] = useState<ExpertRuleState | 'all'>('all');
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -360,7 +362,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
   const state = selectedRule?.state;
   const approvalBlocked = state === 'draft' && ruleList.require_second_reviewer
     && selectedRule?.author_id === ruleList.current_user_id;
-  const editorRule = editing === 'existing' ? selectedRule : null;
+  const editorRule = editing === 'existing' ? ruleList.rules.find(rule => rule.id === editingRuleId) ?? null : null;
   const isSelected = (rule: ExpertRule) => editing !== 'new' && selectedRule?.id === rule.id;
 
   return (
@@ -502,7 +504,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
               </div>
               {readOnly ? null : (
                 <div className="sl-metrics-actions">
-                  <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
+                  <Button variant="outline" disabled={deciding} onClick={() => { setEditingRuleId(selectedRule.id); setEditing('existing'); }}>
                     <Pencil data-icon="inline-start" /> Sửa
                   </Button>
                   {state === 'draft' ? (

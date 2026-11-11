@@ -239,6 +239,8 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
   const [datasets, setDatasets] = useState<GlossaryDatasetOption[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => takeConceptFocus('glossary'));
   const [editing, setEditing] = useState<'new' | 'existing' | null>(creation ? 'new' : null);
+  // The term opened with 'Sửa': the form stays on it even when the search or filter hides it.
+  const [editingTermId, setEditingTermId] = useState<number | null>(null);
   const [stateFilter, setStateFilter] = useState<GlossaryState | 'all'>('all');
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -347,7 +349,7 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
     && selectedTerm?.author_id === termList.current_user_id;
   // An approved revision can be revoked even while an edit of it waits for review.
   const revocable = selectedTerm != null && selectedTerm.serving_revision_number !== null;
-  const editorTerm = editing === 'existing' ? selectedTerm : null;
+  const editorTerm = editing === 'existing' ? termList.terms.find(term => term.id === editingTermId) ?? null : null;
   const isSelected = (term: GlossaryReviewTerm) => editing !== 'new' && selectedTerm?.id === term.id;
 
   return (
@@ -477,7 +479,7 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
               </div>
               {readOnly ? null : (
                 <div className="sl-metrics-actions">
-                  <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
+                  <Button variant="outline" disabled={deciding} onClick={() => { setEditingTermId(selectedTerm.id); setEditing('existing'); }}>
                     <Pencil data-icon="inline-start" /> Sửa
                   </Button>
                   {state === 'draft' ? (
