@@ -13,6 +13,7 @@ from .column_semantics import checked_column_semantics
 from .indicators import stored_indicator_model
 from .pii import checked_pii_flag
 from .time_semantics import checked_temporal_kind
+from .transformations import checked_transformation, stored_transformations
 
 DICTIONARY_FIELDS = {
     "aggregations",
@@ -32,6 +33,7 @@ DICTIONARY_FIELDS = {
     "semantic_role",
     "synonyms",
     "temporal_kind",
+    "transformation",
     "unit",
 }
 
@@ -77,6 +79,17 @@ def release_suggestion(dataset_id: int) -> None:
 def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dataset_id: int) -> list[dict[str, Any]]:
     if not isinstance(payload, dict) or not isinstance(payload.get("columns"), list):
         raise DataDictionaryValidationError("Request body must contain a columns array.")
+
+    # Transformations name columns of other datasets; each is looked up once.
+    dataset_columns: dict[int, set[str] | None] = {dataset_id: actual_column_names}
+
+    def columns_of(source_dataset_id: int) -> set[str] | None:
+        if source_dataset_id not in dataset_columns:
+            source = get_dataset(source_dataset_id)
+            dataset_columns[source_dataset_id] = (
+                None if source is None else {str(column.column_name) for column in source.columns}
+            )
+        return dataset_columns[source_dataset_id]
 
     normalized: list[dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -174,6 +187,10 @@ def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dat
             values["temporal_kind"] = checked_temporal_kind(item["temporal_kind"], index)
         # The stored role is not known here; the save clears aggregations on a column that ends up not a measure.
         values.update(checked_column_semantics(item, index, item.get("semantic_role")))
+        if "transformation" in item:
+            values["transformation"] = checked_transformation(
+                item["transformation"], f"columns[{index}].transformation", (dataset_id, column_name), columns_of
+            )
         if "contains_pii" in item:
             values["contains_pii"] = checked_pii_flag(item["contains_pii"], f"columns[{index}].contains_pii")
         normalized.append(values)
@@ -211,6 +228,7 @@ def serialize_dictionary(
             "referenced_dataset_label": label or (table_name if referenced else None),
         }
     grains = dataset_grain_repository().by_row_kind(dataset.id)
+    transformations = stored_transformations(row.id for row in columns)
     return {
         "dataset_id": dataset.id,
         "dataset_name": dataset.table_name,
@@ -249,6 +267,7 @@ def serialize_dictionary(
                 "synonyms": json_list(records[actual.column_name].synonyms),
                 "description": records[actual.column_name].description,
                 "contains_pii": bool(records[actual.column_name].contains_pii),
+                "transformation": transformations.get(records[actual.column_name].id),
             }
             for actual in dataset.columns
         ],

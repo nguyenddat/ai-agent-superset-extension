@@ -24,6 +24,7 @@ import { IndicatorsPanel } from './IndicatorsPanel';
 import { ReferenceFields } from './ReferenceFields';
 import { RelationshipsPanel } from './RelationshipsPanel';
 import { TimeSemanticsFields, type TimeSemantics } from './TimeSemanticsFields';
+import { TransformationFields } from './TransformationFields';
 import type {
   ColumnDictionary, ColumnDictionarySuggestion, DashboardDataset, DataLayer, DatasetDictionary, ReferenceDataset,
   Aggregation, SemanticRole, TemporalKind,
@@ -95,6 +96,7 @@ const editableFields: Array<keyof Omit<ColumnDictionary, 'id' | 'column_name'>> 
   'synonyms',
   'description',
   'contains_pii',
+  'transformation',
 ];
 
 type DictionaryTab = 'columns' | 'general' | 'time' | 'relationships' | 'indicators';
@@ -793,6 +795,14 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                               </fieldset>
                             ) : null}
                           </div>
+                          <TransformationFields
+                            datasets={referenceDatasets}
+                            datasetId={dataset.id}
+                            columnName={column.column_name}
+                            value={column.transformation ?? null}
+                            disabled={disabled}
+                            onChange={transformation => updateColumn(column.column_name, 'transformation', transformation)}
+                          />
                           <div className="sl-column-details">
                             <ReferenceFields
                               datasets={referenceDatasets}

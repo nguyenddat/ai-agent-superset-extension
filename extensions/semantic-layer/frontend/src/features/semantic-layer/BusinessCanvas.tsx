@@ -584,8 +584,44 @@ const LABEL_LINE_HEIGHT = 16;
 const LABEL_PADDING = 8;
 const LABEL_MAX_PAIRS = 3;
 
+/** Transformation edges: target columns computed from source columns, as an administrator declared them. */
+const TRANSFORM_EDGE_COLOR = '#0d9488';
+const LABEL_MAX_EXPRESSION = 48;
+
+/** The two kinds of flow the lineage draws and the user can show or hide. */
+type FlowKind = 'reference' | 'transform';
+const FLOW_KINDS: Array<[FlowKind, string]> = [['reference', 'Tham chiếu (PK/FK)'], ['transform', 'Biến đổi dữ liệu']];
+const flowKindOf = (edge: LineageEdge): FlowKind => (edge.kind === 'transform' ? 'transform' : 'reference');
+const edgeKindName = (edge: LineageEdge) => {
+  if (edge.kind === 'transform') return 'Biến đổi dữ liệu';
+  if (edge.origin === 'manual') return 'Cạnh vẽ tay';
+  return edge.kind === 'relation' ? 'Quan hệ (PK/FK)' : 'Tham chiếu (PK/FK)';
+};
+const HIDDEN_FLOWS_KEY = 'text-to-bi.semantic-layer.lineage-hidden-flows';
+function readHiddenFlows(): Set<FlowKind> {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(HIDDEN_FLOWS_KEY) ?? '[]');
+    if (Array.isArray(stored)) return new Set(FLOW_KINDS.map(([kind]) => kind).filter(kind => stored.includes(kind)));
+  } catch { /* storage may be unavailable */ }
+  return new Set();
+}
+
+/** A transformation as one line: the target column and the expression, or its inputs when no expression was written. */
+const transformationLine = (item: NonNullable<LineageEdge['transformations']>[number]) => {
+  const formula = item.expression ?? item.sources.join(', ');
+  return `${item.target_column} ← ${formula.length > LABEL_MAX_EXPRESSION ? `${formula.slice(0, LABEL_MAX_EXPRESSION)}…` : formula}`;
+};
+
 /** The label of a lineage edge; `reversed` is set when the edge's target sits on the left. */
 function edgeLabel(edge: LineageEdge, reversed: boolean): EdgeLabel | undefined {
+  if (edge.kind === 'transform' && edge.transformations?.length) {
+    const lines = [
+      ...edge.transformations.slice(0, LABEL_MAX_PAIRS).map(transformationLine),
+      ...(edge.transformations.length > LABEL_MAX_PAIRS ? [`+${edge.transformations.length - LABEL_MAX_PAIRS} cột`] : []),
+    ];
+    const width = Math.ceil(Math.max(...lines.map(line => line.length)) * LABEL_CHAR_WIDTH) + LABEL_PADDING * 2;
+    return { lines, width, height: lines.length * LABEL_LINE_HEIGHT + 8 };
+  }
   const [left, right] = reversed
     ? [edge.target_cardinality, edge.source_cardinality]
     : [edge.source_cardinality, edge.target_cardinality];
@@ -918,6 +954,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const [savingMembers, setSavingMembers] = useState(false);
   const [detailLevel, setDetailLevel] = useState<DetailLevel>(readDetailLevel);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  // Kinds of flow the user put away; the layout keeps their edges so showing them again moves nothing.
+  const [hiddenFlows, setHiddenFlows] = useState<Set<FlowKind>>(readHiddenFlows);
   // The lineage card whose upstream and downstream tables stay lit while the rest of the lineage fades.
   const [traceNodeId, setTraceNodeId] = useState<string | null>(null);
   // Cards whose metrics the user put away; every other card shows its metrics beside it.
@@ -986,6 +1024,14 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const chooseDetailLevel = (level: DetailLevel) => {
     setDetailLevel(level);
     try { window.localStorage.setItem(DETAIL_LEVEL_KEY, level); } catch { /* the choice just is not remembered */ }
+  };
+  const toggleFlow = (kind: FlowKind) => {
+    const next = new Set(hiddenFlows);
+    if (next.has(kind)) next.delete(kind);
+    else next.add(kind);
+    setHiddenFlows(next);
+    setSelectedEdgeKey(null);
+    try { window.localStorage.setItem(HIDDEN_FLOWS_KEY, JSON.stringify([...next])); } catch { /* not remembered */ }
   };
 
   const datasetById = useMemo(() => new Map(datasets.map(dataset => [dataset.id, dataset])), [datasets]);
@@ -1411,8 +1457,10 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           });
           const anchors: [EdgeAnchor, EdgeAnchor] = [anchorOf(sourceEnd), anchorOf(targetEnd)];
           const active = activeIds.has(`table-${edge.source}`) && activeIds.has(`table-${edge.target}`);
-          // A user-chosen colour wins; edges outside the selected domains fade instead of turning grey.
-          const stroke = edge.color ?? (active ? (edge.origin === 'manual' ? '#d97706' : 'var(--sl-accent)') : 'var(--sl-border)');
+          // A user-chosen colour wins; edges outside the selected domains fade instead of turning grey. Transformation
+          // edges have a colour of their own, so the two kinds of flow read apart.
+          const defaultStroke = edge.kind === 'transform' ? TRANSFORM_EDGE_COLOR : edge.origin === 'manual' ? '#d97706' : 'var(--sl-accent)';
+          const stroke = edge.color ?? (active ? defaultStroke : 'var(--sl-border)');
           // Crow's feet mark the "n" side of a relationship and bars the "1" side. Manual edges carry no cardinality and
           // keep a single arrow on their target.
           const manual = !edge.source_cardinality && !edge.target_cardinality;
@@ -1425,8 +1473,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
             type: 'routed',
             markerStart: cardinalityMarker(edge.source_cardinality, stroke),
             markerEnd: manual ? markerId('arrow', stroke) : cardinalityMarker(edge.target_cardinality, stroke),
-            // Relations inside one level are dashed; flows between levels are solid.
-            style: { stroke, strokeWidth: active ? 1.75 : 1.25, strokeDasharray: edge.kind === 'relation' ? '6 4' : undefined, opacity: active || !edge.color ? 1 : 0.4 },
+            // Relations inside one level are dashed; flows between levels are solid; transformations are thicker.
+            style: {
+              stroke,
+              strokeWidth: (active ? 1.75 : 1.25) + (edge.kind === 'transform' ? 0.75 : 0),
+              strokeDasharray: edge.kind === 'relation' ? '6 4' : undefined,
+              opacity: active || !edge.color ? 1 : 0.4,
+            },
             // A reversed route is turned back so its start stays at the edge's source and markers land correctly.
             data: {
               lineage: edge,
@@ -1658,10 +1711,15 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     setTraceNodeId(null);
   }, [mode]);
 
+  // Edges of a kind of flow the user switched off are left out of the drawing and of the trace.
+  const visibleEdges = useMemo(() => edges.filter(edge => {
+    const lineage = (edge.data as RoutedEdgeData | undefined)?.lineage;
+    return !lineage || !hiddenFlows.has(flowKindOf(lineage));
+  }), [edges, hiddenFlows]);
   // A traced card lights its upstream and downstream tables and the edges between them; the rest of the lineage fades.
   const traced = useMemo(
-    () => (mode === 'lineage' && traceNodeId && nodes.some(node => node.id === traceNodeId) ? tracedLineage(traceNodeId, edges) : null),
-    [mode, traceNodeId, nodes, edges],
+    () => (mode === 'lineage' && traceNodeId && nodes.some(node => node.id === traceNodeId) ? tracedLineage(traceNodeId, visibleEdges) : null),
+    [mode, traceNodeId, nodes, visibleEdges],
   );
   const toggleMetrics = useCallback((nodeId: string) => {
     setHiddenMetrics(current => {
@@ -1740,7 +1798,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     }), ...metricNodes];
   }, [mode, nodes, cards, metricNodes, traced]);
   const shownEdges = useMemo(() => {
-    const lineage = traced ? edges.map(edge => ({ ...edge, className: traced.edges.has(edge.id) ? 'is-traced' : 'is-dimmed' })) : edges;
+    const lineage = traced
+      ? visibleEdges.map(edge => ({ ...edge, className: traced.edges.has(edge.id) ? 'is-traced' : 'is-dimmed' }))
+      : visibleEdges;
     if (mode !== 'lineage') return lineage;
     // One arrow to each metric, drawn from the shape its slot gives it (see MetricArrow).
     const arrows = metricNodes.map((node): Edge => {
@@ -1762,7 +1822,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       };
     });
     return [...lineage, ...arrows];
-  }, [mode, edges, traced, metricNodes]);
+  }, [mode, visibleEdges, traced, metricNodes]);
   const markerStrokes = useMemo(() => [...new Set(shownEdges.map(edge => String(edge.style?.stroke ?? '')).filter(Boolean))], [shownEdges]);
   const metricFocus = useMemo(() => {
     const arrowTarget = hoveredEdgeId?.startsWith('metric-edge-') ? shownEdges.find(edge => edge.id === hoveredEdgeId)?.target : undefined;
@@ -1918,15 +1978,35 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                   ))}
                 </div>
                 <Button size="sm" variant="outline" onClick={resetLineageLayout}><RotateCcw data-icon="inline-start" /> Sắp xếp lại tự động</Button>
+                <div className="sl-lineage-flows" role="group" aria-label="Luồng hiển thị">
+                  {FLOW_KINDS.map(([kind, name]) => (
+                    <label key={kind} className="sl-lineage-flow">
+                      <Checkbox checked={!hiddenFlows.has(kind)} onCheckedChange={() => toggleFlow(kind)} />
+                      <span className={`sl-lineage-flow-line is-${kind}`} aria-hidden="true" />
+                      {name}
+                    </label>
+                  ))}
+                </div>
               </div>
               {selectedFlowEdge && selectedGeometry ? (
                 <div className="sl-edge-panel">
                   <div className="sl-edge-panel-title">
-                    <span>{selectedEdge?.kind === 'relation' ? 'Quan hệ' : 'Luồng dữ liệu'}</span>
+                    <span>{selectedEdge ? edgeKindName(selectedEdge) : 'Luồng dữ liệu'}</span>
                     <strong title={`${nodeLabel(selectedFlowEdge.source)} → ${nodeLabel(selectedFlowEdge.target)}`}>
                       {nodeLabel(selectedFlowEdge.source)} → {nodeLabel(selectedFlowEdge.target)}
                     </strong>
                   </div>
+                  {selectedEdge?.transformations?.length ? (
+                    <ul className="sl-edge-transformations" aria-label="Cột được biến đổi">
+                      {selectedEdge.transformations.map(item => (
+                        <li key={item.target_column}>
+                          <strong>{item.target_column}</strong> ←
+                          {item.expression ? <code>{item.expression}</code> : null}
+                          <span>Từ {item.sources.join(', ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                   <div className="sl-edge-panel-styles" role="group" aria-label="Kiểu cạnh">
                     {EDGE_STYLES.map(([style, name]) => (
                       <Button key={style} size="sm" variant={selectedGeometry.style === style ? 'default' : 'outline'} aria-pressed={selectedGeometry.style === style} onClick={() => setEdgeStyle(style)}>

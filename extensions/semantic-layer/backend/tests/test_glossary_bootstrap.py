@@ -68,6 +68,8 @@ def _migration_namespace():
         "DatasetDictionary",
         "ColumnDictionary",
         "DatasetGrain",
+        "ColumnTransformation",
+        "ColumnTransformationSource",
         "BusinessDomain",
         "LineageEdge",
         "BusinessCanvas",

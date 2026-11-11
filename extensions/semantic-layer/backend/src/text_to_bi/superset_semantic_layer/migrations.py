@@ -14,7 +14,13 @@ from .modules.business_model.models import (
     LineageEdge,
     business_domain_dataset,
 )
-from .modules.data_dictionary.models import ColumnDictionary, DatasetDictionary, DatasetGrain
+from .modules.data_dictionary.models import (
+    ColumnDictionary,
+    ColumnTransformation,
+    ColumnTransformationSource,
+    DatasetDictionary,
+    DatasetGrain,
+)
 from .modules.data_dictionary.services.column_semantics import default_semantic_role
 from .modules.expert_rules.models import (
     ExpertRule,
@@ -121,6 +127,8 @@ def _migrate_dictionary_tables():
     DatasetDictionary.__table__.create(bind=db.engine, checkfirst=True)
     ColumnDictionary.__table__.create(bind=db.engine, checkfirst=True)
     DatasetGrain.__table__.create(bind=db.engine, checkfirst=True)
+    ColumnTransformation.__table__.create(bind=db.engine, checkfirst=True)
+    ColumnTransformationSource.__table__.create(bind=db.engine, checkfirst=True)
     BusinessDomain.__table__.create(bind=db.engine, checkfirst=True)
     business_domain_dataset.create(bind=db.engine, checkfirst=True)
     LineageEdge.__table__.create(bind=db.engine, checkfirst=True)

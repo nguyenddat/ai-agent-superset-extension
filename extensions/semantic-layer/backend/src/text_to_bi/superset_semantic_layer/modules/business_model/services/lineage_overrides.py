@@ -8,9 +8,12 @@ def flipped_key(key: EdgeKey) -> EdgeKey:
     """The key the same foreign key gets once its datasets' layers reorder.
 
     A reference is a ``relation`` from the referencing dataset to the referenced one, or a ``flow`` the other way
-    round, so a flip swaps both the direction and the kind.
+    round, so a flip swaps both the direction and the kind. A ``transform`` edge follows its declaration, not the
+    layers, so it keeps its key.
     """
     source_id, target_id, kind = key
+    if kind not in ("flow", "relation"):
+        return key
     return target_id, source_id, "relation" if kind == "flow" else "flow"
 
 

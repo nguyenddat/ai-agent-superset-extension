@@ -198,7 +198,13 @@ answer a question; an administrator creates or rejects them in "Xử lý câu h�
 "Đề xuất dataset". A dataset dictionary and a column dictionary row each carry
 `contains_pii` (boolean, default false), ticked in the Data Dictionary for a table
 or column holding personal data and shown as `contains_pii` in the semantic
-catalog. `text_to_bi_glossary_term_group` gathers glossary terms with
+catalog. A column can carry a transformation an administrator declares in the
+Data Dictionary (no inference, no AI): its input columns in other tables, picked
+explicitly, and a free-text expression that is never parsed, kept in
+`text_to_bi_column_transformation` and `text_to_bi_column_transformation_source`.
+The Semantic Model's lineage draws them as `transform` edges ("Biến đổi dữ
+liệu") next to the PK/FK reference edges, and each kind can be switched off.
+`text_to_bi_glossary_term_group` gathers glossary terms with
 the same meaning and `text_to_bi_expert_rule_group` similar expert rules; a
 term's or rule's `group_id` sits on the term or rule, not on a revision, so
 moving one needs no review, keeps it approved and is logged as a `moved` audit

@@ -3,14 +3,22 @@ from typing import Any
 from superset.connectors.sqla.models import SqlaTable
 from superset.sql.parse import SQLGLOT_DIALECTS
 
-from ...data_dictionary.dependencies import column_dictionary_repository, dataset_dictionary_repository
+from ...data_dictionary.dependencies import (
+    column_dictionary_repository,
+    column_transformation_repository,
+    dataset_dictionary_repository,
+)
 from ...data_dictionary.models import DatasetDictionary
+from ...superset.services.datasets import get_datasets
 from ..dependencies import data_layer_repository, lineage_edge_repository
 from ..models import BusinessDomain, DataLayer, LineageEdge
 from .lineage_overrides import EdgeKey, flipped_key, match_override
 from .metric_columns import metric_columns
+from .transformation_edges import transformation_edges
 
-EDGE_KINDS = ("flow", "relation")
+# "flow" and "relation" are reference edges from PK/FK declarations; "transform" edges come from the column
+# transformations administrators declare.
+EDGE_KINDS = ("flow", "relation", "transform")
 
 
 def _classify_reference(referencing_id: int, referenced_id: int, ranks: dict[int, int]) -> tuple[str, int, int]:
@@ -82,9 +90,27 @@ def infer_dictionary_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, in
     return edges
 
 
+def infer_transformation_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
+    """Edges from the column transformations declared in the Data Dictionary (see transformation_edges)."""
+    rows = column_transformation_repository().into_datasets(datasets)
+    table_names = {dataset_id: str(dataset.table_name) for dataset_id, dataset in datasets.items()}
+    # A column's inputs may sit on another database; they are named in its list of inputs but draw no edge.
+    elsewhere = {source.dataset_id for _, _, source in rows} - table_names.keys()
+    table_names.update({dataset.id: str(dataset.table_name) for dataset in get_datasets(elsewhere)})
+    live_columns = {
+        dataset_id: {str(column.column_name) for column in dataset.columns} for dataset_id, dataset in datasets.items()
+    }
+    return transformation_edges(rows, table_names, live_columns)
+
+
+def infer_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
+    """Every edge the Data Dictionary implies: reference edges from FK declarations and declared transformations."""
+    return {**infer_dictionary_edges(datasets), **infer_transformation_edges(datasets)}
+
+
 def lineage_edges(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
     """Merge dictionary-inferred edges with overrides: added, hidden or recoloured edges."""
-    edges = infer_dictionary_edges(datasets)
+    edges = infer_edges(datasets)
     overrides = lineage_edge_repository().between(datasets)
     rows = {(row.source_dataset_id, row.target_dataset_id, row.kind): row for row in overrides}
     inferred = set(edges)

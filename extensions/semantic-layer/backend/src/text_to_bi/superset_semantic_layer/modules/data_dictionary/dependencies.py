@@ -1,12 +1,17 @@
 from superset import db
 
 from .repositories.column_dictionary import ColumnDictionaryRepository
+from .repositories.column_transformation import ColumnTransformationRepository
 from .repositories.dataset_dictionary import DatasetDictionaryRepository
 from .repositories.dataset_grain import DatasetGrainRepository
 
 
 def column_dictionary_repository() -> ColumnDictionaryRepository:
     return ColumnDictionaryRepository(db.session)
+
+
+def column_transformation_repository() -> ColumnTransformationRepository:
+    return ColumnTransformationRepository(db.session)
 
 
 def dataset_dictionary_repository() -> DatasetDictionaryRepository:

@@ -47,6 +47,7 @@ from ..services.time_semantics import (
     default_temporal_kind,
     grain_profile_from_rows,
 )
+from ..services.transformations import save_transformation
 
 logger = logging.getLogger(__name__)
 
@@ -325,12 +326,19 @@ class DataDictionaryRoutes:
                 item["referenced_dataset_id"] for item in updates if item.get("referenced_dataset_id") is not None
             } - {dataset_id}:
                 seed_dictionary(get_dataset(referenced_id))
+            # A transformation's input columns need dictionary rows to point at.
+            for source_dataset_id in {
+                source_id for item in updates for source_id, _ in (item.get("transformation") or {}).get("sources", [])
+            } - {dataset_id}:
+                seed_dictionary(get_dataset(source_dataset_id))
             dataset_repository = dataset_dictionary_repository()
             dataset_repository.update(dataset_repository.get(dataset_id), dataset_updates)
             column_repository = column_dictionary_repository()
             rows_by_name = {row.column_name: row for row in column_repository.list_for_dataset(dataset_id)}
             for update in updates:
                 column_name = update.pop("column_name")
+                if "transformation" in update:
+                    save_transformation(rows_by_name[column_name].id, update.pop("transformation"))
                 if "referenced_dataset_id" in update or "referenced_column_name" in update:
                     referenced_dataset_id = update.pop("referenced_dataset_id", None)
                     referenced_column_name = update.pop("referenced_column_name", None)

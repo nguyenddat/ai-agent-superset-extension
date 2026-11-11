@@ -176,6 +176,32 @@ rest of the dictionary: `GET`/`PUT /dataset/<id>/dictionary` read and write `con
 column, and a value that is not `true` or `false` is refused with 400. Rows from before the column existed are not
 marked.
 
+### Column transformations and the lineage
+
+An administrator declares how a column is computed from columns of other tables, as a metric is computed from its
+input columns: in the Data Dictionary, a column's details hold a "Biến đổi" section where the input columns are picked
+from a searchable list grouped by table and the expression is written as free text (SQL or pseudo code, such as
+`AVG(tb_gia_tri_quan_sat.gia_tri) theo ngày`). Nothing is inferred: no SQL, view, function or AI is read, and the
+expression is shown as written, never parsed. The declaration is saved with "Lưu thay đổi": `PUT
+/dataset/<id>/dictionary` takes `transformation` on a column as `{"expression": "...", "sources": [{"dataset_id": 13,
+"column_name": "gia_tri"}]}` or `null` to remove it, and `GET` returns it the same way. At least one input column is
+needed, each must exist in Superset, and a column cannot be its own input; a broken declaration is refused with 400.
+
+It is stored in `text_to_bi_column_transformation` (one row per described column dictionary row, holding the
+expression) and `text_to_bi_column_transformation_source` (its input column dictionary rows, in order); deleting a
+column dictionary row deletes its transformation and its use as an input.
+
+The Semantic Model's lineage draws two kinds of flow, each with its own style and a switch in the lineage tools:
+
+- **Tham chiếu (PK/FK)**: the reference edges inferred from the FK declarations, as before (`flow` between levels,
+  dashed `relation` within one), plus edges drawn by hand.
+- **Biến đổi dữ liệu**: a thicker teal arrow (`transform`) from each source table to each table whose columns it feeds.
+  Hovering or selecting the edge shows `target column ← expression`, and the edge panel lists every target column with
+  its expression as code and all its input columns.
+
+A transformation edge is hidden or recoloured like any inferred edge, and its override keeps its key when layers move.
+The switches are remembered in the browser and do not move the cards.
+
 ## Build
 
 Install frontend dependencies in `frontend/`, then bundle the extension from

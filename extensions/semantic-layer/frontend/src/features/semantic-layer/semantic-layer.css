@@ -1230,6 +1230,37 @@
 .sl-edge-panel-hint { margin: 0; color: var(--sl-muted); font-size: 11px; line-height: 15px; }
 .sl-edge-panel-colors { display: flex; flex-wrap: wrap; gap: 6px; }
 .sl-edge-panel-actions { display: flex; justify-content: space-between; gap: 8px; }
+/* Lineage flows: reference (PK/FK) and transformation, each with its legend line and a switch. */
+.sl-lineage-flows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--sl-border);
+  border-radius: 8px;
+  background: var(--sl-surface-raised);
+}
+.sl-lineage-flow { display: flex; align-items: center; gap: 6px; color: var(--sl-text); font-size: 12px; cursor: pointer; }
+.sl-lineage-flow-line { width: 18px; height: 0; flex: none; border-top: 2px solid var(--sl-accent); }
+.sl-lineage-flow-line.is-transform { border-top: 3px solid #0d9488; }
+.sl-edge-transformations { display: flex; max-height: 220px; flex-direction: column; gap: 8px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.sl-edge-transformations li { display: flex; flex-direction: column; gap: 3px; color: var(--sl-text); font-size: 12px; }
+.sl-edge-transformations strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sl-edge-transformations code,
+.sl-transformation-expression textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.sl-edge-transformations code { padding: 4px 6px; border-radius: 4px; background: var(--sl-surface); white-space: pre-wrap; word-break: break-word; }
+.sl-edge-transformations span { color: var(--sl-muted); font-size: 11px; }
+/* A column's transformation in the Data Dictionary: input columns picked from a searchable list and an expression. */
+.sl-transformation { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(240px, 1.4fr); gap: 12px; padding: 0 0 10px; }
+.sl-transformation-sources { display: flex; flex-wrap: wrap; gap: 4px; }
+.sl-transformation-source { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--sl-border); border-radius: 999px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.sl-transformation-source button { display: inline-flex; padding: 0; border: 0; background: none; color: var(--sl-muted); cursor: pointer; }
+.sl-transformation-empty { color: var(--sl-muted); font-size: 11px; font-weight: 400; }
+.sl-transformation-options { max-height: 180px; overflow: auto; border: 1px solid var(--sl-border); border-radius: 6px; background: var(--sl-surface-raised); }
+.sl-transformation-options p { margin: 0; padding: 4px 8px 2px; color: var(--sl-muted); font-size: 11px; font-weight: 600; }
+.sl-transformation-options button { display: block; width: 100%; padding: 3px 8px 3px 16px; border: 0; background: none; color: var(--sl-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: left; cursor: pointer; }
+.sl-transformation-options button:hover { background: var(--sl-surface); }
+@media (max-width: 900px) { .sl-transformation { grid-template-columns: 1fr; } }
 
 .sl-model-overlay,
 .sl-model-error {
