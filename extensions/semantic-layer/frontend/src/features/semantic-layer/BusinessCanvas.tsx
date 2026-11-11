@@ -1,4 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -295,6 +297,9 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
   );
 }
 
+/** The widest the metric formula box grows, as .sl-lineage-formula caps it. */
+const FORMULA_MAX_WIDTH = 380;
+
 /**
  * A metric beside its dataset's card. While it, or an arrow to it, is hovered, its formula shows above it and the
  * columns it uses light up on the card: strongly the values it aggregates, faintly those that pick its rows.
@@ -302,8 +307,22 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
 function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
   const { focus, hover } = useContext(MetricFocusContext);
   const { metric } = data;
+  const formulaShown = Boolean(metric.expression) && focus?.metricNodeId === id;
+  const metricRef = useRef<HTMLDivElement>(null);
+  const [formulaAlign, setFormulaAlign] = useState<'start' | 'end'>('end');
+  // Measured as the formula opens: it opens leftwards from the metric's right edge while the canvas has room there,
+  // otherwise towards the side with more room, so a metric panned near either edge keeps its formula on the canvas.
+  useLayoutEffect(() => {
+    const metricBounds = metricRef.current?.getBoundingClientRect();
+    const canvasBounds = metricRef.current?.closest('.react-flow')?.getBoundingClientRect();
+    if (!formulaShown || !metricBounds || !canvasBounds) return;
+    const roomLeft = metricBounds.right - canvasBounds.left;
+    const roomRight = canvasBounds.right - metricBounds.left;
+    setFormulaAlign(roomLeft >= FORMULA_MAX_WIDTH || roomLeft >= roomRight ? 'end' : 'start');
+  }, [formulaShown]);
   return (
     <div
+      ref={metricRef}
       className={`sl-lineage-metric-node${data.dimmed ? ' is-dimmed' : ''}${focus?.metricNodeId === id ? ' is-focused' : ''}`}
       onMouseEnter={() => hover(id)}
       onMouseLeave={() => hover(null)}
@@ -312,12 +331,12 @@ function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
       <Sigma />
       <strong>{metric.verbose_name || metric.metric_name}</strong>
       <NodeToolbar
-        isVisible={Boolean(metric.expression) && focus?.metricNodeId === id}
+        isVisible={formulaShown}
         // Above the metric: metrics usually stand at the right edge of the lineage, where a box beside them is cut off.
-        // It opens leftwards from the metric's right edge, over the arrows rather than past the canvas, and stays above
-        // the card's lit columns. While it shows, the canvas draws over the lineage tools (is-metric-focused).
+        // It opens towards the side with room (formulaAlign), over the arrows rather than past the canvas, and stays
+        // above the card's lit columns. While it shows, the canvas draws over the lineage tools (is-metric-focused).
         position={Position.Top}
-        align="end"
+        align={formulaAlign}
         offset={8}
         className="sl-lineage-formula"
       >
@@ -490,6 +509,32 @@ function laneBands(nodes: Node[]): Map<string, Box> {
   }]));
 }
 
+/**
+ * Moves whole lanes down, the topmost band first, so no band covers another: a card settled lower stretches its band,
+ * and each band it would then cover moves under it, CARD_GAP apart, with all its cards. Bands that clear each other
+ * stay where they are.
+ */
+function separateLaneBands(cards: Node[]): Node[] {
+  const shifts = new Map<string, number>();
+  const placed: Box[] = [];
+  for (const [lane, band] of [...laneBands(cards)].sort(([, a], [, b]) => a.y - b.y || a.x - b.x)) {
+    const box = { ...band };
+    let covered = placed.filter(other => overlap(box, other));
+    while (covered.length > 0) {
+      // The shift stays a whole number of snap steps, so the cards stay on the lineage grid.
+      const shift = Math.max(...covered.map(other => other.y + other.height)) + CARD_GAP - band.y;
+      box.y = band.y + Math.ceil(shift / LINEAGE_SNAP) * LINEAGE_SNAP;
+      covered = placed.filter(other => overlap(box, other));
+    }
+    shifts.set(lane, box.y - band.y);
+    placed.push(box);
+  }
+  return cards.map(node => {
+    const shift = shifts.get((node.data as LineageCardData).lane) ?? 0;
+    return shift ? { ...node, position: { x: node.position.x, y: node.position.y + shift } } : node;
+  });
+}
+
 /** Pairs of lanes whose bands overlap, as "a|b" keys. */
 function clashingBands(bands: Map<string, Box>): Set<string> {
   const entries = [...bands];
@@ -520,6 +565,8 @@ const anchorPoint = (position: Point, anchor: EdgeAnchor): Point => ({
  * and hovered on its own.
  */
 const TRANSFORM_CHANNEL_OFFSET = 10;
+/** Width of a transformation edge's invisible hover and click path; React Flow gives other edges 20. */
+const TRANSFORM_INTERACTION_WIDTH = 28;
 
 /** An orthogonal shape for an edge between cards at these positions that keeps clear of `obstacles`. */
 function routedGeometry(
@@ -698,7 +745,10 @@ const stopClick = (event: React.MouseEvent) => event.stopPropagation();
  * it) and a faint one between points that adds a waypoint. Its ends stay on the column rows it joins. The label shows
  * while the edge is hovered or selected, can be dragged anywhere and returns to the middle on double-click.
  */
-function RoutedEdge({ id, data, style, markerStart, markerEnd, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition }: EdgeProps<Edge<RoutedEdgeData>>) {
+function RoutedEdge({
+  id, data, style, markerStart, markerEnd, interactionWidth,
+  sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+}: EdgeProps<Edge<RoutedEdgeData>>) {
   const editing = useContext(EdgeEditingContext);
   const { screenToFlowPosition } = useReactFlow();
   const geometry = data?.geometry ?? DEFAULT_GEOMETRY;
@@ -810,6 +860,7 @@ function RoutedEdge({ id, data, style, markerStart, markerEnd, sourceX, sourceY,
         style={selected ? { ...style, strokeWidth: Number(style?.strokeWidth ?? 1.5) + 1.5 } : style}
         markerStart={markerStart}
         markerEnd={markerEnd}
+        interactionWidth={interactionWidth}
       />
       {label && (selected || hovered) ? (
         <EdgeLabelBox
@@ -1413,7 +1464,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           boxes.push(box);
         }
         const levelNames = new Map(lanes.map(lane => [lane.level, lane.key === UNCLASSIFIED_LANE ? null : `Cấp ${lane.level + 1}`]));
-        const cardNodes: Node[] = items.map(item => ({
+        // A card settled lower stretches its lane band; the lanes it would cover move down under it (edges route from
+        // the moved positions).
+        const cardNodes: Node[] = separateLaneBands(items.map(item => ({
           id: item.id,
           type: 'modelTable',
           position: positions.get(item.id) ?? { x: 0, y: 0 },
@@ -1429,7 +1482,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           },
           className: item.datasetId === focusDatasetId ? 'is-focused' : undefined,
           deletable: false,
-        }));
+        })));
+        cardNodes.forEach(node => positions.set(node.id, node.position));
         // Lane bands and level headers are drawn around the cards as they lie (see shownNodes); these give their labels.
         const nextNodes: Node[] = [
           ...layout.levels.flatMap(level => {
@@ -1530,7 +1584,10 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
               flow: [left.node, right.node],
               anchors,
             },
-            zIndex: active ? 2 : 1,
+            // A transformation edge may run within a few pixels of a reference edge in the same gap, so it is drawn
+            // above every reference edge with a wider hover and click path that wins where the two lie together.
+            zIndex: (active ? 2 : 1) + (edge.kind === 'transform' ? 2 : 0),
+            interactionWidth: edge.kind === 'transform' ? TRANSFORM_INTERACTION_WIDTH : undefined,
           };
         });
         autoGeometryRef.current = autoGeometry;
