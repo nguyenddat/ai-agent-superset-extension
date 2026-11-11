@@ -3,8 +3,9 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-from catalog_source import MODULES_PATH, compile_into, module_function
+from catalog_source import MODULES_PATH, api_class, compile_into, module_function
 
+from text_to_bi.superset_semantic_layer.modules.business_model.exceptions import TransformEdgeNotHideableError
 from text_to_bi.superset_semantic_layer.modules.business_model.services.layout import LINEAGE_EDGE_KEY
 from text_to_bi.superset_semantic_layer.modules.business_model.services.lineage_overrides import (
     flipped_key,
@@ -223,3 +224,72 @@ def test_a_transform_edge_keeps_its_key_and_its_overrides_when_layers_change():
     assert match_override(key, {key}, {key: hidden}) is hidden
     assert match_override(key, {key}, {(12, 9, "relation"): hidden}) is None
     assert LINEAGE_EDGE_KEY.match("transform-9-12")
+
+
+class _ResponseAPI:
+    def response(self, status, **payload):
+        return status, payload
+
+
+def _edge_removal_api(body, inferred):
+    """remove_lineage_edge on fakes; `inferred` is what the Data Dictionary implies for datasets 9 and 12."""
+    added, commits = [], []
+    namespace = {
+        "RestApi": _ResponseAPI,
+        "require_admin": lambda: None,
+        "ensure_dictionary_tables": lambda: None,
+        "ensure_dataset_dictionaries": lambda datasets: None,
+        "request": SimpleNamespace(get_json=lambda silent=True: body),
+        "db": SimpleNamespace(session=SimpleNamespace(commit=lambda: commits.append(True), rollback=lambda: None)),
+        "get_datasets": lambda ids: [SimpleNamespace(id=dataset_id) for dataset_id in ids],
+        "infer_edges": lambda datasets: inferred,
+        "find_edge_override": lambda key, inferred_edges: None,
+        "lineage_edge_repository": lambda: SimpleNamespace(add=lambda row, flush=True: added.append(row)),
+        # A class, since the route's annotations read `LineageEdge | None`.
+        "LineageEdge": type("LineageEdge", (SimpleNamespace,), {}),
+        "EDGE_KINDS": ("flow", "relation", "transform"),
+    }
+    compile_into(namespace, api_class({"remove_lineage_edge", "_edge_override", "_edge_key"}))
+    return namespace["SemanticLayerAPI"](), added, commits
+
+
+def test_a_declared_transform_edge_is_not_hidden_from_the_canvas():
+    edge_key = {"source": 9, "target": 12, "kind": "transform"}
+    api, added, commits = _edge_removal_api(edge_key, {(9, 12, "transform"): {}})
+    assert api.remove_lineage_edge() == (400, {"message": TransformEdgeNotHideableError.message})
+    assert added == [] and commits == []
+
+
+def test_a_reference_edge_inferred_from_a_foreign_key_is_still_hidden():
+    api, added, commits = _edge_removal_api({"source": 9, "target": 12, "kind": "flow"}, {(9, 12, "flow"): {}})
+    assert api.remove_lineage_edge() == (200, {"source": 9, "target": 12, "kind": "flow"})
+    assert [row.is_hidden for row in added] == [True] and commits == [True]
+
+
+def _lineage_edges(edges, overrides):
+    """services/business_model.py's lineage_edges, which imports Superset, run on fakes of what it reads."""
+    path = MODULES_PATH / "business_model" / "services" / "business_model.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "lineage_edges")
+    namespace = {
+        "Any": object,
+        "SqlaTable": object,
+        "infer_edges": lambda datasets: edges,
+        "lineage_edge_repository": lambda: SimpleNamespace(between=lambda datasets: overrides),
+        "match_override": match_override,
+    }
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), "exec"), namespace)  # noqa: S102
+    return namespace["lineage_edges"]({})
+
+
+def test_a_hidden_row_stored_earlier_for_a_transform_edge_no_longer_hides_it():
+    edges = {
+        (9, 12, "transform"): {"source": 9, "target": 12, "kind": "transform"},
+        (7, 12, "flow"): {"source": 7, "target": 12, "kind": "flow"},
+    }
+    hidden = {"is_hidden": True, "is_manual": True, "color": None}
+    overrides = [
+        SimpleNamespace(id=1, source_dataset_id=9, target_dataset_id=12, kind="transform", **hidden),
+        SimpleNamespace(id=2, source_dataset_id=7, target_dataset_id=12, kind="flow", **hidden),
+    ]
+    assert [(edge["source"], edge["kind"]) for edge in _lineage_edges(edges, overrides)] == [(9, "transform")]

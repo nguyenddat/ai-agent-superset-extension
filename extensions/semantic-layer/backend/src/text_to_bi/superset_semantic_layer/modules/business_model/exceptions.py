@@ -5,6 +5,10 @@ class BusinessModelValidationError(ValidationError):
     """A canvas, data layer, business domain or lineage edge that breaks a rule."""
 
 
+class TransformEdgeNotHideableError(ValidationError):
+    message = "Cạnh biến đổi được khai báo trong Data Dictionary: bỏ phần Biến đổi của cột ở đó để xóa cạnh."
+
+
 class DataLayerNotFoundError(NotFoundError):
     message = "Data layer not found."
 

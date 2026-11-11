@@ -26,6 +26,7 @@ from ..exceptions import (
     DataLayerNotFoundError,
     DuplicateBusinessDomainNameError,
     DuplicateDataLayerNameError,
+    TransformEdgeNotHideableError,
 )
 from ..models import BusinessCanvas, BusinessDomain, DataLayer, LineageCanvas, LineageEdge
 from ..services.business_model import (
@@ -555,12 +556,17 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def remove_lineage_edge(self):
-        """Remove a manual lineage edge, or hide an edge inferred from the data dictionary."""
+        """Remove a manual lineage edge, or hide a reference edge inferred from the data dictionary.
+
+        A declared transformation's edge is not hidden: it goes when the transformation is removed in the dictionary.
+        """
         require_admin()
         ensure_dictionary_tables()
         source_id, target_id, kind = self._edge_key(request.get_json(silent=True))
         edge, inferred = self._edge_override((source_id, target_id, kind))
 
+        if inferred and kind == "transform":
+            raise TransformEdgeNotHideableError()
         if inferred:
             # The dictionary keeps producing this edge, so it is suppressed with a hidden override.
             if edge is None:

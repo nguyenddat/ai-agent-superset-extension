@@ -244,11 +244,13 @@ marked.
 An administrator declares how a column is computed from columns of other tables, as a metric is computed from its
 input columns: in the Data Dictionary, a column's details hold a "Biến đổi" section where the input columns are picked
 from a searchable list grouped by table and the expression is written as free text (SQL or pseudo code, such as
-`AVG(tb_gia_tri_quan_sat.gia_tri) theo ngày`). Nothing is inferred: no SQL, view, function or AI is read, and the
+`AVG(tb_gia_tri_quan_sat.gia_tri_so) theo ngày`). Nothing is inferred: no SQL, view, function or AI is read, and the
 expression is shown as written, never parsed. The declaration is saved with "Lưu thay đổi": `PUT
 /dataset/<id>/dictionary` takes `transformation` on a column as `{"expression": "...", "sources": [{"dataset_id": 13,
-"column_name": "gia_tri"}]}` or `null` to remove it, and `GET` returns it the same way. At least one input column is
+"column_name": "gia_tri_so"}]}` or `null` to remove it, and `GET` returns it the same way. At least one input column is
 needed, each must exist in Superset, and a column cannot be its own input; a broken declaration is refused with 400.
+Removing the last input column clears the transformation, but the typed expression stays on screen and is kept when
+another input is picked before saving.
 
 It is stored in `text_to_bi_column_transformation` (one row per described column dictionary row, holding the
 expression) and `text_to_bi_column_transformation_source` (its input column dictionary rows, in order); deleting a
@@ -262,8 +264,12 @@ The Semantic Model's lineage draws two kinds of flow, each with its own style an
   Hovering or selecting the edge shows `target column ← expression`, and the edge panel lists every target column with
   its expression as code and all its input columns.
 
-A transformation edge is hidden or recoloured like any inferred edge, and its override keeps its key when layers move.
-The switches are remembered in the browser and do not move the cards.
+A transformation edge is recoloured like any inferred edge, and its override keeps its key when layers move. It is
+not hidden on the canvas, because it follows its declaration: the edge panel offers no "Xóa cạnh" for it and says to
+edit the column's "Biến đổi" in the Data Dictionary, `DELETE /lineage-edges` with `kind: "transform"` for a declared
+transformation answers 400, and a hidden row stored for one earlier is ignored. Where a transformation edge and a
+reference edge run down the same gap between cards, the transformation edge runs a little beside it so each can be
+hovered. The switches are remembered in the browser and do not move the cards.
 
 ### Metric formulas and their input columns
 

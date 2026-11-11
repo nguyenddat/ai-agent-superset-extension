@@ -122,7 +122,9 @@ def lineage_edges(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
             edges[key]["color"] = None
             continue
         used.add(override.id)
-        if override.is_hidden:
+        # A declared transformation is always drawn; a hidden row stored for one before it could not be hidden is
+        # ignored, since the canvas offers no way to show it again.
+        if override.is_hidden and key[2] != "transform":
             del edges[key]
         else:
             edges[key]["color"] = override.color

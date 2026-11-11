@@ -24,6 +24,7 @@ import {
   useNodesState,
   useReactFlow,
   useStore,
+  useStoreApi,
 } from '@xyflow/react';
 import { ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripHorizontal, Layers3, LoaderCircle, Network, Pencil, Plus, RotateCcw, Sigma, Table2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +71,7 @@ import type { LineageLink } from './lineageElk';
 import {
   GRID_CELL,
   UNASSIGNED_DOMAIN,
+  canvasSignature,
   cellKey,
   cellsConnected,
   datasetLaneKey,
@@ -312,9 +314,10 @@ function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
       <NodeToolbar
         isVisible={Boolean(metric.expression) && focus?.metricNodeId === id}
         // Above the metric: metrics usually stand at the right edge of the lineage, where a box beside them is cut off.
-        // It opens rightwards from the metric's left edge, so it leaves the card's lit columns in view.
+        // It opens leftwards from the metric's right edge, over the arrows rather than past the canvas, and stays above
+        // the card's lit columns. While it shows, the canvas draws over the lineage tools (is-metric-focused).
         position={Position.Top}
-        align="start"
+        align="end"
         offset={8}
         className="sl-lineage-formula"
       >
@@ -511,11 +514,22 @@ const anchorPoint = (position: Point, anchor: EdgeAnchor): Point => ({
   y: position.y + anchor.y,
 });
 
+/**
+ * Routes run down the middle of the gaps between cards, so edges between the same gaps share their runs. A
+ * transformation edge runs this far beside them (less than the router's clearance from the cards), so it can be seen
+ * and hovered on its own.
+ */
+const TRANSFORM_CHANNEL_OFFSET = 10;
+
 /** An orthogonal shape for an edge between cards at these positions that keeps clear of `obstacles`. */
-function routedGeometry(source: Point, target: Point, anchors: [EdgeAnchor, EdgeAnchor], obstacles: Box[]): EdgeGeometry {
+function routedGeometry(
+  source: Point, target: Point, anchors: [EdgeAnchor, EdgeAnchor], obstacles: Box[], kind?: LineageEdge['kind'],
+): EdgeGeometry {
   const route = routeOrthogonal(anchorPoint(source, anchors[0]), anchors[0].side, anchorPoint(target, anchors[1]), anchors[1].side, obstacles);
   const coords = route ? coordsFromRoute(route) : null;
-  return coords ? { ...DEFAULT_GEOMETRY, coords } : DEFAULT_GEOMETRY;
+  if (!coords) return DEFAULT_GEOMETRY;
+  const offset = kind === 'transform' ? TRANSFORM_CHANNEL_OFFSET : 0;
+  return { ...DEFAULT_GEOMETRY, coords: coords.map(value => value + offset) };
 }
 
 const sidePosition = (side: CardSide) => (side === 'right' ? Position.Right : Position.Left);
@@ -587,6 +601,8 @@ const LABEL_MAX_PAIRS = 3;
 /** Transformation edges: target columns computed from source columns, as an administrator declared them. */
 const TRANSFORM_EDGE_COLOR = '#0d9488';
 const LABEL_MAX_EXPRESSION = 48;
+/** A transformation edge drawn from a Data Dictionary declaration: it is edited there, never hidden on the canvas. */
+const isDeclaredTransform = (edge: LineageEdge) => edge.kind === 'transform' && edge.origin === 'dictionary';
 
 /** The two kinds of flow the lineage draws and the user can show or hide. */
 type FlowKind = 'reference' | 'transform';
@@ -910,9 +926,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, getEdges, getNode, getNodes, getZoom, screenToFlowPosition, setViewport } = useReactFlow();
+  const { fitView, getEdges, getNode, getNodes, getNodesBounds, getZoom, screenToFlowPosition, setViewport } =
+    useReactFlow();
+  const flowStore = useStoreApi();
   // Brings the whole diagram into view, clear of the lineage tools at the top right. A lineage too big to fit at a
-  // readable zoom opens on its top-left corner at that zoom instead.
+  // readable zoom opens on its top-right corner at that zoom instead, still clear of the tools: the facts and their
+  // metrics stand at the right of the flow. The canvas width is read when the fit runs, after a panel toggle has
+  // resized it.
   const fitCanvas = useCallback(async () => {
     if (mode === 'business') {
       await fitView({ padding: 0.12, duration: 250, maxZoom: 1 });
@@ -920,9 +940,11 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     }
     await fitView({ padding: { top: '32px', bottom: '32px', left: '32px', right: '200px' }, duration: 250, maxZoom: 1 });
     if (getZoom() >= LINEAGE_MIN_FIT_ZOOM) return;
-    const left = Math.min(...getNodes().map(node => node.position.x));
-    await setViewport({ x: 32 - left * LINEAGE_MIN_FIT_ZOOM, y: 32, zoom: LINEAGE_MIN_FIT_ZOOM }, { duration: 250 });
-  }, [mode, fitView, getZoom, getNodes, setViewport]);
+    const bounds = getNodesBounds(getNodes());
+    const { width } = flowStore.getState();
+    const x = width - 200 - (bounds.x + bounds.width) * LINEAGE_MIN_FIT_ZOOM;
+    await setViewport({ x, y: 32, zoom: LINEAGE_MIN_FIT_ZOOM }, { duration: 250 });
+  }, [mode, fitView, getZoom, getNodes, getNodesBounds, flowStore, setViewport]);
 
   // Collapsing or opening the panel resizes the canvas; once React Flow has measured it, the diagram is centred again.
   const collapsedRef = useRef(panelCollapsed);
@@ -940,7 +962,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const gridRef = useRef<CanvasGrid>(EMPTY_GRID);
   // Tables carried along by the domain being dragged.
   const followersRef = useRef<{ key: string; ids: number[] } | null>(null);
-  // The canvas as last stored in the backend, serialized, so unchanged layouts are not sent again.
+  // The canvas as last stored in the backend, as its canvasSignature, so unchanged layouts are not sent again.
   const savedLayoutRef = useRef<string | null>(null);
   const [pending, setPending] = useState<PendingChanges | null>(null);
   // Lineage cards the user moved and edges the user shaped, kept across re-layouts and stored in the backend.
@@ -991,10 +1013,11 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
 
   // Stores the business-view canvas so a reload draws domains and tables where the user left them.
   const saveGrid = useCallback((grid: CanvasGrid) => {
-    const layout = JSON.stringify(toStoredCanvas(grid));
-    if (layout === savedLayoutRef.current) return;
-    savedLayoutRef.current = layout;
-    requestJson(semanticLayerApi.businessCanvas(databaseId), 'PUT', JSON.parse(layout)).catch(reason => {
+    const layout = toStoredCanvas(grid);
+    const signature = canvasSignature(layout);
+    if (signature === savedLayoutRef.current) return;
+    savedLayoutRef.current = signature;
+    requestJson(semanticLayerApi.businessCanvas(databaseId), 'PUT', layout).catch(reason => {
       savedLayoutRef.current = null;
       setError(reason instanceof Error ? reason.message : 'Không lưu được bố cục canvas.');
     });
@@ -1276,7 +1299,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       // first or inconsistent layout starts afresh.
       if (gridRef.current.domains.length === 0 && model.canvas) {
         gridRef.current = fromStoredCanvas(model.canvas);
-        savedLayoutRef.current = JSON.stringify(model.canvas);
+        savedLayoutRef.current = canvasSignature(model.canvas);
       }
       const kept = gridRef.current.domains.length > 0 ? reconcileGrid(gridRef.current, model.domains, ids) : null;
       const grid = kept && validGrid(kept) ? kept : reconcileGrid(layoutDomainGroups(model.domains, ids), model.domains, ids);
@@ -1366,8 +1389,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       .then(layout => {
         if (cancelled) return;
         // Cards the user moved start where they were left, the others where ELK put them. Cards are then settled from
-        // the top down: one that would cover a card above it, or come closer than CARD_GAP under it, moves down. Cards
-        // grow with the detail level while the stored positions stay, so the user's order holds at every level.
+        // the top down: one whose card or metrics would cover a card or metrics above it, or come closer than CARD_GAP
+        // under them, moves down. Cards grow with the detail level while the stored positions stay, so the user's
+        // order holds at every level.
         const positions = new Map<string, Point>();
         const boxes: Box[] = [];
         const spaced = (box: Box) => ({ ...box, height: box.height + CARD_GAP });
@@ -1375,7 +1399,15 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           .map(item => ({ item, start: saved.nodes.get(item.id) ?? layout.positions.get(item.id) ?? { x: 0, y: 0 } }))
           .sort((a, b) => a.start.y - b.start.y || a.start.x - b.start.x);
         for (const { item, start } of starts) {
-          const box = { ...start, width: CARD_WIDTH, height: heightOf(item.id) };
+          const box = cardFootprint({
+            id: item.id,
+            position: start,
+            data: {
+              content: contentByNode.get(item.id),
+              metrics: metricsByDataset.get(item.datasetId) ?? [],
+              metricsOpen: !hiddenMetrics.has(item.id),
+            },
+          });
           while (boxes.some(other => overlap(spaced(box), spaced(other)))) box.y += LINEAGE_SNAP;
           positions.set(item.id, { x: box.x, y: box.y });
           boxes.push(box);
@@ -1431,7 +1463,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         // them, and is routed around the cards once one of them moved.
         const obstacles = edgeObstacles(cardNodes);
         const autoGeometry = new Map<string, EdgeGeometry>();
-        const geometryOf = (id: string, ends: [string, string], anchors: [EdgeAnchor, EdgeAnchor], reversed: boolean): EdgeGeometry => {
+        const geometryOf = (
+          id: string,
+          ends: [string, string],
+          anchors: [EdgeAnchor, EdgeAnchor],
+          reversed: boolean,
+          kind: LineageEdge['kind'],
+        ): EdgeGeometry => {
           const elkRoute = layout.routes.get(id);
           const route = elkRoute && reversed ? elkRoute.slice().reverse() : elkRoute;
           const unmoved = ends.every(nodeId => {
@@ -1441,7 +1479,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           const elkCoords = route && unmoved ? coordsFromRoute(route) : null;
           const auto = elkCoords
             ? { ...DEFAULT_GEOMETRY, coords: elkCoords }
-            : routedGeometry(positions.get(ends[0]) as Point, positions.get(ends[1]) as Point, anchors, obstacles);
+            : routedGeometry(
+              positions.get(ends[0]) as Point, positions.get(ends[1]) as Point, anchors, obstacles, kind,
+            );
           autoGeometry.set(id, auto);
           return saved.edges.get(id) ?? auto;
         };
@@ -1468,6 +1508,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
             id,
             source: sourceEnd.node,
             target: targetEnd.node,
+            deletable: !isDeclaredTransform(edge),
             sourceHandle: handleId(contentByNode.get(sourceEnd.node) as CardContent, sourceEnd.column, sideOf(sourceEnd)),
             targetHandle: handleId(contentByNode.get(targetEnd.node) as CardContent, targetEnd.column, sideOf(targetEnd)),
             type: 'routed',
@@ -1483,7 +1524,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
             // A reversed route is turned back so its start stays at the edge's source and markers land correctly.
             data: {
               lineage: edge,
-              geometry: geometryOf(id, [sourceEnd.node, targetEnd.node], anchors, reversed),
+              geometry: geometryOf(id, [sourceEnd.node, targetEnd.node], anchors, reversed, edge.kind),
               label: edgeLabel(edge, reversed),
               muted: !active,
               flow: [left.node, right.node],
@@ -1541,7 +1582,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       if (!data?.anchors || !source || !target) return edge;
       if (!pick(edge, boxes => edgeCrosses(data.geometry, source, target, data.anchors, boxes))) return edge;
       routed.add(edge.id);
-      const geometry = routedGeometry(source, target, data.anchors, obstacles);
+      const geometry = routedGeometry(source, target, data.anchors, obstacles, data.lineage?.kind);
       autoGeometryRef.current.set(edge.id, geometry);
       return { ...edge, data: { ...data, geometry } };
     }));
@@ -1923,7 +1964,14 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         </> : null}
       </aside>
 
-      <section className={`sl-canvas sl-model-canvas${mode === 'lineage' && zoomedOut ? ' is-zoomed-out' : ''}`} aria-label="Canvas semantic layer">
+      <section
+        className={[
+          'sl-canvas sl-model-canvas',
+          mode === 'lineage' && zoomedOut ? 'is-zoomed-out' : '',
+          metricFocus ? 'is-metric-focused' : '',
+        ].filter(Boolean).join(' ')}
+        aria-label="Canvas semantic layer"
+      >
         <EdgeMarkers strokes={markerStrokes} />
         <EdgeEditingContext.Provider value={edgeEditing}>
         <MetricFocusContext.Provider value={metricFocusValue}>
@@ -2000,7 +2048,7 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                     <ul className="sl-edge-transformations" aria-label="Cột được biến đổi">
                       {selectedEdge.transformations.map(item => (
                         <li key={item.target_column}>
-                          <strong>{item.target_column}</strong> ←
+                          <strong>{item.target_column}</strong> ←{' '}
                           {item.expression ? <code>{item.expression}</code> : null}
                           <span>Từ {item.sources.join(', ')}</span>
                         </li>
@@ -2041,7 +2089,11 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                       <Button size="sm" variant="outline" disabled={!selectedEdge.color} onClick={() => void setEdgeColor(selectedEdge, null)}>Màu mặc định</Button>
                     ) : null}
                   </div>
-                  {selectedEdge ? (
+                  {selectedEdge && isDeclaredTransform(selectedEdge) ? (
+                    <p className="sl-edge-panel-hint">
+                      Cạnh biến đổi khai báo trong Data Dictionary; sửa hoặc bỏ phần Biến đổi của cột ở đó.
+                    </p>
+                  ) : selectedEdge ? (
                     <Button
                       size="sm"
                       variant="destructive"

@@ -19,13 +19,16 @@ const MAX_OPTIONS = 60;
 /**
  * How a column is computed from columns of other tables, declared by hand like a metric's formula: the input columns
  * are picked from a searchable list grouped by table, and the expression is free text that is shown as written.
- * Removing the last input clears the transformation.
+ * Removing the last input clears the transformation; the typed expression stays on screen and comes back with the next
+ * input picked, so swapping the only input does not lose it.
  */
 export function TransformationFields({
   datasets, datasetId, columnName, value, disabled = false, onChange,
 }: TransformationFieldsProps) {
   const [query, setQuery] = useState('');
+  const [keptExpression, setKeptExpression] = useState<string | null>(null);
   const sources = value?.sources ?? [];
+  const expression = value ? value.expression : keptExpression;
   const tableName = (id: number) => datasets.find(dataset => dataset.id === id)?.dataset_name ?? `#${id}`;
   const chosen = new Set(sources.map(source => `${source.dataset_id}.${source.column_name}`));
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -45,11 +48,13 @@ export function TransformationFields({
 
   const update = (next: ColumnTransformation) => onChange(next.sources.length > 0 ? next : null);
   const addSource = (dataset_id: number, column_name: string) => {
-    update({ expression: value?.expression ?? null, sources: [...sources, { dataset_id, column_name }] });
+    update({ expression, sources: [...sources, { dataset_id, column_name }] });
     setQuery('');
   };
   const removeSource = (index: number) => {
-    update({ expression: value?.expression ?? null, sources: sources.filter((_, at) => at !== index) });
+    const remainingSources = sources.filter((_, at) => at !== index);
+    if (remainingSources.length === 0) setKeptExpression(expression);
+    update({ expression, sources: remainingSources });
   };
 
   return (
@@ -70,7 +75,7 @@ export function TransformationFields({
         ) : null}
         <Input
           aria-label={`Tìm cột nguồn cho ${columnName}`}
-          placeholder="Tìm bảng hoặc cột, ví dụ tb_quan_sat nhiet"
+          placeholder="Tìm bảng hoặc cột, ví dụ tb_gia_tri gia_tri_so"
           disabled={disabled}
           value={query}
           onChange={event => setQuery(event.target.value)}
@@ -93,9 +98,11 @@ export function TransformationFields({
         <Textarea
           aria-label={`Biểu thức biến đổi của ${columnName}`}
           className="min-h-16 max-h-40 py-1"
-          placeholder={sources.length > 0 ? 'Ví dụ: AVG(tb_gia_tri_quan_sat.gia_tri) theo ngày' : 'Chọn cột nguồn trước'}
+          placeholder={
+            sources.length > 0 ? 'Ví dụ: AVG(tb_gia_tri_quan_sat.gia_tri_so) theo ngày' : 'Chọn cột nguồn trước'
+          }
           disabled={disabled || sources.length === 0}
-          value={value?.expression ?? ''}
+          value={expression ?? ''}
           onChange={event => update({ expression: event.target.value || null, sources })}
         />
       </label>
