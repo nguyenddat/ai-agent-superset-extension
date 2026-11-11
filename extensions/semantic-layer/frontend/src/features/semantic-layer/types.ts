@@ -207,6 +207,30 @@ export type MetricAppliedDefaults = {
 export type ConceptGroup = { id: number; name: string; description: string | null };
 export type ConceptGroupReference = Pick<ConceptGroup, 'id' | 'name'>;
 
+/** A term or rule a grouping suggestion moves: how similar it is to the rest on average, and its closest neighbour. */
+export type GroupSuggestionMember = {
+  id: number;
+  name: string;
+  similarity: number;
+  closest: { id: number; name: string; similarity: number };
+};
+/** Ungrouped members close in meaning: for an existing `group`, or for a new group named `proposed_name`. */
+export type GroupSuggestion = {
+  fingerprint: string;
+  group: ConceptGroupReference | null;
+  proposed_name: string;
+  similarity: number;
+  members: GroupSuggestionMember[];
+  group_members: Array<{ id: number; name: string }>;
+};
+/** `embedding`: compared by `model`; `tfidf`: by shared words, when no embedding model could be used. */
+export type GroupSuggestionList = {
+  method: 'embedding' | 'tfidf';
+  model: string | null;
+  threshold: number;
+  suggestions: GroupSuggestion[];
+};
+
 export type GlossaryStatus = 'draft' | 'approved' | 'revoked';
 /** Review state of a term: `outdated` is an approval whose linked column or metric changed since it was saved. */
 export type GlossaryState = GlossaryStatus | 'outdated';

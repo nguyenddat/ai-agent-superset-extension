@@ -3,6 +3,7 @@ from typing import Any
 from flask import request
 from flask_appbuilder.api import expose, permission_name, protect, safe
 from flask_login import current_user
+from sqlalchemy.exc import IntegrityError
 from superset import db
 
 from ....common.utils.table_file import import_report
@@ -26,7 +27,7 @@ from ..dependencies import (
     glossary_term_repository,
     glossary_term_revision_repository,
 )
-from ..exceptions import GlossaryTermNotFoundError
+from ..exceptions import GlossaryTermNotFoundError, GlossaryValidationError
 from ..models import GlossaryTerm, GlossaryTermGroup, GlossaryTermLink, GlossaryTermRevision
 from ..services.discovery import (
     discoverable_glossary_terms,
@@ -37,7 +38,16 @@ from ..services.discovery import (
     glossary_term_readable,
 )
 from ..services.glossary import approve_revision, create_draft, revision_author_id, revoke_revision, update_draft
-from ..services.group import create_group, delete_group, group_reference, move_term, update_group
+from ..services.group import (
+    apply_term_grouping,
+    create_group,
+    delete_group,
+    group_reference,
+    move_term,
+    suggest_term_groups,
+    update_group,
+)
+from ..services.group_suggestion import GLOSSARY_KIND, dismiss_suggestion
 from ..services.term_file import apply_term_import, export_terms, preview_term_import
 from ..services.validation import expected_revision_of, glossary_link_fingerprint, group_id_of, review_reason
 
@@ -326,6 +336,53 @@ class GlossaryRoutes:
         moved_term_ids = delete_group(group_id, current_user.id)
         db.session.commit()
         return self.response(200, moved_term_ids=moved_term_ids)
+
+    @expose("/glossary/group-suggestions", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def glossary_group_suggestions(self):
+        """Groups suggested for ungrouped terms close in meaning; new term embeddings are cached on the way."""
+        require_admin()
+        ensure_dictionary_tables()
+        suggestions = suggest_term_groups()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Another request cached the same text first; the vectors in hand are the same.
+            db.session.rollback()
+        return self.response(200, **suggestions)
+
+    @expose("/glossary/group-suggestions/apply", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def apply_glossary_group_suggestion(self):
+        """Put the terms the administrator kept from a suggestion in an existing or a new group; no review is needed."""
+        require_admin()
+        ensure_dictionary_tables()
+        group, moved_term_ids = apply_term_grouping(request.get_json(silent=True), current_user.id)
+        db.session.commit()
+        return self.response(200, group=self._glossary_group(group), moved_term_ids=moved_term_ids)
+
+    @expose("/glossary/group-suggestions/dismiss", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def dismiss_glossary_group_suggestion(self):
+        require_admin()
+        ensure_dictionary_tables()
+        payload = request.get_json(silent=True)
+        fingerprint = dismiss_suggestion(GLOSSARY_KIND, payload, current_user.id, GlossaryValidationError)
+        db.session.commit()
+        return self.response(200, fingerprint=fingerprint)
 
     @expose("/glossary/file", methods=("GET",))
     @protect()

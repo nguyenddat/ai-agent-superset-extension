@@ -212,7 +212,11 @@ the same meaning and `text_to_bi_expert_rule_group` similar expert rules; a
 term's or rule's `group_id` sits on the term or rule, not on a revision, so
 moving one needs no review, keeps it approved and is logged as a `moved` audit
 event, and deleting a group leaves its members ungrouped (see the extension
-README). Opening the Semantic Layer as an administrator creates these tables
+README). "Gợi ý gom nhóm" suggests groups of similar ungrouped terms or rules
+from embeddings cached in `text_to_bi_text_embedding` (word TF-IDF without a
+key), for an administrator to apply, change or dismiss; dismissals stay in
+`text_to_bi_group_suggestion_dismissal` (`docs/specs/goi-y-gom-nhom.md`).
+Opening the Semantic Layer as an administrator creates these tables
 and seeds dictionary rows from the existing Superset datasets.
 
 The Semantic Model's business view groups both base and aggregate datasets by

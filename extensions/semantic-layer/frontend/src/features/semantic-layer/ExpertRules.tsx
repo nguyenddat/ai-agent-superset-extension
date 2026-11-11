@@ -13,6 +13,7 @@ import type { ConceptRequest } from './creationRequest';
 import { ExpertRuleEditor } from './ExpertRuleEditor';
 import { FileTransfer } from './FileTransfer';
 import type { ExpertRuleDraft } from './ExpertRuleEditor';
+import { GroupSuggestions } from './GroupSuggestions';
 import { conditionPhrase, expertRuleErrorMessage } from './expertRuleFormat';
 import { formatTime } from './MetricDefinitionPanel';
 import { ReviewDecisionDialog } from './ReviewDecisionDialog';
@@ -386,6 +387,13 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
               <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
                 <FolderPlus data-icon="inline-start" /> Tạo nhóm
               </Button>
+              <GroupSuggestions
+                noun="rule"
+                endpoint={expertRulesApi.groupSuggestions}
+                groups={ruleList.groups}
+                errorMessage={expertRuleErrorMessage}
+                onApplied={() => refreshAfterChange(null)}
+              />
               <FileTransfer
                 subject="rule"
                 endpoint={expertRulesApi.file}
