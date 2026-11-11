@@ -96,6 +96,10 @@ export const semanticLayerApi = {
   glossaryGroups: `${SEMANTIC_LAYER_API}/glossary/groups`,
   glossaryGroup: (groupId: number) => `${SEMANTIC_LAYER_API}/glossary/groups/${encodeURIComponent(groupId)}`,
   glossaryFile: `${SEMANTIC_LAYER_API}/glossary/file`,
+  contradictionsCheck: `${SEMANTIC_LAYER_API}/contradictions/check`,
+  contradictionDismiss: (contradictionId: number) => (
+    `${SEMANTIC_LAYER_API}/contradictions/${encodeURIComponent(contradictionId)}/dismiss`
+  ),
   dictionaryFile: `${SEMANTIC_LAYER_API}/dictionary/file`,
   datasetProposals: `${SEMANTIC_LAYER_API}/dataset-proposals`,
   datasetProposal: (proposalId: number) => `${SEMANTIC_LAYER_API}/dataset-proposals/${encodeURIComponent(proposalId)}`,

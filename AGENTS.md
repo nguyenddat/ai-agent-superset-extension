@@ -212,7 +212,9 @@ the same meaning and `text_to_bi_expert_rule_group` similar expert rules; a
 term's or rule's `group_id` sits on the term or rule, not on a revision, so
 moving one needs no review, keeps it approved and is logged as a `moved` audit
 event, and deleting a group leaves its members ungrouped (see the extension
-README). Opening the Semantic Layer as an administrator creates these tables
+README). `text_to_bi_contradiction` holds the contradictions "Mâu thuẫn" finds between terms, rules and
+linked metrics, with their dismissals, and `text_to_bi_contradiction_judgement` caches the chat model's verdict per
+pair content (`docs/specs/phat-hien-mau-thuan.md`). Opening the Semantic Layer as an administrator creates these tables
 and seeds dictionary rows from the existing Superset datasets.
 
 The Semantic Model's business view groups both base and aggregate datasets by

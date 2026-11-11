@@ -40,6 +40,7 @@ thuộc một nghiệp vụ.
 | `business_model` | Tầng dữ liệu, nghiệp vụ, canvas và lineage |
 | `glossary` | Thuật ngữ nghiệp vụ, nhóm thuật ngữ cùng nghĩa, vòng đời duyệt, khám phá thuật ngữ |
 | `expert_rules` | Expert rule, nhóm rule tương đồng, vòng đời duyệt, khám phá rule (API riêng `ExpertRuleAPI`) |
+| `consistency` | Phát hiện thuật ngữ, rule và metric mâu thuẫn nhau (quy tắc và mô hình AI), bỏ qua có lý do |
 | `semantic_query` | Metric contract, relationship contract, semantic catalog, biên dịch và chạy truy vấn |
 | `agent_ladder` | Metric tạm tính và đề xuất dataset do AI Agent tạo |
 | `access_control` | Nhóm quyền Superset xem và truy vấn Semantic Layer, màn gán nhóm quyền cho người dùng |

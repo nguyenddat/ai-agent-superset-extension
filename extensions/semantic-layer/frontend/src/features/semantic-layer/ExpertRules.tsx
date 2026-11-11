@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { expertRulesApi, requestJson } from './api';
 import { GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace } from './ConceptGroups';
+import { takeConceptFocus } from './conceptFocus';
 import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
 import type { ConceptRequest } from './creationRequest';
@@ -244,7 +245,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
     { rules: [], groups: [], current_user_id: null, require_second_reviewer: false },
   );
   const [datasets, setDatasets] = useState<ExpertRuleDatasetOption[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(() => takeConceptFocus('rules'));
   const [editing, setEditing] = useState<'new' | 'existing' | null>(creation ? 'new' : null);
   const [stateFilter, setStateFilter] = useState<ExpertRuleState | 'all'>('all');
   const [searchText, setSearchText] = useState('');
