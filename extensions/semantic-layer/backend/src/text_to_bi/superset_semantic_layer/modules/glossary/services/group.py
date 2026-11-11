@@ -9,8 +9,14 @@ from ..dependencies import (
     glossary_term_repository,
     glossary_term_revision_repository,
 )
-from ..exceptions import GlossaryConflictError, GlossaryTermGroupNotFoundError, GlossaryTermNotFoundError
+from ..exceptions import (
+    GlossaryConflictError,
+    GlossaryTermGroupNotFoundError,
+    GlossaryTermNotFoundError,
+    GlossaryValidationError,
+)
 from ..models import GlossaryTerm, GlossaryTermAuditEvent, GlossaryTermGroup
+from .group_suggestion import GLOSSARY_KIND, GroupingCandidate, grouping_choice, suggest_groups
 from .validation import MAX_REASON_LENGTH, normalize_group_payload
 
 GROUP_NAME_TAKEN = "Đã có nhóm thuật ngữ cùng tên."
@@ -102,3 +108,36 @@ def place_term(term: GlossaryTerm, group: GlossaryTermGroup | None, actor_id: in
 
 def group_reference(group: GlossaryTermGroup | None) -> dict[str, Any] | None:
     return {"id": group.id, "name": group.name} if group else None
+
+
+def term_text(canonical_name: str, synonyms: list[str], definition: str) -> str:
+    """What a term means, as it is embedded to suggest groups: its name, synonyms and definition.
+
+    Links are left out: they say where the data lives, and terms on one dataset would look alike for that alone.
+    """
+    synonym_text = f" Đồng nghĩa: {'; '.join(synonyms)}." if synonyms else ""
+    return f"{canonical_name}.{synonym_text} {definition}"
+
+
+def suggest_term_groups() -> dict[str, Any]:
+    """Groups suggested for ungrouped terms close in meaning, each term read from its current revision."""
+    revisions = glossary_term_revision_repository()
+    candidates = []
+    for term in glossary_term_repository().by_canonical_name():
+        revision = revisions.current_for(term.id)
+        if revision is not None:
+            text = term_text(term.canonical_name, revision.synonyms or [], revision.definition)
+            candidates.append(GroupingCandidate(term.id, term.canonical_name, text, term.group_id))
+    group_names = {group.id: group.name for group in glossary_term_group_repository().by_name()}
+    return suggest_groups(GLOSSARY_KIND, candidates, group_names)
+
+
+def apply_term_grouping(payload: Any, actor_id: int) -> tuple[GlossaryTermGroup, list[int]]:
+    """Put the terms an administrator kept from a suggestion in an existing group, or in a new one it creates.
+
+    Returns the group and the term IDs. Each move is a `moved` audit event and keeps the term's approval, as a move
+    from the term list does.
+    """
+    choice = grouping_choice(payload, GlossaryValidationError)
+    group = require_group(choice.group_id) if choice.group_id is not None else create_group({"name": choice.group_name})
+    return group, [move_term(term_id, group.id, actor_id).id for term_id in choice.member_ids]

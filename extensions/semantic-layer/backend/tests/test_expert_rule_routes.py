@@ -46,6 +46,9 @@ ENDPOINTS = {
     "create_group": ("/expert-rules/groups", "POST"),
     "update_group": ("/expert-rules/groups/<int:group_id>", "PUT"),
     "delete_group": ("/expert-rules/groups/<int:group_id>", "DELETE"),
+    "group_suggestions": ("/expert-rules/group-suggestions", "GET"),
+    "apply_group_suggestion": ("/expert-rules/group-suggestions/apply", "POST"),
+    "dismiss_group_suggestion": ("/expert-rules/group-suggestions/dismiss", "POST"),
 }
 
 
@@ -187,6 +190,8 @@ def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=(), permissio
     glossary.GlossaryTermRevision = type("GlossaryTermRevision", (), {})
     glossary.GlossaryTermAuditEvent = type("GlossaryTermAuditEvent", (), {})
     glossary.GlossaryTermGroup = type("GlossaryTermGroup", (), {})
+    glossary.TextEmbedding = type("TextEmbedding", (), {})
+    glossary.GroupSuggestionDismissal = type("GroupSuggestionDismissal", (), {})
     metric = types.ModuleType("text_to_bi.superset_semantic_layer.modules.semantic_query.models")
     for name in ("MetricContract", "MetricContractEvent", "MetricDefinition", "RelationshipContract"):
         setattr(metric, name, type(name, (), {}))
@@ -527,3 +532,30 @@ def test_group_routes_are_admin_only_commit_once_and_answer_a_missing_group_with
     user.roles = []
     with app.test_request_context("/", method="POST", json={"name": "Lọc bản ghi"}):
         assert api.create_group()[0] == 403
+
+
+def test_group_suggestion_routes_are_admin_only_commit_once_and_refuse_a_bad_fingerprint(monkeypatch):
+    app = Flask(__name__)
+    route, user, session = _load_route(monkeypatch)
+    api = route.ExpertRuleAPI()
+    received = {}
+
+    def apply_rule_grouping(_session, payload, actor_id):
+        received.update(payload=payload, actor_id=actor_id)
+        return SimpleNamespace(id=4, name="Ngưỡng", description=None), [1, 2]
+
+    route.apply_rule_grouping = apply_rule_grouping
+    with app.test_request_context("/", method="POST", json={"member_ids": [1, 2], "group_id": 4}):
+        assert api.apply_group_suggestion() == (
+            200, {"group": {"id": 4, "name": "Ngưỡng", "description": None}, "moved_rule_ids": [1, 2]}
+        )
+    assert received == {"payload": {"member_ids": [1, 2], "group_id": 4}, "actor_id": 42}
+    assert session.commit_calls == 1
+
+    with app.test_request_context("/", method="POST", json={"fingerprint": "not-a-fingerprint"}):
+        assert api.dismiss_group_suggestion() == (400, {"message": "Gợi ý gom nhóm không hợp lệ."})
+    assert session.commit_calls == 1 and session.rollback_calls == 1
+
+    user.roles = []
+    with app.test_request_context("/", method="GET"):
+        assert api.group_suggestions()[0] == 403

@@ -12,6 +12,7 @@ import { completeConceptCreation, takeConceptRequest } from './creationRequest';
 import type { ConceptRequest } from './creationRequest';
 import { FileTransfer } from './FileTransfer';
 import { GlossaryEditor, glossaryErrorMessage } from './GlossaryEditor';
+import { GroupSuggestions } from './GroupSuggestions';
 import type { GlossaryDraft } from './GlossaryEditor';
 import { formatTime } from './MetricDefinitionPanel';
 import { ReviewDecisionDialog } from './ReviewDecisionDialog';
@@ -373,6 +374,12 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
               <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
                 <FolderPlus data-icon="inline-start" /> Tạo nhóm
               </Button>
+              <GroupSuggestions
+                noun="thuật ngữ"
+                endpoint={semanticLayerApi.glossaryGroupSuggestions}
+                groups={termList.groups}
+                onApplied={() => refreshAfterChange(null)}
+              />
               <FileTransfer
                 subject="thuật ngữ"
                 endpoint={semanticLayerApi.glossaryFile}

@@ -341,6 +341,13 @@
 .sl-group-actions { display: inline-flex; flex: 0 0 auto; opacity: 0; transition: opacity 0.15s; }
 .sl-group-heading:hover .sl-group-actions, .sl-group-actions:focus-within { opacity: 1; }
 .sl-group-empty { margin: 0; padding: 4px 8px; font-size: 12px; }
+/* "Gợi ý gom nhóm": one card per suggestion, with its target group, its members and its decision. */
+.sl-group-suggestions { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
+.sl-group-suggestion { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--sl-border); border-radius: 7px; }
+.sl-group-suggestion-target { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.sl-group-suggestion-members { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.sl-group-suggestion-members label { display: flex; align-items: center; gap: 8px; }
+.sl-group-suggestion-actions { display: flex; justify-content: flex-end; gap: 6px; }
 /* Reads as the fact's value next to its label; the frame shows only on hover so it does not look like a form field. */
 .sl-metrics-facts div:has(.sl-group-inline-select) { align-items: center; }
 .sl-group-inline-select {

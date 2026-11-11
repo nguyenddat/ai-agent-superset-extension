@@ -30,6 +30,7 @@ from ...glossary.dependencies import (
     glossary_term_revision_repository,
 )
 from ...glossary.models import GlossaryTermLink
+from ...glossary.services.group_suggestion import EXPERT_RULE_KIND, dismiss_suggestion
 from ...semantic_query.dependencies import metric_contract_repository
 from ...semantic_query.services.contracts import contract_is_approved_current, metric_contract_hash
 from ...semantic_query.services.metric_review import metric_query_defaults_for
@@ -61,6 +62,7 @@ from ..services.expert_rule_group import (
     update_rule_group,
 )
 from ..services.rule_file import RuleReferences, apply_rule_import, export_rules, preview_rule_import
+from ..services.rule_group_suggestion import apply_rule_grouping, suggest_rule_groups
 
 
 @api(id="text_to_bi_expert_rule_api", name="Text to BI Expert Rules", resource_name="expert-rules")
@@ -350,6 +352,50 @@ class ExpertRuleAPI(RestApi):
         moved_rule_ids = delete_rule_group(db.session, group_id, current_user.id)
         db.session.commit()
         return self.response(200, moved_rule_ids=moved_rule_ids)
+
+    @expose("/expert-rules/group-suggestions", methods=["GET"])
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def group_suggestions(self):
+        """Groups suggested for ungrouped rules close in meaning; new rule embeddings are cached on the way."""
+        require_admin()
+        suggestions = suggest_rule_groups(db.session)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Another request cached the same text first; the vectors in hand are the same.
+            db.session.rollback()
+        return self.response(200, **suggestions)
+
+    @expose("/expert-rules/group-suggestions/apply", methods=["POST"])
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def apply_group_suggestion(self):
+        """Put the rules the administrator kept from a suggestion in an existing or a new group; no review is needed."""
+        require_admin()
+        group, moved_rule_ids = apply_rule_grouping(db.session, request.get_json(silent=True), current_user.id)
+        db.session.commit()
+        return self.response(200, group=self._group(group), moved_rule_ids=moved_rule_ids)
+
+    @expose("/expert-rules/group-suggestions/dismiss", methods=["POST"])
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def dismiss_group_suggestion(self):
+        require_admin()
+        payload = request.get_json(silent=True)
+        fingerprint = dismiss_suggestion(EXPERT_RULE_KIND, payload, current_user.id, ExpertRuleValidationError)
+        db.session.commit()
+        return self.response(200, fingerprint=fingerprint)
 
     def _file_references(self) -> RuleReferences:
         """What a rule file names, resolved with the same resolvers as the editor's create and draft routes."""

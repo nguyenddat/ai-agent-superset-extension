@@ -37,6 +37,8 @@ from .modules.glossary.models import (
     GlossaryTermGroup,
     GlossaryTermLink,
     GlossaryTermRevision,
+    GroupSuggestionDismissal,
+    TextEmbedding,
 )
 from .modules.glossary.models.glossary_term import AUDIT_EVENT_TYPES as GLOSSARY_AUDIT_EVENT_TYPES
 from .modules.semantic_query.models import MetricContract, MetricContractEvent, MetricDefinition, RelationshipContract
@@ -153,6 +155,9 @@ def _migrate_dictionary_tables():
     ExpertRuleRevision.__table__.create(bind=db.engine, checkfirst=True)
     ExpertRuleLink.__table__.create(bind=db.engine, checkfirst=True)
     ExpertRuleAuditEvent.__table__.create(bind=db.engine, checkfirst=True)
+    # Grouping suggestions for terms and rules: cached embeddings and the suggestions administrators dismissed.
+    TextEmbedding.__table__.create(bind=db.engine, checkfirst=True)
+    GroupSuggestionDismissal.__table__.create(bind=db.engine, checkfirst=True)
     DatasetProposal.__table__.create(bind=db.engine, checkfirst=True)
 
     with db.engine.begin() as connection:

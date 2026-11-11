@@ -59,6 +59,14 @@ each group as a collapsible section, with the ungrouped members last under "Chư
   `POST .../glossary/groups` and `POST .../expert-rules/groups`, and changed or deleted with `PUT` and `DELETE` on
   `.../groups/<group_id>`. The admin lists (`GET .../glossary`, `GET .../expert-rules`) return `groups` and each
   member's `group`.
+- "Gợi ý gom nhóm" (admin only) suggests putting ungrouped terms or rules that are close in meaning into a new group
+  or into an existing group they are close to. Items are embedded with `OPENROUTER_EMBEDDING_MODEL`
+  (`openai/text-embedding-3-small`), cached in `text_to_bi_text_embedding` by text hash, or compared by word TF-IDF
+  when no key is set or the call fails. The administrator applies a suggestion as it is or changed (another group, a
+  new name, fewer members), which moves each member as above, or dismisses it; `text_to_bi_group_suggestion_dismissal`
+  keeps the dismissal so the same suggestion is not offered again. `GET .../group-suggestions`,
+  `POST .../group-suggestions/apply` and `POST .../group-suggestions/dismiss` under `.../glossary` and
+  `.../expert-rules`; see [`docs/specs/goi-y-gom-nhom.md`](../../docs/specs/goi-y-gom-nhom.md).
 
 ### Bulk create and update from a file
 

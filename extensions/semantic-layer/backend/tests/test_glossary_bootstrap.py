@@ -88,6 +88,8 @@ def _migration_namespace():
         "ExpertRuleRevision",
         "ExpertRuleLink",
         "ExpertRuleAuditEvent",
+        "TextEmbedding",
+        "GroupSuggestionDismissal",
         "DatasetProposal",
     )
     namespace = {name: SimpleNamespace(__tablename__=name, __table__=Table(name)) for name in names}
