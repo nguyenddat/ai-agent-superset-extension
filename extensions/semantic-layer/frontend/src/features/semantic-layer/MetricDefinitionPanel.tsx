@@ -7,8 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { requestJson, semanticLayerApi } from './api';
 import { MetricQueryDefaultsSection } from './MetricQueryDefaults';
 import type {
-  MetricContractEvent, MetricContractEventAction, MetricDefinitionPayload, MetricFormulaReading, MetricQueryDataset,
-  MetricReviewItem, MetricUser,
+  MetricContractEvent, MetricContractEventAction, MetricDefinitionPayload, MetricQueryDataset, MetricReviewItem,
+  MetricUser,
 } from './types';
 
 const EVENT_LABELS: Record<MetricContractEventAction, string> = {
@@ -21,19 +21,30 @@ const EVENT_LABELS: Record<MetricContractEventAction, string> = {
 const NO_STEWARD = 'none';
 export const formatTime = (value: string | null) => (value ? new Date(value).toLocaleString('vi-VN') : '');
 
-/** The formula in business words: the dictionary's column labels, a ratio as (…) ÷ (…), and the row filter apart. */
-function FormulaReading({ name, reading }: { name: string; reading: MetricFormulaReading }) {
-  const scale = reading.scale && reading.scale !== '1' ? `${reading.scale} × ` : '';
+/**
+ * The formula as pseudo code with the data dictionary's column labels, or as the SQL Superset runs. The SQL alone shows
+ * when the expression could not be read, such as one holding Jinja templating.
+ */
+function MetricFormula({ metric }: { metric: MetricReviewItem }) {
+  const [showSql, setShowSql] = useState(false);
+  useEffect(() => setShowSql(false), [metric.dataset_id, metric.metric_id]);
+  const pseudoCode = metric.pseudo_code;
   return (
-    <div className="sl-metrics-reading">
-      <p>
-        <strong>{name}</strong> ={' '}
-        {reading.denominator ? `${scale}(${reading.numerator}) ÷ (${reading.denominator})` : reading.numerator}
-      </p>
-      {reading.only_rows.length ? (
-        <p className="sl-metrics-reading-rows">Chỉ tính các dòng có {reading.only_rows.join(' và ')}</p>
-      ) : null}
-    </div>
+    <section className="sl-metrics-section">
+      <div className="sl-metrics-section-heading">
+        <h4>Công thức</h4>
+        {pseudoCode ? (
+          <Button variant="ghost" size="sm" onClick={() => setShowSql(current => !current)}>
+            {showSql ? 'Xem mã giả' : 'Xem SQL'}
+          </Button>
+        ) : null}
+      </div>
+      {pseudoCode && !showSql ? (
+        <pre className="sl-metrics-expression is-pseudo-code">{pseudoCode}</pre>
+      ) : (
+        <pre className="sl-metrics-expression">{metric.expression || '—'}</pre>
+      )}
+    </section>
   );
 }
 
@@ -250,13 +261,7 @@ export function MetricDefinitionPanel(
         )}
       </section>
       <MetricQueryDefaultsSection metric={metric} dataset={dataset} onSaved={onDefinitionSaved} />
-      <section className="sl-metrics-section">
-        <h4>Công thức</h4>
-        {metric.reading ? (
-          <FormulaReading name={metric.verbose_name || metric.metric_name} reading={metric.reading} />
-        ) : null}
-        <pre className="sl-metrics-expression">{metric.expression || '—'}</pre>
-      </section>
+      <MetricFormula metric={metric} />
       <ReviewHistory metric={metric} revision={historyRevision} />
     </div>
   );

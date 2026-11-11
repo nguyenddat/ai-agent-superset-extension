@@ -21,10 +21,8 @@ from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contract
     parse_contract_metric,
 )
 from text_to_bi.superset_semantic_layer.modules.semantic_query.services.formula_reading import (
-    FormulaVocabulary,
-    RowKindGrain,
     formula_row_kinds,
-    read_formula,
+    metric_pseudo_code,
 )
 from text_to_bi.superset_semantic_layer.modules.semantic_query.services.query_defaults import (
     MetricQueryDefaults,
@@ -138,7 +136,7 @@ def _route_api(datasets):
         "_serialize_relationship_contract", "create_metric_contract_candidate", "approve_metric_contract",
         "revoke_metric_contract", "execute_metric_contract", "create_relationship_contract_candidate",
         "approve_relationship_contract", "revoke_relationship_contract", "semantic_catalog", "_query_dataset",
-        "list_metric_contracts", "_active_users", "_serialize_metric_definition", "_formula_vocabularies",
+        "list_metric_contracts", "_active_users", "_serialize_metric_definition", "_column_labels",
         "save_metric_definition", "list_metric_contract_events", "save_metric_query_defaults", "_metric_time_context",
         "create_agent_metric", "_agent_metric", "_relationship_contract_fields", "_snapshot_relationship_candidate",
     }
@@ -184,9 +182,7 @@ def _route_api(datasets):
         "metric_contract_ineligibility": metric_contract_ineligibility,
         "metric_contract_state": metric_contract_state,
         "parse_contract_metric": parse_contract_metric,
-        "read_formula": read_formula,
-        "FormulaVocabulary": FormulaVocabulary,
-        "RowKindGrain": RowKindGrain,
+        "metric_pseudo_code": metric_pseudo_code,
         "contract_is_approved_current": contract_is_approved_current,
         "execute_approved_chart_query": None,
         "relationship_cardinality": relationship_cardinality,
@@ -539,10 +535,8 @@ def test_metric_list_reports_state_formula_and_reason_and_skips_the_default_coun
     assert (approved["metric_name"], spread["metric_name"]) == ("average_temperature", "spread")
     assert approved["state"] == "approved" and approved["ineligibility"] is None
     assert approved["formula"]["aggregation"] == "AVG" and approved["formula"]["measure_column"] == "temperature"
-    assert approved["reading"] == {
-        "scale": None, "numerator": "trung bình của Temperature", "denominator": None, "only_rows": [],
-    }
-    assert spread["reading"] is None
+    assert approved["pseudo_code"] == "TRUNG_BÌNH([Temperature])"
+    assert spread["pseudo_code"] == "LỚN_NHẤT([Temperature]) - NHỎ_NHẤT([Temperature])"
     assert approved["contract"]["approver_name"] == "Ada Admin" and "expression_hash" not in approved["contract"]
     assert spread["state"] == "ineligible" and spread["contract"] is None
     assert spread["ineligibility"] == METRIC_CONTRACT_RULE

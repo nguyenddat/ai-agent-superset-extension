@@ -202,6 +202,35 @@ The Semantic Model's lineage draws two kinds of flow, each with its own style an
 A transformation edge is hidden or recoloured like any inferred edge, and its override keeps its key when layers move.
 The switches are remembered in the browser and do not move the cards.
 
+### Metric formulas and their input columns
+
+Both are read from a metric's SQL expression with sqlglot (28.10.1, the version Superset 6.1 ships), so any form
+Superset accepts is covered: `DISTINCT`, `CASE … ELSE … END` (searched or `CASE x WHEN …`), `FILTER (WHERE …)`,
+`COALESCE`, `NULLIF`, casts, arithmetic and ratios of aggregates, nested string and date functions, window functions,
+and quoted or table-qualified columns. Superset SQL metrics cannot reference other metrics, so there is nothing to
+follow there.
+
+- **Input columns** (`business_model/services/metric_columns.py`, the `columns` of each metric in the business model)
+  are the dataset columns the expression names. A column in a `CASE`/`IF` condition, the subject of `CASE x WHEN`, a
+  `FILTER (WHERE …)` clause or a window's `PARTITION BY`/`ORDER BY` is a `filter`; any other is a `measure`. A
+  templated expression is read again without its Jinja tags (each `{{ … }}` taken as NULL), so the columns of every
+  branch count; one that still cannot be parsed gives `null`, and the lineage falls back to the whole dataset.
+- **Pseudo code** (`semantic_query/services/formula_reading.py`, `pseudo_code` in `/metric-contracts` and in the
+  business model's metrics) writes the expression with the Data Dictionary's column labels in brackets, aggregates and
+  logic in Vietnamese words, and any other function as written in SQL. A ratio puts its divisor on a line of its own:
+
+  ```text
+  100.0 × ĐẾM(NẾU [Loại quan sát] = “DU_BAO_NGAY” VÀ [Tổng lượng mưa (mm)] > 0 THÌ 1)
+  ÷ NULLIF(ĐẾM(NẾU [Loại quan sát] = “DU_BAO_NGAY” THÌ 1), 0)
+  ```
+
+  `SUM`, `AVG`, `COUNT`, `MAX`, `MIN` read `TỔNG`, `TRUNG_BÌNH`, `ĐẾM`, `LỚN_NHẤT`, `NHỎ_NHẤT`; `DISTINCT` reads
+  `KHÁC NHAU`; `CASE` reads `NẾU … THÌ …, CÒN LẠI …`; `FILTER (WHERE c)` reads `CHỈ KHI c`; `OVER (PARTITION BY …
+  ORDER BY … DESC)` reads `TRÊN (CHIA THEO … XẾP THEO … GIẢM DẦN)`; a cast reads `ĐỔI_KIỂU(x, kiểu)`; `AND`, `OR`,
+  `NOT`, `IS NULL`, `IS NOT NULL`, `IN`, `BETWEEN`, `LIKE` read `VÀ`, `HOẶC`, `KHÔNG`, `TRỐNG`, `CÓ GIÁ TRỊ`,
+  `THUỘC`, `TỪ … ĐẾN …`, `GIỐNG`. The Metrics tab shows the pseudo code under "Công thức" with a "Xem SQL" toggle
+  for the raw expression, and a lineage metric shows it on hover; an expression that cannot be parsed shows its SQL.
+
 ## Build
 
 Install frontend dependencies in `frontend/`, then bundle the extension from

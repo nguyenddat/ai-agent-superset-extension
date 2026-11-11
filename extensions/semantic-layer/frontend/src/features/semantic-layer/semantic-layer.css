@@ -366,11 +366,8 @@
 .sl-metrics-title { min-width: 0; }
 .sl-metrics-title h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; color: var(--sl-text); font-size: 17px; font-weight: 600; }
 .sl-metrics-title p { margin: 3px 0 0; color: var(--sl-muted); font-size: 12px; }
-.sl-metrics-title code, .sl-metrics-formula-summary code, .sl-metrics-reading { display: flex; flex-direction: column; gap: 4px; }
-.sl-metrics-reading p { margin: 0; color: var(--sl-text); font-size: 14px; line-height: 1.6; }
-.sl-metrics-reading strong { font-weight: 600; }
-.sl-metrics-reading .sl-metrics-reading-rows { color: var(--sl-text-secondary); font-size: 12px; }
-.sl-metrics-expression { font-family: var(--font-mono, monospace); }
+.sl-metrics-title code, .sl-metrics-formula-summary code, .sl-metrics-expression { font-family: var(--font-mono, monospace); }
+.sl-metrics-expression.is-pseudo-code { color: var(--sl-text); font-size: 13px; line-height: 1.6; }
 .sl-metrics-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .sl-metrics-tabs { display: flex; gap: 4px; margin-top: 10px; padding: 0 16px; border-bottom: 1px solid var(--sl-border); }
 .sl-metrics-tabs button { margin-bottom: -1px; padding: 8px 10px; border: 0; border-bottom: 2px solid transparent; color: var(--sl-text-secondary); background: transparent; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }

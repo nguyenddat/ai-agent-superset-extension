@@ -1,3 +1,5 @@
+import pytest
+
 from text_to_bi.superset_semantic_layer.modules.business_model.services.metric_columns import metric_columns
 
 COLUMNS = ["loai_quan_sat", "nhiet_do_c", "tong_luong_mua_mm", "thanh_pho_id", "Nhiet Do"]
@@ -43,6 +45,61 @@ def test_unknown_names_are_dropped_and_names_match_ignoring_case():
     }
 
 
-def test_count_star_uses_no_column_and_templating_cannot_be_parsed():
+def test_count_star_uses_no_column_and_unparseable_sql_gives_none():
     assert roles("COUNT(*)") == {}
-    assert roles("SUM(nhiet_do_c) {% if filter_values('city') %}+ 0{% endif %}") is None
+    assert roles("SUM(nhiet_do_c) +* FROM") is None
+
+
+def test_simple_case_subject_is_a_filter():
+    assert roles("SUM(CASE loai_quan_sat WHEN 'A' THEN tong_luong_mua_mm ELSE 0 END)") == {
+        "loai_quan_sat": "filter",
+        "tong_luong_mua_mm": "measure",
+    }
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("COUNT(DISTINCT thanh_pho_id)", {"thanh_pho_id": "measure"}),
+        (
+            "SUM(CASE WHEN loai_quan_sat = 'A' THEN tong_luong_mua_mm ELSE nhiet_do_c END)",
+            {"loai_quan_sat": "filter", "tong_luong_mua_mm": "measure", "nhiet_do_c": "measure"},
+        ),
+        ("COALESCE(SUM(NULLIF(nhiet_do_c, 0)), 0)", {"nhiet_do_c": "measure"}),
+        (
+            "SUM(CAST(nhiet_do_c AS DECIMAL(10, 2))) + AVG(tong_luong_mua_mm::numeric)",
+            {"nhiet_do_c": "measure", "tong_luong_mua_mm": "measure"},
+        ),
+        (
+            "100.0 * SUM(tong_luong_mua_mm) / NULLIF(COUNT(DISTINCT thanh_pho_id), 0)",
+            {"tong_luong_mua_mm": "measure", "thanh_pho_id": "measure"},
+        ),
+        ("ROUND(AVG(ABS(nhiet_do_c)), 1)", {"nhiet_do_c": "measure"}),
+        (
+            "COUNT(DISTINCT UPPER(TRIM(loai_quan_sat)) || '-' || CAST(thanh_pho_id AS TEXT))",
+            {"loai_quan_sat": "measure", "thanh_pho_id": "measure"},
+        ),
+        (
+            "MAX(DATE_TRUNC('day', loai_quan_sat)) - MIN(EXTRACT(YEAR FROM nhiet_do_c))",
+            {"loai_quan_sat": "measure", "nhiet_do_c": "measure"},
+        ),
+        ("PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nhiet_do_c)", {"nhiet_do_c": "measure"}),
+        ('SUM(weather.nhiet_do_c) + MAX(public.weather."Nhiet Do")', {"nhiet_do_c": "measure", "Nhiet Do": "measure"}),
+        (
+            "COUNT(*) FILTER (WHERE loai_quan_sat IN ('A', 'B') AND nhiet_do_c IS NOT NULL)",
+            {"loai_quan_sat": "filter", "nhiet_do_c": "filter"},
+        ),
+    ],
+)
+def test_every_sql_form_finds_its_input_columns(expression, expected):
+    assert roles(expression) == expected
+
+
+def test_an_if_function_condition_is_a_filter():
+    result = metric_columns("SUM(IF(tong_luong_mua_mm > 0, nhiet_do_c, 0))", COLUMNS, "mysql")
+    assert result == [{"name": "nhiet_do_c", "role": "measure"}, {"name": "tong_luong_mua_mm", "role": "filter"}]
+
+
+def test_templated_expressions_read_the_columns_of_every_branch():
+    expression = "SUM(nhiet_do_c) {% if filter_values('city') %}+ SUM(tong_luong_mua_mm){% endif %} * {{ scale }}"
+    assert roles(expression) == {"nhiet_do_c": "measure", "tong_luong_mua_mm": "measure"}

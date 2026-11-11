@@ -319,7 +319,7 @@ function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
         className="sl-lineage-formula"
       >
         <span>{metric.metric_name}</span>
-        <code>{metric.expression}</code>
+        <code>{metric.pseudo_code ?? metric.expression}</code>
         {metric.description ? <small>{metric.description}</small> : null}
       </NodeToolbar>
     </div>

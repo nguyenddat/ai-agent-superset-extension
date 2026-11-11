@@ -1,54 +1,17 @@
-from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 import sqlglot
 from sqlglot import exp
+from sqlglot.dialects.postgres import Postgres
 from sqlglot.errors import SqlglotError
 
-from .contracts import ContractMetricFormula, ContractMetricTerm
+from .contracts import ContractMetricFormula
 
-# What one row is, by grain, so a count of rows reads as "số ngày" or "số giờ".
-GRAIN_WORDS = {
-    "instant": "lần quan sát",
-    "hour": "giờ",
-    "day": "ngày",
-    "week": "tuần",
-    "month": "tháng",
-    "quarter": "quý",
-    "year": "năm",
+_AGGREGATE_WORDS = {exp.Sum: "TỔNG", exp.Avg: "TRUNG_BÌNH", exp.Count: "ĐẾM", exp.Max: "LỚN_NHẤT", exp.Min: "NHỎ_NHẤT"}
+_OPERATORS = {
+    exp.EQ: "=", exp.NEQ: "≠", exp.GT: ">", exp.GTE: "≥", exp.LT: "<", exp.LTE: "≤", exp.Mul: "×", exp.Div: "÷",
+    exp.And: "VÀ", exp.Or: "HOẶC", exp.Like: "GIỐNG",
 }
-_AGGREGATE_WORDS = {
-    "SUM": "tổng của",
-    "AVG": "trung bình của",
-    "MAX": "giá trị lớn nhất của",
-    "MIN": "giá trị nhỏ nhất của",
-    "COUNT": "số giá trị của",
-}
-_COMPARISONS = {exp.EQ: "là", exp.NEQ: "khác", exp.GT: "lớn hơn", exp.LT: "nhỏ hơn", exp.LTE: "không quá"}
-
-
-@dataclass(frozen=True)
-class RowKindGrain:
-    """The grain of the rows that hold one value of the dataset's row kind column; `value` None covers every row."""
-
-    value: str | None
-    grain: str
-    label: str | None = None
-
-
-@dataclass(frozen=True)
-class FormulaVocabulary:
-    """The words a dataset's data dictionary gives its columns and rows."""
-
-    column_labels: dict[str, str] = field(default_factory=dict)
-    row_kind_column: str | None = None
-    grains: tuple[RowKindGrain, ...] = ()
-
-    def label(self, column_name: str) -> str:
-        return self.column_labels.get(column_name) or column_name
-
-    def grain_of(self, row_kind_value: str | None) -> RowKindGrain | None:
-        return next((grain for grain in self.grains if grain.value == row_kind_value), None)
 
 
 def _unwrapped(node: Any) -> Any:
@@ -70,133 +33,144 @@ def _conjuncts(condition: str | None) -> list[Any]:
     return [tree]
 
 
-def _value(node: Any) -> str:
-    if isinstance(node, exp.Literal):
-        return f"“{node.this}”" if node.is_string else node.this
-    if isinstance(node, exp.Neg) and isinstance(node.this, exp.Literal):
-        return f"-{node.this.this}"
-    if isinstance(node, exp.Boolean):
-        return "đúng" if node.this else "sai"
-    return node.sql(dialect="postgres")
-
-
-def _told(node: Any, vocabulary: FormulaVocabulary) -> str:
-    """One condition in words, with the dictionary's column labels; anything unusual keeps its SQL."""
-    node = _unwrapped(node)
-    if isinstance(node, (exp.And, exp.Or)):
-        joiner = " và " if isinstance(node, exp.And) else " hoặc "
-        return f"{_told(node.left, vocabulary)}{joiner}{_told(node.right, vocabulary)}"
-    if isinstance(node, exp.Not):
-        inner = _unwrapped(node.this)
-        if isinstance(inner, exp.Is) and isinstance(inner.this, exp.Column) and isinstance(inner.expression, exp.Null):
-            return f"{vocabulary.label(inner.this.name)} có giá trị"
-        if isinstance(inner, exp.In) and isinstance(inner.this, exp.Column):
-            values = ", ".join(_value(item) for item in inner.expressions)
-            return f"{vocabulary.label(inner.this.name)} không thuộc {values}"
-        return f"không phải ({_told(inner, vocabulary)})"
-    if isinstance(node, exp.Is) and isinstance(node.this, exp.Column) and isinstance(node.expression, exp.Null):
-        return f"{vocabulary.label(node.this.name)} trống"
-    if isinstance(node, exp.In) and isinstance(node.this, exp.Column):
-        return f"{vocabulary.label(node.this.name)} thuộc {', '.join(_value(item) for item in node.expressions)}"
-    if isinstance(node, exp.GTE) and isinstance(node.this, exp.Column):
-        return f"{vocabulary.label(node.this.name)} từ {_value(node.expression)} trở lên"
-    word = _COMPARISONS.get(type(node))
-    if word and isinstance(node.this, exp.Column):
-        return f"{vocabulary.label(node.this.name)} {word} {_value(node.expression)}"
-    return node.sql(dialect="postgres")
-
-
-def _row_kind_value(node: Any, vocabulary: FormulaVocabulary) -> str | None:
+def _row_kind_value(node: Any, row_kind_column: str | None) -> str | None:
     """The row kind a condition such as loai_quan_sat = 'DU_BAO_NGAY' selects, or None."""
     node = _unwrapped(node)
-    if not vocabulary.row_kind_column or not isinstance(node, exp.EQ):
+    if not row_kind_column or not isinstance(node, exp.EQ):
         return None
     column, value = node.this, node.expression
-    if isinstance(column, exp.Column) and column.name == vocabulary.row_kind_column and isinstance(value, exp.Literal):
+    if isinstance(column, exp.Column) and column.name == row_kind_column and isinstance(value, exp.Literal):
         return value.this if value.is_string else None
     return None
 
 
 def formula_row_kinds(formula: ContractMetricFormula, row_kind_column: str | None) -> set[str]:
     """The row kinds the formula's conditions select, such as {"DU_BAO_NGAY"}; empty when it counts every kind."""
-    vocabulary = FormulaVocabulary(row_kind_column=row_kind_column)
     terms = [formula.numerator, *([formula.denominator] if formula.denominator else [])]
     return {
         row_kind
         for term in terms
         for node in _conjuncts(term.condition)
-        if (row_kind := _row_kind_value(node, vocabulary))
+        if (row_kind := _row_kind_value(node, row_kind_column))
     }
 
 
-def _row_filter(node: Any, vocabulary: FormulaVocabulary) -> str:
-    told = _told(node, vocabulary)
-    row_kind = _row_kind_value(node, vocabulary)
-    grain = vocabulary.grain_of(row_kind) if row_kind else None
-    return f"{told} ({grain.label})" if grain and grain.label else told
+class _PseudoCodeGenerator(Postgres.Generator):
+    """Writes a parsed metric expression as pseudo code: dictionary labels in brackets, Vietnamese words for the
+    aggregates and the logic, and every other function or construct as it is in SQL, so nothing goes unsaid."""
+
+    def __init__(self, column_labels: dict[str, str]):
+        super().__init__(dialect="postgres", comments=False)
+        self.column_labels = column_labels
+
+    def column_label(self, column: exp.Column) -> str:
+        label = self.column_labels.get(column.name)
+        if label:
+            return f"[{label}]"
+        return f"[{column.table}.{column.name}]" if column.table else f"[{column.name}]"
+
+    def literal_value(self, literal: exp.Literal) -> str:
+        return f"“{literal.this}”" if literal.is_string else literal.this
+
+    def aggregate(self, node: exp.Expression) -> str:
+        argument = node.this
+        if isinstance(node, exp.Count) and (argument is None or isinstance(argument, exp.Star)):
+            return "ĐẾM(*)"
+        return f"{_AGGREGATE_WORDS[type(node)]}({self.sql(argument)})"
+
+    def operator(self, node: exp.Binary) -> str:
+        joiner = "\n" if isinstance(node, exp.Div) and node.parent is None else " "
+        return f"{self.sql(node.this)}{joiner}{_OPERATORS[type(node)]} {self.sql(node.expression)}"
+
+    def branches(self, case: exp.Case) -> str:
+        """CASE as NẾU … THÌ …, one branch after another; a simple CASE x WHEN v compares x = v in each branch."""
+        subject = case.this
+        parts = []
+        for branch in case.args.get("ifs") or []:
+            condition = self.sql(branch.this)
+            if subject is not None:
+                condition = f"{self.sql(subject)} = {condition}"
+            parts.append(f"NẾU {condition} THÌ {self.sql(branch, 'true')}")
+        if case.args.get("default") is not None:
+            parts.append(f"CÒN LẠI {self.sql(case, 'default')}")
+        text = ", ".join(parts)
+        # Inside a function call its parentheses already set the branches apart.
+        return text if case.parent is None or isinstance(case.parent, exp.Func) else f"({text})"
+
+    def negated(self, node: exp.Not) -> str:
+        inner = _unwrapped(node.this)
+        if isinstance(inner, exp.Is) and isinstance(inner.expression, exp.Null):
+            return f"{self.sql(inner.this)} CÓ GIÁ TRỊ"
+        if isinstance(inner, exp.In):
+            return f"{self.sql(inner.this)} KHÔNG {self.membership(inner)}"
+        if isinstance(inner, exp.Like):
+            return f"{self.sql(inner.this)} KHÔNG GIỐNG {self.sql(inner.expression)}"
+        return f"KHÔNG ({self.sql(inner)})" if isinstance(inner, exp.Binary) else f"KHÔNG {self.sql(inner)}"
+
+    def membership(self, node: exp.In) -> str:
+        if node.args.get("query"):
+            return f"THUỘC {self.sql(node, 'query')}"
+        return f"THUỘC ({', '.join(self.sql(item) for item in node.expressions)})"
+
+    def null_check(self, node: exp.Is) -> str:
+        if isinstance(node.expression, exp.Null):
+            return f"{self.sql(node.this)} TRỐNG"
+        return f"{self.sql(node.this)} LÀ {self.sql(node.expression)}"
+
+    def window(self, node: exp.Window) -> str:
+        parts = []
+        if node.args.get("partition_by"):
+            parts.append(f"CHIA THEO {', '.join(self.sql(item) for item in node.args['partition_by'])}")
+        if node.args.get("order"):
+            parts.append(f"XẾP THEO {', '.join(self.sql(item) for item in node.args['order'].expressions)}")
+        if node.args.get("spec"):
+            parts.append(self.sql(node, "spec"))
+        return f"{self.sql(node.this)} TRÊN ({' '.join(parts)})"
+
+    def ordered(self, node: exp.Ordered) -> str:
+        return f"{self.sql(node.this)} GIẢM DẦN" if node.args.get("desc") else self.sql(node.this)
+
+    TRANSFORMS: ClassVar[dict[Any, Any]] = {
+        # PostgreSQL casts ROUND's argument to NUMERIC; the reading keeps ROUND as written.
+        **{node: transform for node, transform in Postgres.Generator.TRANSFORMS.items() if node is not exp.Round},
+        exp.Column: lambda self, node: self.column_label(node),
+        exp.Literal: lambda self, node: self.literal_value(node),
+        exp.Null: lambda self, node: "RỖNG",
+        exp.Boolean: lambda self, node: "ĐÚNG" if node.this else "SAI",
+        **{aggregate: lambda self, node: self.aggregate(node) for aggregate in _AGGREGATE_WORDS},
+        exp.Distinct: lambda self, node: f"KHÁC NHAU {', '.join(self.sql(item) for item in node.expressions)}",
+        **{operator: lambda self, node: self.operator(node) for operator in _OPERATORS},
+        exp.Case: lambda self, node: self.branches(node),
+        exp.If: lambda self, node: self.func("NẾU", node.this, node.args.get("true"), node.args.get("false")),
+        exp.Not: lambda self, node: self.negated(node),
+        exp.In: lambda self, node: f"{self.sql(node.this)} {self.membership(node)}",
+        exp.Is: lambda self, node: self.null_check(node),
+        exp.Between: lambda self, node: (
+            f"{self.sql(node.this)} TỪ {self.sql(node, 'low')} ĐẾN {self.sql(node, 'high')}"
+        ),
+        exp.Filter: lambda self, node: f"{self.sql(node.this)} CHỈ KHI {self.sql(node.expression.this)}",
+        exp.Window: lambda self, node: self.window(node),
+        exp.Ordered: lambda self, node: self.ordered(node),
+        exp.Cast: lambda self, node: f"ĐỔI_KIỂU({self.sql(node.this)}, {self.sql(node, 'to')})",
+    }
 
 
-def _counts_rows(term: ContractMetricTerm) -> bool:
-    """COUNT of a constant and SUM of 1 both count the rows that meet the condition."""
-    if term.measure_column:
-        return False
-    return term.aggregation == "COUNT" or (term.aggregation == "SUM" and term.measure_constant == "1")
+def metric_pseudo_code(expression: str | None, column_labels: dict[str, str], dialect: str | None = None) -> str | None:
+    """A metric expression as pseudo code for a reviewer, with the data dictionary's column labels in brackets.
 
-
-def _rows_word(conditions: list[Any], vocabulary: FormulaVocabulary) -> str:
-    """"ngày" when the term counts rows of a daily row kind (or a dataset with one grain), else "dòng"."""
-    for node in conditions:
-        if (row_kind := _row_kind_value(node, vocabulary)) and (grain := vocabulary.grain_of(row_kind)):
-            return GRAIN_WORDS.get(grain.grain, "dòng")
-    single = vocabulary.grain_of(None)
-    return GRAIN_WORDS.get(single.grain, "dòng") if single else "dòng"
-
-
-def _term_text(term: ContractMetricTerm, own: list[Any], every: list[Any], vocabulary: FormulaVocabulary) -> str:
-    """The term in words: `own` are the conditions it states itself; `every` also holds those moved to the note."""
-    conditions = " và ".join(_told(node, vocabulary) for node in own)
-    if _counts_rows(term):
-        text = f"số {_rows_word(every, vocabulary)}"
-        return f"{text} có {conditions}" if conditions else text
-    word = _AGGREGATE_WORDS.get(term.aggregation, term.aggregation.lower())
-    measure = vocabulary.label(term.measure_column) if term.measure_column else f"giá trị {term.measure_constant}"
-    text = f"{word} {measure}"
-    return f"{text}, chỉ tính dòng có {conditions}" if conditions else text
-
-
-def read_formula(formula: ContractMetricFormula, vocabulary: FormulaVocabulary) -> dict[str, Any]:
-    """The formula in business words, for a reviewer: each aggregate as a phrase and the row filters set apart.
-
-    A condition the numerator and denominator share, and a row kind condition, go to `only_rows`, so the phrases stay
-    short. A plain metric that does not count rows moves all its conditions there.
+    Aggregates, CASE, FILTER, windows, casts and the logic read in Vietnamese words; any other function keeps its SQL
+    name, so every expression Superset accepts has a reading. None when the expression cannot be parsed, such as one
+    holding Jinja templating; the raw SQL then stands alone.
     """
-    numerator_conditions = _conjuncts(formula.numerator.condition)
-    denominator_conditions = _conjuncts(formula.denominator.condition) if formula.denominator else []
-    if formula.denominator:
-        denominator_sql = {node.sql(dialect="postgres") for node in denominator_conditions}
-        shared = [node for node in numerator_conditions if node.sql(dialect="postgres") in denominator_sql]
-    elif _counts_rows(formula.numerator):
-        shared = []
-    else:
-        shared = list(numerator_conditions)
-    moved = list(shared)
-    moved_sql = {node.sql(dialect="postgres") for node in moved}
-    for node in [*numerator_conditions, *denominator_conditions]:
-        if _row_kind_value(node, vocabulary) and node.sql(dialect="postgres") not in moved_sql:
-            moved.append(node)
-            moved_sql.add(node.sql(dialect="postgres"))
-
-    def own(conditions: list[Any]) -> list[Any]:
-        return [node for node in conditions if node.sql(dialect="postgres") not in moved_sql]
-
-    numerator = _term_text(formula.numerator, own(numerator_conditions), numerator_conditions, vocabulary)
-    denominator = (
-        _term_text(formula.denominator, own(denominator_conditions), denominator_conditions, vocabulary)
-        if formula.denominator else None
-    )
-    return {
-        "scale": format(float(formula.scale), "g") if formula.scale else None,
-        "numerator": numerator,
-        "denominator": denominator,
-        "only_rows": [_row_filter(node, vocabulary) for node in moved],
-    }
+    if not expression or not expression.strip():
+        return None
+    try:
+        tree = sqlglot.parse_one(expression, read=dialect)
+    except SqlglotError:
+        return None
+    if tree is None:
+        return None
+    try:
+        return _PseudoCodeGenerator(column_labels).generate(tree)
+    except (SqlglotError, ValueError, KeyError):
+        return None
