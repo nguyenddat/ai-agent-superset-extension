@@ -61,3 +61,12 @@ def is_internal_dataset(dataset: SqlaTable) -> bool:
     except (TypeError, ValueError):
         return False
     return isinstance(extra, dict) and extra.get(INTERNAL_DATABASE_FLAG) is True
+
+
+def business_datasets_by_name() -> dict[str, list[SqlaTable]]:
+    """The business datasets (not internal ones) under their table name; datasets on two schemas may share a name."""
+    datasets: dict[str, list[SqlaTable]] = {}
+    for dataset in datasets_by_name():
+        if not is_internal_dataset(dataset):
+            datasets.setdefault(dataset.table_name, []).append(dataset)
+    return datasets

@@ -746,3 +746,13 @@ export type ExpertRulePayload = {
   metric_ids: number[];
   group_id?: number | null;
 };
+
+/** A CSV or XLSX file sent by the API, its bytes in base64. */
+export type TableFile = { filename: string; media_type: string; content: string };
+
+export type ImportAction = 'create' | 'update' | 'unchanged' | 'error';
+
+/** What importing one row of a file does; `row` is the spreadsheet row number and `changes` the fields it changes. */
+export type ImportRow = { row: number; key: string; action: ImportAction; message: string | null; changes: string[] };
+
+export type ImportReport = { rows: ImportRow[]; summary: Record<ImportAction, number> };

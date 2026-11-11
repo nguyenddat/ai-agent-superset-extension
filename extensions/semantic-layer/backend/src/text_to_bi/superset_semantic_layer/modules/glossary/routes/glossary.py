@@ -5,6 +5,7 @@ from flask_appbuilder.api import expose, permission_name, protect, safe
 from flask_login import current_user
 from superset import db
 
+from ....common.utils.table_file import import_report
 from ....common.utils.type_formatter import iso_datetime
 from ....core.database import handle_errors, rollback_on_error
 from ....core.security import csrf_protected, require_admin, second_reviewer_required
@@ -27,6 +28,7 @@ from ..services.discovery import (
 )
 from ..services.glossary import approve_revision, create_draft, revision_author_id, revoke_revision, update_draft
 from ..services.group import create_group, delete_group, group_reference, move_term, update_group
+from ..services.term_file import apply_term_import, export_terms, preview_term_import
 from ..services.validation import expected_revision_of, glossary_link_fingerprint, group_id_of, review_reason
 
 
@@ -312,6 +314,44 @@ class GlossaryRoutes:
         moved_term_ids = delete_group(group_id, current_user.id)
         db.session.commit()
         return self.response(200, moved_term_ids=moved_term_ids)
+
+    @expose("/glossary/file", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def export_glossary_file(self):
+        """Every term as a CSV file, or XLSX with `?format=xlsx`: the template the import reads back."""
+        require_admin()
+        ensure_dictionary_tables()
+        return self.response(200, **export_terms(request.args.get("format", "csv")))
+
+    @expose("/glossary/file/preview", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @handle_errors
+    def preview_glossary_file(self):
+        """What importing the uploaded file would do to each row; nothing is saved."""
+        require_admin()
+        ensure_dictionary_tables()
+        return self.response(200, **import_report(preview_term_import(request.get_json(silent=True))))
+
+    @expose("/glossary/file/import", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def import_glossary_file(self):
+        """Create and update the terms of the uploaded file as drafts in one transaction; a failing row saves none."""
+        require_admin()
+        ensure_dictionary_tables()
+        rows = apply_term_import(request.get_json(silent=True), current_user.id)
+        db.session.commit()
+        return self.response(200, **import_report(rows))
 
     @expose("/glossary/<int:term_id>/audit", methods=("GET",))
     @protect()

@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { requestJson, semanticLayerApi, supersetApi } from './api';
 import { layerLevels } from './datasets';
 import { OptionSelect } from './ExpertRuleEditor';
+import { FileTransfer } from './FileTransfer';
 import { IndicatorsPanel } from './IndicatorsPanel';
 import { ReferenceFields } from './ReferenceFields';
 import { RelationshipsPanel } from './RelationshipsPanel';
@@ -125,6 +126,23 @@ function comparableColumns(columns: ColumnDictionary[]): string {
     ...Object.fromEntries(editableFields.map(field => [field, column[field]])),
   })));
 }
+
+const DICTIONARY_FILE_GUIDE = (
+  <ul>
+    <li>
+      File gồm mọi dataset: mỗi dòng là một cột, khớp theo <code>dataset</code> (tên bảng) và <code>column</code>; dòng
+      có <code>column</code> trống là chính dataset và chỉ có <code>display_name</code>, <code>description</code>,{' '}
+      <code>contains_pii</code>.
+    </li>
+    <li>
+      <code>aggregations</code> và <code>synonyms</code> cách nhau bằng <code>;</code>; <code>contains_pii</code> là{' '}
+      <code>true</code> hoặc <code>false</code>; <code>semantic_role</code> trống thì giữ vai trò hiện tại.
+    </li>
+    <li>
+      Thiếu hẳn một cột không bắt buộc thì giữ nguyên giá trị đó. Metadata không cần duyệt: áp dụng là có hiệu lực.
+    </li>
+  </ul>
+);
 
 async function responseMessage(response: Response, fallback: string): Promise<string> {
   const payload = await response.json().catch(() => ({}));
@@ -549,6 +567,16 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           {readOnly ? <span className="sl-read-only"><LockKeyhole /> Chỉ đọc</span> : null}
           {dirty && !readOnly ? <span className="sl-dirty-status" role="status">Chưa lưu</span> : null}
           {saved ? <span className="sl-save-success" role="status"><Check /> Đã lưu</span> : null}
+          {!readOnly ? (
+            <FileTransfer
+              subject="data dictionary"
+              endpoint={semanticLayerApi.dictionaryFile}
+              guide={DICTIONARY_FILE_GUIDE}
+              disabled={dirty || saving || suggesting}
+              disabledReason="Lưu thay đổi trước khi nhập hoặc xuất file."
+              onImported={() => void loadDictionary(undefined, true)}
+            />
+          ) : null}
           {!readOnly ? (
             <Button variant="outline" disabled={saving || suggesting} onClick={() => void suggestDictionary()} title="Điền metadata còn trống; classification do người dùng chọn">
               {suggesting ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Sparkles data-icon="inline-start" />}

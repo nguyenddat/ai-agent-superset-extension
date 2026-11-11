@@ -26,7 +26,8 @@ TERM_CHANGED = "The glossary term changed; refresh and retry."
 NAME_TAKEN = "A glossary term with this canonical name already exists."
 
 
-def _checked_content(payload: Any) -> dict[str, Any]:
+def checked_term_content(payload: Any) -> dict[str, Any]:
+    """A term's content as the editor and the file import save it, with its steward checked to exist."""
     values = normalize_glossary_payload(payload)
     steward_id = values["steward_id"]
     if steward_id is not None and security_manager.get_user_by_id(steward_id) is None:
@@ -84,7 +85,7 @@ def _locked_current(term_id: int, expected_revision: int) -> GlossaryTermRevisio
 
 
 def create_draft(payload: Any, actor_id: int) -> GlossaryTermRevision:
-    values = _checked_content(payload)
+    values = checked_term_content(payload)
     term_repository = glossary_term_repository()
     if term_repository.by_normalized_name(values["normalized_name"]) is not None:
         raise GlossaryConflictError(NAME_TAKEN)
@@ -112,7 +113,7 @@ def update_draft(term_id: int, payload: Any, expected_revision: int, actor_id: i
     term in the meantime. A `group_id` in the payload moves the term at once, outside the draft.
     """
     current = _locked_current(term_id, expected_revision)
-    values = _checked_content(payload)
+    values = checked_term_content(payload)
     if values["normalized_name"] != current.term.normalized_name:
         raise GlossaryValidationError("The canonical name cannot be changed after creation.")
     group_id = group_id_of(payload)

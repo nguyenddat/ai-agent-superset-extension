@@ -11,6 +11,7 @@ from superset import db
 from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
 
+from ....common.utils.table_file import import_report
 from ....common.utils.type_formatter import compact_json, iso_datetime
 from ....core.database import handle_errors, rollback_on_error
 from ....core.security import can_access_dataset, csrf_protected, require_admin, second_reviewer_required
@@ -24,7 +25,7 @@ from ...glossary.models import GlossaryTermLink
 from ...semantic_query.dependencies import metric_contract_repository
 from ...semantic_query.services.contracts import contract_is_approved_current, metric_contract_hash
 from ...semantic_query.services.metric_review import metric_query_defaults_for
-from ...superset.services.datasets import get_dataset
+from ...superset.services.datasets import business_datasets_by_name, get_dataset
 from ...superset.services.users import user_names
 from ..dependencies import (
     expert_rule_audit_event_repository,
@@ -51,6 +52,7 @@ from ..services.expert_rule_group import (
     rule_group_id,
     update_rule_group,
 )
+from ..services.rule_file import RuleReferences, apply_rule_import, export_rules, preview_rule_import
 
 
 @api(id="text_to_bi_expert_rule_api", name="Text to BI Expert Rules", resource_name="expert-rules")
@@ -340,6 +342,60 @@ class ExpertRuleAPI(RestApi):
         moved_rule_ids = delete_rule_group(db.session, group_id, current_user.id)
         db.session.commit()
         return self.response(200, moved_rule_ids=moved_rule_ids)
+
+    def _file_references(self) -> RuleReferences:
+        """What a rule file names, resolved with the same resolvers as the editor's create and draft routes."""
+        return RuleReferences(
+            business_datasets_by_name(),
+            self._dataset,
+            self._glossary,
+            self._metric,
+            self._fingerprint,
+            self._column_resolver,
+            self._with_term_metrics,
+        )
+
+    @expose("/expert-rules/file", methods=["GET"])
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def export_file(self):
+        """Every rule as a CSV file, or XLSX with `?format=xlsx`: the template the import reads back."""
+        require_admin()
+        file_format = request.args.get("format", "csv")
+        return self.response(200, **export_rules(db.session, self._file_references(), file_format))
+
+    @expose("/expert-rules/file/preview", methods=["POST"])
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @handle_errors
+    def preview_file(self):
+        """What importing the uploaded file would do to each row; nothing is saved."""
+        require_admin()
+        rows = preview_rule_import(db.session, request.get_json(silent=True), self._file_references())
+        return self.response(200, **import_report(rows))
+
+    @expose("/expert-rules/file/import", methods=["POST"])
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def import_file(self):
+        """Create and update the rules of the uploaded file as drafts in one transaction; a failing row saves none."""
+        require_admin()
+        # Repositories flush as they add rows, so a unique-name collision can surface inside the import too.
+        try:
+            payload = request.get_json(silent=True)
+            rows = apply_rule_import(db.session, payload, self._file_references(), current_user.id)
+            db.session.commit()
+        except IntegrityError as ex:
+            raise ExpertRuleValidationError("Không lưu được các rule trong file; tải lại trang rồi thử lại.") from ex
+        return self.response(200, **import_report(rows))
 
     @expose("/expert-rules/<int:rule_id>/audit", methods=["GET"])
     @protect()
