@@ -8,6 +8,7 @@ from ....migrations import ensure_dictionary_tables
 from ...access_control.routes.access_control import AccessControlRoutes
 from ...agent_ladder.routes.agent import AgentLadderRoutes
 from ...business_model.routes.business_model import BusinessModelRoutes
+from ...consistency.routes.contradictions import ContradictionRoutes
 from ...data_dictionary.routes.dictionary import DataDictionaryRoutes
 from ...glossary.routes.glossary import GlossaryRoutes
 from ...semantic_query.routes.consumer import ConsumerRoutes
@@ -29,6 +30,7 @@ class SemanticLayerAPI(
     DataDictionaryRoutes,
     BusinessModelRoutes,
     GlossaryRoutes,
+    ContradictionRoutes,
     AccessControlRoutes,
     RestApi,
 ):

@@ -15,6 +15,7 @@ from .modules.business_model.models import (
     LineageEdge,
     business_domain_dataset,
 )
+from .modules.consistency.models import Contradiction, ContradictionJudgement
 from .modules.data_dictionary.models import (
     ColumnDictionary,
     ColumnTransformation,
@@ -159,6 +160,8 @@ def _migrate_dictionary_tables():
     TextEmbedding.__table__.create(bind=db.engine, checkfirst=True)
     GroupSuggestionDismissal.__table__.create(bind=db.engine, checkfirst=True)
     DatasetProposal.__table__.create(bind=db.engine, checkfirst=True)
+    Contradiction.__table__.create(bind=db.engine, checkfirst=True)
+    ContradictionJudgement.__table__.create(bind=db.engine, checkfirst=True)
 
     with db.engine.begin() as connection:
         contract_columns = {column["name"] for column in inspect(connection).get_columns(MetricContract.__tablename__)}

@@ -216,7 +216,11 @@ README). "Gợi ý gom nhóm" suggests groups of similar ungrouped terms or rule
 from embeddings cached in `text_to_bi_text_embedding` (word TF-IDF without a
 key), for an administrator to apply, change or dismiss; dismissals stay in
 `text_to_bi_group_suggestion_dismissal` (`docs/specs/goi-y-gom-nhom.md`).
-Opening the Semantic Layer as an administrator creates these tables
+`text_to_bi_contradiction` holds the contradictions "Mâu thuẫn" finds between
+terms, rules and linked metrics, with their dismissals, and
+`text_to_bi_contradiction_judgement` caches the chat model's verdict per pair
+content (`docs/specs/phat-hien-mau-thuan.md`). Opening the Semantic Layer as an
+administrator creates these tables
 and seeds dictionary rows from the existing Superset datasets.
 
 The Semantic Model's business view groups both base and aggregate datasets by

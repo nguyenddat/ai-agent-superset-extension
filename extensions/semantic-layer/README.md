@@ -11,6 +11,7 @@ This extension adds two menus to Superset's top navigation bar for administrator
 | Quản trị nghiệp vụ | Metrics: business definitions, review and trial runs | `metrics` |
 | Quản trị nghiệp vụ | Business Glossary: governed business terms | `glossary` |
 | Quản trị nghiệp vụ | Expert Rules: governed business rules | `rules` |
+| Quản trị nghiệp vụ | Mâu thuẫn: contradictory terms and rules, found automatically | `contradictions` |
 | Quản trị nghiệp vụ | Phân quyền: assign the Semantic Layer roles to users | `access` |
 
 ### Roles
@@ -86,6 +87,18 @@ are separated by `;`; a column left out of the file keeps the stored value.
 A new term or rule is created as a draft; a content change adds a draft revision through the editor services, so
 nothing is approved by an import and each change is audited as a single edit would be. A group-only change is a
 `moved` event, and a missing group is created. Dictionary metadata has no review step and is saved directly.
+
+### Contradictions
+
+"Mâu thuẫn" (admin only) checks the current draft or approved revision of every term and rule, and the metrics terms
+link, each time it opens or "Kiểm tra lại" is pressed (`POST .../contradictions/check`). Rule-based checks catch name
+and synonym clashes, rule conditions that cannot all hold, rules that overlap or disagree on one term, and thresholds
+a term's definition or a rule's example states differently from the rule's conditions (`> 50` against `≥ 50`). Pairs
+related by links, groups or names are also sent to the OpenRouter chat model for clashes in meaning; without
+`OPENROUTER_API_KEY`, or when the call fails, only the rule-based checks run. Verdicts are cached by the content hash
+of the pair in `text_to_bi_contradiction_judgement`; findings live in `text_to_bi_contradiction`. A dismissal
+(`POST .../contradictions/<id>/dismiss` with `{"reason"}`) holds until either item changes. See
+`docs/specs/phat-hien-mau-thuan.md`.
 
 ## Semantic Model: base and aggregate tables
 
@@ -163,7 +176,7 @@ semantic-layer/
 │       ├── common/exceptions/          # abstract app errors carrying a status and a default message
 │       ├── common/utils/type_formatter.py  # ISO dates and moments, JSON texts, SSE events
 │       ├── modules/<module>/           # one business area each: data_dictionary, business_model, glossary,
-│       │   │                           # expert_rules, semantic_query, agent_ladder, superset; each holds:
+│       │   │                           # expert_rules, consistency, semantic_query, agent_ladder, superset; each holds:
 │       │   ├── models/                 # its tables in Superset's metadata database
 │       │   ├── repositories/           # one repository per model: every query on those tables
 │       │   ├── dependencies.py         # repository factories bound to the request's session

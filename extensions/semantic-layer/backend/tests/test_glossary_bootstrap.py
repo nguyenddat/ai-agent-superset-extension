@@ -91,6 +91,8 @@ def _migration_namespace():
         "TextEmbedding",
         "GroupSuggestionDismissal",
         "DatasetProposal",
+        "Contradiction",
+        "ContradictionJudgement",
     )
     namespace = {name: SimpleNamespace(__tablename__=name, __table__=Table(name)) for name in names}
     namespace.update(

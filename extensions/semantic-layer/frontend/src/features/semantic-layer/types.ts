@@ -786,3 +786,31 @@ export type ImportAction = 'create' | 'update' | 'unchanged' | 'error';
 export type ImportRow = { row: number; key: string; action: ImportAction; message: string | null; changes: string[] };
 
 export type ImportReport = { rows: ImportRow[]; summary: Record<ImportAction, number> };
+
+/** What a contradiction is about; the `_meaning` kinds are judged by the AI model, the others by rule-based checks. */
+export type ContradictionKind =
+  | 'term_name_clash' | 'rule_conditions_empty' | 'rule_rule_same_term' | 'rule_rule_overlap' | 'rule_term_threshold'
+  | 'rule_example_threshold' | 'term_term_meaning' | 'term_metric_meaning' | 'rule_term_meaning' | 'rule_rule_meaning';
+
+/** A glossary term, expert rule or metric a contradiction involves, named as it was when found. */
+export type ContradictionItem = { type: 'term' | 'rule' | 'metric'; id: number; name: string };
+
+export type Contradiction = {
+  id: number;
+  kind: ContradictionKind;
+  found_by: 'rule' | 'ai';
+  status: 'open' | 'dismissed';
+  items: ContradictionItem[];
+  evidence: string[];
+  explanation: string;
+  detected_at: string | null;
+  dismiss_reason: string | null;
+  dismissed_by_name: string | null;
+  dismissed_at: string | null;
+};
+
+/** A check's result: the contradictions, open ones first, and how the AI part went. */
+export type ContradictionCheck = {
+  contradictions: Contradiction[];
+  semantic: { status: 'checked' | 'pending' | 'unavailable' | 'failed'; unchecked: number; message: string | null };
+};

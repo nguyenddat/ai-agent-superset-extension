@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { requestJson, semanticLayerApi } from './api';
 import { GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace } from './ConceptGroups';
+import { takeConceptFocus } from './conceptFocus';
 import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
 import type { ConceptRequest } from './creationRequest';
@@ -226,7 +227,7 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
     { terms: [], groups: [], users: [], current_user_id: null, require_second_reviewer: false },
   );
   const [datasets, setDatasets] = useState<GlossaryDatasetOption[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(() => takeConceptFocus('glossary'));
   const [editing, setEditing] = useState<'new' | 'existing' | null>(creation ? 'new' : null);
   const [stateFilter, setStateFilter] = useState<GlossaryState | 'all'>('all');
   const [searchText, setSearchText] = useState('');

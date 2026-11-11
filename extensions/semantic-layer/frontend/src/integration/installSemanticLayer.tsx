@@ -4,6 +4,7 @@ import { Database, Layers3, LoaderCircle, Table2 } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import '@/styles/globals.css';
 import { PortalContainerContext } from '@/lib/portal-container';
+import { Contradictions } from '../features/semantic-layer/Contradictions';
 import { DataDictionary } from '../features/semantic-layer/DataDictionary';
 import { ExpertRules } from '../features/semantic-layer/ExpertRules';
 import { BusinessCanvas } from '../features/semantic-layer/BusinessCanvas';
@@ -305,6 +306,8 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
                 <main className="sl-details"><Glossary readOnly={!access.is_admin} /></main>
               ) : activeModule === 'rules' ? (
                 <main className="sl-details"><ExpertRules readOnly={!access.is_admin} /></main>
+              ) : activeModule === 'contradictions' ? (
+                <main className="sl-details"><Contradictions /></main>
               ) : activeModule === 'access' ? (
                 <main className="sl-details"><RoleAssignments /></main>
               ) : activeModule === 'metrics' ? (

@@ -14,7 +14,8 @@ export const AGENT_DEFINITIONS_API = '/extensions/text-to-bi/superset-ai-agent/d
 export const SEMANTIC_LAYER_PAGE = '/semantic-layer/';
 
 export type SemanticLayerModule =
-  | 'dictionary' | 'semantic' | 'overview' | 'metrics' | 'glossary' | 'rules' | 'questions' | 'access';
+  | 'dictionary' | 'semantic' | 'overview' | 'metrics' | 'glossary' | 'rules' | 'contradictions' | 'questions'
+  | 'access';
 
 export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: string; description: string }> = [
   { id: 'dictionary', label: 'Data Dictionary', description: 'Chỉnh metadata datasets và columns' },
@@ -23,6 +24,7 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
   { id: 'metrics', label: 'Metrics', description: 'Duyệt định nghĩa metric và chạy thử' },
   { id: 'glossary', label: 'Business Glossary', description: 'Thuật ngữ nghiệp vụ được quản trị' },
   { id: 'rules', label: 'Expert Rules', description: 'Quy tắc nghiệp vụ của chuyên gia' },
+  { id: 'contradictions', label: 'Mâu thuẫn', description: 'Thuật ngữ và rule nói trái nhau, phát hiện tự động' },
   { id: 'questions', label: 'Xử lý câu hỏi', description: 'Cách hiểu riêng của người dùng, câu hỏi thiếu metric và đề xuất dataset' },
   { id: 'access', label: 'Phân quyền', description: 'Gán nhóm quyền xem và truy vấn Semantic Layer cho người dùng' },
 ];
@@ -46,7 +48,7 @@ export const semanticLayerModuleGroups: Array<{ id: string; label: string; modul
   {
     id: 'governance',
     label: 'Quản trị nghiệp vụ',
-    modules: ['overview', 'metrics', 'glossary', 'rules', 'questions', 'access'],
+    modules: ['overview', 'metrics', 'glossary', 'rules', 'contradictions', 'questions', 'access'],
   },
 ];
 
