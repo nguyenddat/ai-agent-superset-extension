@@ -479,7 +479,11 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
               </div>
               {readOnly ? null : (
                 <div className="sl-metrics-actions">
-                  <Button variant="outline" disabled={deciding} onClick={() => { setEditingTermId(selectedTerm.id); setEditing('existing'); }}>
+                  <Button
+                    variant="outline"
+                    disabled={deciding}
+                    onClick={() => { setEditingTermId(selectedTerm.id); setEditing('existing'); }}
+                  >
                     <Pencil data-icon="inline-start" /> Sửa
                   </Button>
                   {state === 'draft' ? (

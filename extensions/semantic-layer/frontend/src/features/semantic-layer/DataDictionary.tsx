@@ -665,7 +665,10 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                 id="sl-dataset-contains-pii" checked={dictionary.contains_pii ?? false} disabled={readOnly || saving}
                 onCheckedChange={checked => updateDataset('contains_pii', checked)}
               />
-              <FieldLabel htmlFor="sl-dataset-contains-pii" title="Bảng chứa dữ liệu cá nhân như họ tên, số điện thoại, email">
+              <FieldLabel
+                htmlFor="sl-dataset-contains-pii"
+                title="Bảng chứa dữ liệu cá nhân như họ tên, số điện thoại, email"
+              >
                 Chứa dữ liệu nhạy cảm (PII)
               </FieldLabel>
             </Field>

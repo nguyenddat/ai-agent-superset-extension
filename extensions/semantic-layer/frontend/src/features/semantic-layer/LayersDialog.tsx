@@ -291,13 +291,21 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
                             </span>
                             <Select items={colorItems} value={draft.color} onValueChange={color => { if (color) update(draft.key, { color }); }}>
                               <SelectTrigger aria-label={`Màu của tầng ${draft.name || 'mới'}`} className="w-14" size="sm">
-                                <SelectValue>{(value: string) => <span className="sl-reference-item"><span className="sl-color-dot" style={{ background: value }} /></span>}</SelectValue>
+                                <SelectValue>
+                                  {(value: string) => (
+                                    <span className="sl-reference-item">
+                                      <span className="sl-color-dot" style={{ background: value }} />
+                                    </span>
+                                  )}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent alignItemWithTrigger={false} className="min-w-40">
                                 <SelectGroup>
                                   {colorItems.map(item => (
                                     <SelectItem key={item.value} value={item.value}>
-                                      <span className="sl-reference-item"><span className="sl-color-dot" style={{ background: item.value }} />{item.label}</span>
+                                      <span className="sl-reference-item">
+                                        <span className="sl-color-dot" style={{ background: item.value }} />{item.label}
+                                      </span>
                                     </SelectItem>
                                   ))}
                                 </SelectGroup>
