@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { expertRulesApi, requestJson } from './api';
-import { GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace } from './ConceptGroups';
+import {
+  firstListed, GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace,
+} from './ConceptGroups';
 import { takeConceptFocus } from './conceptFocus';
 import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
@@ -156,11 +158,12 @@ function RuleHistory({ rule, revision }: { rule: ExpertRule; revision: number })
   );
 }
 
-function RuleDetail({ rule, groups, historyRevision, moving, onMove }: {
+function RuleDetail({ rule, groups, historyRevision, moving, readOnly, onMove }: {
   rule: ExpertRule;
   groups: ConceptGroup[];
   historyRevision: number;
   moving: boolean;
+  readOnly: boolean;
   onMove: (groupId: number | null) => void;
 }) {
   const columnName = (columnId: number) => rule.column_names[String(columnId)] ?? `#${columnId}`;
@@ -172,7 +175,14 @@ function RuleDetail({ rule, groups, historyRevision, moving, onMove }: {
         <div>
           <dt>Nhóm</dt>
           <dd>
-            <GroupSelect groups={groups} groupId={rule.group?.id ?? null} disabled={moving} inline onChange={onMove} />
+            <GroupSelect
+              groups={groups}
+              groupId={rule.group?.id ?? null}
+              disabled={moving}
+              inline
+              readOnly={readOnly}
+              onChange={onMove}
+            />
           </dd>
         </div>
       </dl>
@@ -248,6 +258,8 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
   const [datasets, setDatasets] = useState<ExpertRuleDatasetOption[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => takeConceptFocus('rules'));
   const [editing, setEditing] = useState<'new' | 'existing' | null>(creation ? 'new' : null);
+  // The rule opened with 'Sửa': the form stays on it even when the search or filter hides it.
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
   const [stateFilter, setStateFilter] = useState<ExpertRuleState | 'all'>('all');
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -291,7 +303,10 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
     ));
   }, [ruleList, stateFilter, searchText]);
   const filtering = stateFilter !== 'all' || searchText.trim() !== '';
-  const selectedRule = ruleList.rules.find(rule => rule.id === selectedId) ?? visibleRules[0] ?? null;
+  const ruleGroupId = (rule: ExpertRule) => rule.group?.id ?? null;
+  // The detail follows the list: a rule the search or filter hides is not shown, and the first listed rule opens.
+  const selectedRule = visibleRules.find(rule => rule.id === selectedId)
+    ?? firstListed(ruleList.groups, visibleRules, ruleGroupId);
   const stateItems = [
     { value: 'all', label: `Mọi trạng thái (${ruleList.rules.length})` },
     ...STATE_ORDER.map(state => ({ value: state, label: `${STATE_LABELS[state]} (${stateCounts.get(state) ?? 0})` })),
@@ -347,7 +362,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
   const state = selectedRule?.state;
   const approvalBlocked = state === 'draft' && ruleList.require_second_reviewer
     && selectedRule?.author_id === ruleList.current_user_id;
-  const editorRule = editing === 'existing' ? selectedRule : null;
+  const editorRule = editing === 'existing' ? ruleList.rules.find(rule => rule.id === editingRuleId) ?? null : null;
   const isSelected = (rule: ExpertRule) => editing !== 'new' && selectedRule?.id === rule.id;
 
   return (
@@ -407,18 +422,20 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
         <div className="sl-metrics-list">
           {loading && ruleList.rules.length === 0 ? (
             <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang tải rule…</p>
-          ) : visibleRules.length === 0 && (filtering || ruleList.groups.length === 0) ? (
+          ) : visibleRules.length === 0 && (filtering || readOnly || ruleList.groups.length === 0) ? (
             <p className="sl-metric-muted">
-              {ruleList.rules.length === 0
-                ? 'Chưa có rule nào. Bấm "Tạo rule" để bắt đầu.'
-                : 'Không có rule nào khớp bộ lọc.'}
+              {ruleList.rules.length > 0
+                ? 'Không có rule nào khớp bộ lọc.'
+                : readOnly
+                  ? 'Chưa có rule nào bạn được xem. Rule chỉ hiện khi bạn có quyền đọc dataset của nó.'
+                  : 'Chưa có rule nào. Bấm "Tạo rule" để bắt đầu.'}
             </p>
           ) : (
             <GroupedList
               noun="rule"
               groups={ruleList.groups}
               items={visibleRules}
-              groupIdOf={rule => rule.group?.id ?? null}
+              groupIdOf={ruleGroupId}
               filtered={filtering}
               onEditGroup={readOnly ? undefined : group => groupWorkspace.startEditing(group)}
               onDeleteGroup={readOnly ? undefined : groupWorkspace.setDeleting}
@@ -467,7 +484,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
           </>
         ) : !selectedRule ? (
           <p className="sl-metric-muted sl-rule-empty">
-            {datasets.length === 0 && !loading
+            {!readOnly && datasets.length === 0 && !loading
               ? 'Cần ít nhất một dataset có Data Dictionary để viết rule.'
               : 'Chọn một rule để xem chi tiết.'}
           </p>
@@ -487,7 +504,7 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
               </div>
               {readOnly ? null : (
                 <div className="sl-metrics-actions">
-                  <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
+                  <Button variant="outline" disabled={deciding} onClick={() => { setEditingRuleId(selectedRule.id); setEditing('existing'); }}>
                     <Pencil data-icon="inline-start" /> Sửa
                   </Button>
                   {state === 'draft' ? (
@@ -512,7 +529,8 @@ export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
               rule={selectedRule}
               groups={ruleList.groups}
               historyRevision={historyRevision}
-              moving={moving || readOnly}
+              moving={moving}
+              readOnly={readOnly}
               onMove={groupId => void moveRule(selectedRule, groupId)}
             />
           </>

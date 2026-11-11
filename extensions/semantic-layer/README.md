@@ -87,6 +87,10 @@ are separated by `;`; a column left out of the file keeps the stored value.
 A new term or rule is created as a draft; a content change adds a draft revision through the editor services, so
 nothing is approved by an import and each change is audited as a single edit would be. A group-only change is a
 `moved` event, and a missing group is created. Dictionary metadata has no review step and is saved directly.
+A file exported unchanged always imports back unchanged: a term row that keeps its content may keep a metric link
+whose contract is no longer approved, while a row that edits the term needs every linked metric approved, as the
+editor does. Renaming a rule moves its name key with it, so the old name is free and the file matches the new name;
+a rename onto another rule's name is refused like a duplicate new rule.
 
 ### Contradictions
 

@@ -175,7 +175,13 @@ export function GlossaryEditor({ term, draft, datasets, users, groups, onCancel,
           onChange={event => setSynonyms(event.target.value)}
         />
         <span className="sl-metric-trial-label">Người phụ trách</span>
-        <OptionSelect label="Người phụ trách" items={stewardItems} value={stewardId} onChange={setStewardId} />
+        <OptionSelect
+          label="Người phụ trách"
+          items={stewardItems}
+          value={stewardId}
+          className="sl-rule-wide"
+          onChange={setStewardId}
+        />
         <span className="sl-metric-trial-label">Liên kết</span>
         <div className="sl-metric-trial-field is-stacked">
           {links.map(link => (

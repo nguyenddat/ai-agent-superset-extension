@@ -175,16 +175,19 @@ export function groupItems(groups: ConceptGroup[]) {
 
 /**
  * A select that moves a member between groups; null stands for "ungrouped". `inline` reads as plain text among the
- * detail panel's facts and shows its frame only on hover, instead of looking like a form field.
+ * detail panel's facts and shows its frame only on hover, instead of looking like a form field. `readOnly` shows
+ * only the group's name, for a viewer who cannot move members.
  */
-export function GroupSelect({ groups, groupId, disabled, inline, className, onChange }: {
+export function GroupSelect({ groups, groupId, disabled, inline, readOnly, className, onChange }: {
   groups: ConceptGroup[];
   groupId: number | null;
   disabled?: boolean;
   inline?: boolean;
+  readOnly?: boolean;
   className?: string;
   onChange: (groupId: number | null) => void;
 }) {
+  if (readOnly) return <>{groups.find(group => group.id === groupId)?.name ?? UNGROUPED_LABEL}</>;
   return (
     <OptionSelect
       label="Nhóm"
@@ -205,12 +208,33 @@ type GroupedListProps<Item> = {
   /** While a search or filter narrows the list, groups with no matching member are hidden. */
   filtered: boolean;
   renderItem: (item: Item) => ReactNode;
-  /** Left out for a read-only viewer, which hides the edit and delete buttons of every group. */
+  /** Left out for a read-only viewer, which hides the edit and delete buttons of every group and the empty groups. */
   onEditGroup?: (group: ConceptGroup) => void;
   onDeleteGroup?: (group: ConceptGroup) => void;
 };
 
-/** The members under their groups, each group collapsible, and the ungrouped members last. */
+/** The groups in list order, each with its members, and the ungrouped members last. */
+function groupSections<Item>(groups: ConceptGroup[], items: Item[], groupIdOf: (item: Item) => number | null) {
+  const knownGroupIds = new Set(groups.map(group => group.id));
+  const membersOf = (groupId: number | null) => items.filter(item => {
+    const itemGroupId = groupIdOf(item);
+    return groupId === null ? itemGroupId === null || !knownGroupIds.has(itemGroupId) : itemGroupId === groupId;
+  });
+  return [
+    ...groups.map(group => ({ key: String(group.id), group, members: membersOf(group.id) })),
+    { key: UNGROUPED_VALUE, group: null as ConceptGroup | null, members: membersOf(null) },
+  ];
+}
+
+/** The first member the grouped list shows, which a page opens when nothing is selected. */
+export function firstListed<Item>(groups: ConceptGroup[], items: Item[], groupIdOf: (item: Item) => number | null) {
+  return groupSections(groups, items, groupIdOf).flatMap(section => section.members)[0] ?? null;
+}
+
+/**
+ * The members under their groups, each group collapsible, and the ungrouped members last. An empty group is listed
+ * only for an administrator, who can fill it; a read-only viewer sees the groups holding members it may read.
+ */
 export function GroupedList<Item>(
   { noun, groups, items, groupIdOf, filtered, renderItem, onEditGroup, onDeleteGroup }: GroupedListProps<Item>,
 ) {
@@ -220,15 +244,9 @@ export function GroupedList<Item>(
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
-  const knownGroupIds = new Set(groups.map(group => group.id));
-  const membersOf = (groupId: number | null) => items.filter(item => {
-    const itemGroupId = groupIdOf(item);
-    return groupId === null ? itemGroupId === null || !knownGroupIds.has(itemGroupId) : itemGroupId === groupId;
-  });
-  const sections = [
-    ...groups.map(group => ({ key: String(group.id), group, members: membersOf(group.id) })),
-    { key: UNGROUPED_VALUE, group: null, members: membersOf(null) },
-  ].filter(section => section.members.length > 0 || (!filtered && section.group !== null));
+  const showsEmptyGroups = !filtered && onEditGroup !== undefined;
+  const sections = groupSections(groups, items, groupIdOf)
+    .filter(section => section.members.length > 0 || (showsEmptyGroups && section.group !== null));
 
   return (
     <>

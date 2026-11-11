@@ -27,7 +27,8 @@ type SuggestionCardProps = {
 /** One suggestion the administrator may take as it is, change (group, name, members) or dismiss. */
 function SuggestionCard({ noun, suggestion, groups, busy, onApply, onDismiss }: SuggestionCardProps) {
   const [target, setTarget] = useState(suggestion.group ? String(suggestion.group.id) : NEW_GROUP);
-  const [groupName, setGroupName] = useState(suggestion.proposed_name);
+  // A suggestion for an existing group proposes that group's name, which a new group could not take.
+  const [groupName, setGroupName] = useState(suggestion.group ? '' : suggestion.proposed_name);
   const [memberIds, setMemberIds] = useState(() => suggestion.members.map(member => member.id));
   const toggle = (memberId: number) => setMemberIds(current => (
     current.includes(memberId) ? current.filter(id => id !== memberId) : [...current, memberId]
@@ -45,6 +46,7 @@ function SuggestionCard({ noun, suggestion, groups, busy, onApply, onDismiss }: 
         {target === NEW_GROUP ? (
           <Input
             aria-label="Tên nhóm mới"
+            placeholder="Tên nhóm mới"
             value={groupName}
             maxLength={255}
             disabled={busy}

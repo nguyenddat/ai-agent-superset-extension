@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from catalog_source import compile_into, module_function
+from sqlalchemy import create_engine, text
 
 
 def test_glossary_bootstrap_creates_parent_tables_before_children_with_checkfirst():
@@ -102,6 +103,7 @@ def _migration_namespace():
         business_domain_dataset=Table("business_domain_dataset"),
         calls=calls,
         _add_group_columns=lambda postgres: calls.append(("_add_group_columns", postgres)),
+        _sync_rule_name_keys=lambda: calls.append(("_sync_rule_name_keys", None)),
     )
     return namespace
 
@@ -177,3 +179,33 @@ def test_postgres_audit_trails_created_before_groups_learn_to_record_moves():
             "CHECK (event_type IN ('created', 'moved'))"
         ),
     ]
+
+
+def test_rules_renamed_before_renames_moved_the_name_key_get_the_key_of_their_current_name():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE rule (id INTEGER PRIMARY KEY, normalized_name TEXT UNIQUE)"))
+        connection.execute(
+            text("CREATE TABLE revision (id INTEGER PRIMARY KEY, rule_id INTEGER, name TEXT, is_current BOOLEAN)")
+        )
+        connection.execute(text("INSERT INTO rule VALUES (1, 'hot day'), (2, 'wet day'), (3, 'cold day')"))
+        connection.execute(
+            text(
+                "INSERT INTO revision VALUES (1, 1, 'Hot day', 0), (2, 1, 'Very  Hot day', 1), "
+                "(3, 2, 'Wet day', 1), (4, 3, 'Wet day', 1)"
+            )
+        )
+    namespace = {
+        "db": SimpleNamespace(engine=engine),
+        "text": text,
+        "ExpertRule": SimpleNamespace(__tablename__="rule"),
+        "ExpertRuleRevision": SimpleNamespace(__tablename__="revision"),
+    }
+    compile_into(namespace, module_function("_sync_rule_name_keys"))
+
+    namespace["_sync_rule_name_keys"]()
+
+    with engine.connect() as connection:
+        name_keys = dict(connection.execute(text("SELECT id, normalized_name FROM rule")).all())
+    # Rule 3 was renamed onto rule 2's name before renames were checked, so it keeps its old key.
+    assert name_keys == {1: "very hot day", 2: "wet day", 3: "cold day"}

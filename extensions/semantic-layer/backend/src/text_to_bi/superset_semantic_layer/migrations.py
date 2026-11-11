@@ -207,6 +207,7 @@ def _migrate_dictionary_tables():
             )
 
     _add_group_columns(postgres)
+    _sync_rule_name_keys()
 
     with db.engine.begin() as connection:
         definition_columns = {
@@ -434,6 +435,29 @@ def _migrate_dictionary_tables():
             table_columns = {column["name"] for column in inspect(connection).get_columns(table)}
             if "contains_pii" not in table_columns:
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN contains_pii BOOLEAN NOT NULL DEFAULT FALSE"))
+
+
+def _sync_rule_name_keys() -> None:
+    """Give a rule renamed before renames moved its unique name key the key of its current name, unless it is taken."""
+    rule_table, revision_table = ExpertRule.__tablename__, ExpertRuleRevision.__tablename__
+    with db.engine.begin() as connection:
+        rows = connection.execute(
+            text(
+                f"SELECT expert_rule.id, expert_rule.normalized_name, revision.name FROM {rule_table} expert_rule "
+                f"JOIN {revision_table} revision ON revision.rule_id = expert_rule.id AND revision.is_current"
+            )
+        ).all()
+        taken = {row.normalized_name for row in rows}
+        for row in rows:
+            name_key = " ".join(row.name.split()).casefold()
+            if name_key == row.normalized_name or name_key in taken:
+                continue
+            connection.execute(
+                text(f"UPDATE {rule_table} SET normalized_name = :name_key WHERE id = :id"),
+                {"name_key": name_key, "id": row.id},
+            )
+            taken.discard(row.normalized_name)
+            taken.add(name_key)
 
 
 def _add_group_columns(postgres: bool) -> None:

@@ -235,6 +235,25 @@ def test_a_term_file_that_only_changes_the_group_moves_the_term_without_review()
     assert (events[-1].event_type, events[-1].reason) == ("moved", "Chưa phân nhóm → Doanh thu")
 
 
+def test_an_unchanged_term_reads_back_after_its_metric_lost_approval_but_an_edit_of_it_is_refused():
+    service, session = _glossary()
+    namespace = service.create_draft.__globals__
+    namespace["get_dataset"](7).metrics.append(SimpleNamespace(id=21, metric_name="rain_days", expression="SUM(1)"))
+    row = ["Rainy day", "A day with rain.", "", "", "", "metric:daily_weather.rain_days"]
+    service.apply_term_import(_term_file(row), 7)
+    session.commit()
+    namespace["glossary_metric_approved"] = lambda _dataset, _metric: False
+
+    assert _actions(service.preview_term_import(service.export_terms("csv"))) == [("unchanged", None)]
+    moved = [*row[:3], "Mưa", *row[4:]]
+    assert [item.action for item in service.preview_term_import(_term_file(moved))] == ["update"]
+    edited = [row[0], "Any day with rain.", *row[2:]]
+    refused = ("error", "Thuật ngữ chỉ được liên kết metric đã duyệt.")
+    assert _actions(service.preview_term_import(_term_file(edited))) == [refused]
+    new_term = ["Wet day", "A wet day.", "", "", "", "metric:daily_weather.rain_days"]
+    assert _actions(service.preview_term_import(_term_file(new_term))) == [refused]
+
+
 def test_a_term_file_with_a_failing_row_reports_every_reason_and_saves_nothing():
     service, session = _glossary()
     upload = _term_file(
