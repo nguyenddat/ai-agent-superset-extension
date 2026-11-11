@@ -24,6 +24,7 @@ import {
   useNodesState,
   useReactFlow,
   useStore,
+  useStoreApi,
 } from '@xyflow/react';
 import { ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripHorizontal, Layers3, LoaderCircle, Network, Pencil, Plus, RotateCcw, Sigma, Table2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -925,11 +926,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, getEdges, getNode, getNodes, getNodesBounds, getZoom, screenToFlowPosition, setViewport } = useReactFlow();
-  const flowWidth = useStore(state => state.width);
+  const { fitView, getEdges, getNode, getNodes, getNodesBounds, getZoom, screenToFlowPosition, setViewport } =
+    useReactFlow();
+  const flowStore = useStoreApi();
   // Brings the whole diagram into view, clear of the lineage tools at the top right. A lineage too big to fit at a
   // readable zoom opens on its top-right corner at that zoom instead, still clear of the tools: the facts and their
-  // metrics stand at the right of the flow.
+  // metrics stand at the right of the flow. The canvas width is read when the fit runs, after a panel toggle has
+  // resized it.
   const fitCanvas = useCallback(async () => {
     if (mode === 'business') {
       await fitView({ padding: 0.12, duration: 250, maxZoom: 1 });
@@ -938,9 +941,10 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     await fitView({ padding: { top: '32px', bottom: '32px', left: '32px', right: '200px' }, duration: 250, maxZoom: 1 });
     if (getZoom() >= LINEAGE_MIN_FIT_ZOOM) return;
     const bounds = getNodesBounds(getNodes());
-    const x = flowWidth - 200 - (bounds.x + bounds.width) * LINEAGE_MIN_FIT_ZOOM;
+    const { width } = flowStore.getState();
+    const x = width - 200 - (bounds.x + bounds.width) * LINEAGE_MIN_FIT_ZOOM;
     await setViewport({ x, y: 32, zoom: LINEAGE_MIN_FIT_ZOOM }, { duration: 250 });
-  }, [mode, fitView, getZoom, getNodes, getNodesBounds, flowWidth, setViewport]);
+  }, [mode, fitView, getZoom, getNodes, getNodesBounds, flowStore, setViewport]);
 
   // Collapsing or opening the panel resizes the canvas; once React Flow has measured it, the diagram is centred again.
   const collapsedRef = useRef(panelCollapsed);
@@ -1460,7 +1464,11 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         const obstacles = edgeObstacles(cardNodes);
         const autoGeometry = new Map<string, EdgeGeometry>();
         const geometryOf = (
-          id: string, ends: [string, string], anchors: [EdgeAnchor, EdgeAnchor], reversed: boolean, kind: LineageEdge['kind'],
+          id: string,
+          ends: [string, string],
+          anchors: [EdgeAnchor, EdgeAnchor],
+          reversed: boolean,
+          kind: LineageEdge['kind'],
         ): EdgeGeometry => {
           const elkRoute = layout.routes.get(id);
           const route = elkRoute && reversed ? elkRoute.slice().reverse() : elkRoute;
@@ -1471,7 +1479,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           const elkCoords = route && unmoved ? coordsFromRoute(route) : null;
           const auto = elkCoords
             ? { ...DEFAULT_GEOMETRY, coords: elkCoords }
-            : routedGeometry(positions.get(ends[0]) as Point, positions.get(ends[1]) as Point, anchors, obstacles, kind);
+            : routedGeometry(
+              positions.get(ends[0]) as Point, positions.get(ends[1]) as Point, anchors, obstacles, kind,
+            );
           autoGeometry.set(id, auto);
           return saved.edges.get(id) ?? auto;
         };
@@ -1955,7 +1965,11 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       </aside>
 
       <section
-        className={`sl-canvas sl-model-canvas${mode === 'lineage' && zoomedOut ? ' is-zoomed-out' : ''}${metricFocus ? ' is-metric-focused' : ''}`}
+        className={[
+          'sl-canvas sl-model-canvas',
+          mode === 'lineage' && zoomedOut ? 'is-zoomed-out' : '',
+          metricFocus ? 'is-metric-focused' : '',
+        ].filter(Boolean).join(' ')}
         aria-label="Canvas semantic layer"
       >
         <EdgeMarkers strokes={markerStrokes} />
@@ -2076,7 +2090,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                     ) : null}
                   </div>
                   {selectedEdge && isDeclaredTransform(selectedEdge) ? (
-                    <p className="sl-edge-panel-hint">Cạnh biến đổi khai báo trong Data Dictionary; sửa hoặc bỏ phần Biến đổi của cột ở đó.</p>
+                    <p className="sl-edge-panel-hint">
+                      Cạnh biến đổi khai báo trong Data Dictionary; sửa hoặc bỏ phần Biến đổi của cột ở đó.
+                    </p>
                   ) : selectedEdge ? (
                     <Button
                       size="sm"

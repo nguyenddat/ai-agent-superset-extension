@@ -98,7 +98,9 @@ export function TransformationFields({
         <Textarea
           aria-label={`Biểu thức biến đổi của ${columnName}`}
           className="min-h-16 max-h-40 py-1"
-          placeholder={sources.length > 0 ? 'Ví dụ: AVG(tb_gia_tri_quan_sat.gia_tri_so) theo ngày' : 'Chọn cột nguồn trước'}
+          placeholder={
+            sources.length > 0 ? 'Ví dụ: AVG(tb_gia_tri_quan_sat.gia_tri_so) theo ngày' : 'Chọn cột nguồn trước'
+          }
           disabled={disabled || sources.length === 0}
           value={expression ?? ''}
           onChange={event => update({ expression: event.target.value || null, sources })}

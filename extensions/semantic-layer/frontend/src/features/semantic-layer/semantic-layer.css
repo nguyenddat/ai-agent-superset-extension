@@ -1233,7 +1233,12 @@
 }
 .sl-edge-panel-title { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .sl-edge-panel-title span { color: var(--sl-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
-.sl-edge-panel-title strong { color: var(--sl-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.sl-edge-panel-title strong {
+  color: var(--sl-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .sl-edge-panel-styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .sl-edge-panel-hint { margin: 0; color: var(--sl-muted); font-size: 11px; line-height: 15px; }
 .sl-edge-panel-colors { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1257,7 +1262,13 @@
 .sl-edge-transformations strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sl-edge-transformations code,
 .sl-transformation-expression textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.sl-edge-transformations code { padding: 1px 4px; border-radius: 4px; background: var(--sl-surface); white-space: pre-wrap; word-break: break-word; }
+.sl-edge-transformations code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--sl-surface);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .sl-edge-transformations span { display: block; color: var(--sl-muted); font-size: 11px; }
 /* A column's transformation in the Data Dictionary: input columns picked from a searchable list and an expression. */
 .sl-transformation { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(240px, 1.4fr); gap: 12px; padding: 0 0 10px; }
