@@ -110,7 +110,9 @@ def _scalar_filter_value(value: Any) -> bool:
 
 _TEMPORAL_TYPE = re.compile(r"DATE|TIME", re.IGNORECASE)
 _NUMERIC_TYPE = re.compile(r"INT|FLOAT|DOUBLE|NUMERIC|DECIMAL|REAL|SERIAL|NUMBER", re.IGNORECASE)
-_MOMENT_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$")
+_MOMENT_TEXT = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
+)
 
 
 def _is_number(value: Any) -> bool:
@@ -126,8 +128,16 @@ def _is_number(value: Any) -> bool:
 
 
 def _is_moment(value: Any) -> bool:
-    """A date or timestamp written as the frontend accepts it, the same on every Python version."""
-    return isinstance(value, str) and _MOMENT_TEXT.match(value.strip()) is not None
+    """A real date or timestamp written as the frontend accepts it, the same on every Python version."""
+    match = _MOMENT_TEXT.match(value.strip()) if isinstance(value, str) else None
+    if match is None:
+        return False
+    day, hour, minute, second = match.groups()
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return hour is None or (int(hour) < 24 and int(minute) < 60 and int(second or 0) < 60)
 
 
 def _check_value_type(column: Any, values: list[Any]) -> None:

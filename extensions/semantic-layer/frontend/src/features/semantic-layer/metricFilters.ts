@@ -27,7 +27,17 @@ export const datasetColumnLabel = (dataset: MetricQueryDataset | undefined, colu
 export const isListOperator = (operator: MetricFilterOperator) => operator === 'IN' || operator === 'NOT IN';
 
 const TEMPORAL_TYPE = /DATE|TIME/i;
-const MOMENT_TEXT = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/;
+const MOMENT_TEXT = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+
+/** A date or timestamp in the accepted shape that also exists on the calendar and the clock. */
+function isMoment(text: string) {
+  const match = MOMENT_TEXT.exec(text);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(part => Number(part ?? 0));
+  const calendarDay = new Date(Date.UTC(year, month - 1, day));
+  return calendarDay.getUTCFullYear() === year && calendarDay.getUTCMonth() === month - 1
+    && calendarDay.getUTCDate() === day && hour < 24 && minute < 60 && second < 60;
+}
 
 /** Turns the typed filter rows into the execute payload, converting numbers and checking dates. */
 export function buildFilters(drafts: FilterDraft[], columns: MetricQueryColumn[]): MetricQueryFilter[] {
@@ -37,7 +47,7 @@ export function buildFilters(drafts: FilterDraft[], columns: MetricQueryColumn[]
     const numeric = isNumericColumnType(column.type);
     const temporal = column.is_dttm || TEMPORAL_TYPE.test(column.type ?? '');
     const convert = (text: string) => {
-      if (temporal && !MOMENT_TEXT.test(text)) {
+      if (temporal && !isMoment(text)) {
         throw new Error(
           `Giá trị lọc của cột ${columnLabel(column)} phải là ngày dạng YYYY-MM-DD hoặc ngày giờ YYYY-MM-DD HH:MM:SS.`,
         );

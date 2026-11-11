@@ -199,6 +199,9 @@ def _typed_dataset():
     [
         ({"column": "ngay_key", "operator": ">", "value": "abc"}, "ngay_key phải là ngày"),
         ({"column": "ngay_key", "operator": "IN", "value": ["2026-11-01", "hôm qua"]}, "ngay_key phải là ngày"),
+        ({"column": "ngay_key", "operator": ">", "value": "2026-13-45"}, "ngay_key phải là ngày"),
+        ({"column": "ngay_key", "operator": ">", "value": "2026-02-30"}, "ngay_key phải là ngày"),
+        ({"column": "ngay_key", "operator": ">", "value": "2026-11-01 25:61:00"}, "ngay_key phải là ngày"),
         ({"column": "nhiet_do_c", "operator": ">", "value": "abc"}, "nhiet_do_c phải là số"),
     ],
 )
