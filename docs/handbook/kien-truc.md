@@ -42,7 +42,8 @@ thuộc một nghiệp vụ.
 | `expert_rules` | Expert rule, nhóm rule tương đồng, vòng đời duyệt, khám phá rule (API riêng `ExpertRuleAPI`) |
 | `semantic_query` | Metric contract, relationship contract, semantic catalog, biên dịch và chạy truy vấn |
 | `agent_ladder` | Metric tạm tính và đề xuất dataset do AI Agent tạo |
-| `superset` | Dataset, database và người dùng của Superset: chỉ đọc, không có bảng riêng |
+| `access_control` | Nhóm quyền Superset xem và truy vấn Semantic Layer, màn gán nhóm quyền cho người dùng |
+| `superset` | Dataset, database, người dùng và nhóm quyền của Superset: không có bảng riêng |
 | `catalog` | Ghép `SemanticLayerAPI` từ route mixin của các module và trang Semantic Layer |
 
 Thêm tính năng: đặt vào module của nghiệp vụ đó. Chỉ tạo module mới khi có một nghiệp vụ mới, có ngôn ngữ và vòng đời
@@ -50,7 +51,8 @@ riêng. Không tạo module chỉ để chứa một model, một bảng hay m�
 
 Mọi truy vấn vào bảng của Superset (`SqlaTable`, `Database`, người dùng) đi qua module `superset`:
 `modules/superset/services/datasets.py` (`get_dataset`, `require_dataset`, `datasets_on_database`, …) và
-`services/users.py` (`active_users`, `user_names`). Không gọi `db.session.query(SqlaTable)` ở module khác. Truy vấn
+`services/users.py` (`active_users`, `user_names`, `require_user`); nhóm quyền và permission FAB đi qua
+`services/roles.py` (`ensure_role`, `revoke_permissions`, `replace_user_roles`) bằng security manager. Không gọi `db.session.query(SqlaTable)` ở module khác. Truy vấn
 join bảng của một module với bảng Superset (ví dụ dataset dictionary với `SqlaTable`) nằm trong repository của module đó.
 
 ## Cấu trúc một module

@@ -9,7 +9,7 @@ from superset import db
 from ....common.utils.type_formatter import compact_json
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatabaseIdRequiredError
-from ....core.security import csrf_protected, require_admin
+from ....core.security import csrf_protected, require_admin, require_semantic_layer_view
 from ....migrations import ensure_dictionary_tables
 from ...data_dictionary.dependencies import dataset_dictionary_repository
 from ...superset.services.datasets import datasets_on_database, get_datasets, require_database
@@ -247,7 +247,7 @@ class BusinessModelRoutes:
     @handle_errors
     def get_data_layers(self):
         """List admin-defined data layers in flow order."""
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
         layers = data_layer_repository().in_flow_order()
         return self.response(200, layers=[serialize_layer(layer) for layer in layers])

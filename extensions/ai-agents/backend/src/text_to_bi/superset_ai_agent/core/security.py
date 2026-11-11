@@ -5,7 +5,12 @@ from flask_login import current_user
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from .exceptions import AdminRequiredError, CsrfTokenError
+from .exceptions import AdminRequiredError, CsrfTokenError, SemanticLayerQueryRequiredError
+
+# The Semantic Layer extension owns this FAB view menu and grants `can_query` on it through its "Semantic Layer Query"
+# role; the names must match its core/security.py.
+SEMANTIC_LAYER_VIEW_MENU = "Text to BI Semantic Layer"
+QUERY_PERMISSION = "can_query"
 
 
 def is_admin() -> bool:
@@ -18,6 +23,22 @@ def is_admin() -> bool:
 def require_admin() -> None:
     if not is_admin():
         raise AdminRequiredError()
+
+
+def can_query_semantic_layer() -> bool:
+    """Asking the agent runs the Semantic Layer's catalog and metrics as the user, so it needs their query permission."""
+    if is_admin():
+        return True
+    if not getattr(current_user, "is_authenticated", False):
+        return False
+    from superset import security_manager
+
+    return bool(security_manager.can_access(QUERY_PERMISSION, SEMANTIC_LAYER_VIEW_MENU))
+
+
+def require_semantic_layer_query() -> None:
+    if not can_query_semantic_layer():
+        raise SemanticLayerQueryRequiredError()
 
 
 def csrf_protected(method):

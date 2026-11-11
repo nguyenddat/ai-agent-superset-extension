@@ -11,6 +11,11 @@ from sqlalchemy.exc import IntegrityError
 
 # The repositories import flask_appbuilder's Model; import it before the route loader stubs flask_appbuilder.api.
 import text_to_bi.superset_semantic_layer.common.base_repo  # noqa: F401
+from text_to_bi.superset_semantic_layer.core.exceptions import (
+    DatasetAccessError,
+    SemanticLayerQueryRequiredError,
+    SemanticLayerViewRequiredError,
+)
 from text_to_bi.superset_semantic_layer.modules.expert_rules.exceptions import (
     ExpertRuleConflictError,
     ExpertRuleGroupNotFoundError,
@@ -106,8 +111,11 @@ class _Query:
         return values[0] if len(values) == 1 else None
 
 
-def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=()):
-    """Load route.py with local stubs; no Superset package or metadata DB is used."""
+def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=(), permissions=()):
+    """Load route.py with local stubs; no Superset package or metadata DB is used.
+
+    `permissions` are the Semantic Layer permissions (can_view, can_query) a non-admin user holds through a role.
+    """
     package = "text_to_bi.superset_semantic_layer.modules.expert_rules.routes"
     route_name = f"{package}.route_isolated"
     current_user = SimpleNamespace(id=42, is_authenticated=True, roles=[SimpleNamespace(name="Admin")])
@@ -140,6 +148,7 @@ def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=()):
             None if datasource.id in allowed_datasets else (_ for _ in ()).throw(Exception())
         ),
         get_user_by_id=lambda user_id: reviewer if user_id == 42 else None,
+        can_access=lambda permission, view_menu: view_menu == "Text to BI Semantic Layer" and permission in permissions,
     )
     sqla_module = types.ModuleType("superset.connectors.sqla.models")
     sqla_module.SqlaTable = type("SqlaTable", (), {})
@@ -403,14 +412,50 @@ def test_self_approval_is_refused_with_403_and_rolled_back(monkeypatch):
     assert session.rollback_calls == 1 and session.commit_calls == 0
 
 
-def test_review_list_and_options_are_admin_only(monkeypatch):
+def test_review_list_and_options_need_the_view_permission(monkeypatch):
     app = Flask(__name__)
-    route, user, _ = _load_route(monkeypatch)
+    route, user, _ = _load_route(monkeypatch, permissions={"can_query"})
     user.roles = []
     api = route.ExpertRuleAPI()
     with app.test_request_context("/", method="GET"):
-        assert api.list_rules()[0] == 403
+        assert api.list_rules() == (403, {"message": SemanticLayerViewRequiredError.message})
         assert api.rule_options()[0] == 403
+        assert api.audit(1)[0] == 403
+
+
+def test_a_viewer_reads_the_review_list_but_only_rules_on_datasets_they_may_access(monkeypatch):
+    app = Flask(__name__)
+    route, user, _ = _load_route(monkeypatch, allowed_datasets={7}, permissions={"can_view"})
+    user.roles = [SimpleNamespace(name="Semantic Layer Viewer")]
+    revisions = [SimpleNamespace(id=1, rule_id=1), SimpleNamespace(id=2, rule_id=2)]
+    rules = {1: SimpleNamespace(dataset_id=7, group=None), 2: SimpleNamespace(dataset_id=8, group=None)}
+    datasets = {7: SimpleNamespace(id=7, table_name="allowed"), 8: SimpleNamespace(id=8, table_name="denied")}
+    listed = []
+    api = route.ExpertRuleAPI()
+    api._review_revisions = lambda: revisions
+    api._dataset = datasets.get
+    api._serialize = lambda revision: listed.append(revision.id) or {"name": f"rule {revision.id}"}
+    api._review_state = lambda *_: "approved"
+    route.expert_rule_repository = lambda: SimpleNamespace(get=rules.get)
+    route.expert_rule_link_repository = lambda: SimpleNamespace(for_revision=lambda _: [])
+    route.expert_rule_group_repository = lambda: SimpleNamespace(by_name=list)
+    route.revision_author_id = lambda *_: None
+    for revision in revisions:
+        revision.conditions, revision.approver_id, revision.revoker_id = [], None, None
+        revision.approved_at = revision.revoked_at = None
+    with app.test_request_context("/", method="GET"):
+        status, body = api.list_rules()
+        assert status == 200 and [rule["dataset_name"] for rule in body["rules"]] == ["allowed"]
+        assert listed == [1]
+        assert api.audit(2) == (403, {"message": DatasetAccessError.message})
+
+
+def test_discovery_needs_the_query_permission(monkeypatch):
+    app = Flask(__name__)
+    route, user, _ = _load_route(monkeypatch, allowed_datasets={7}, permissions={"can_view"})
+    user.roles = []
+    with app.test_request_context("/", method="GET"):
+        assert route.ExpertRuleAPI().discover() == (403, {"message": SemanticLayerQueryRequiredError.message})
 
 
 def test_review_revisions_prefer_the_current_one_and_fall_back_to_the_latest(monkeypatch):

@@ -76,7 +76,8 @@ function FilterSelect({ label, items, value, onChange }: {
   );
 }
 
-type MetricContractsProps = { databaseId: number | null };
+/** A Semantic Layer Viewer gets the page `readOnly`; trying a metric needs the query permission (`canQuery`). */
+type MetricContractsProps = { databaseId: number | null; readOnly?: boolean; canQuery?: boolean };
 
 /**
  * A metric AI Agent proposed for a question. Metrics are saved metrics of a Superset dataset, so the administrator adds
@@ -108,7 +109,7 @@ function ProposedMetric({ request, onClose }: { request: MetricRequest; onClose:
 }
 
 /** Admin workspace listing every saved metric with its review state: propose, approve, revoke and try each metric. */
-export function MetricContracts({ databaseId }: MetricContractsProps) {
+export function MetricContracts({ databaseId, readOnly = false, canQuery = true }: MetricContractsProps) {
   // Set when "Xử lý câu hỏi" sent the administrator here to add the metric a question was missing.
   const [creation, setCreation] = useState<MetricRequest | null>(() => takeMetricRequest());
   const [reviewList, setReviewList] = useState<MetricReviewList>(
@@ -204,12 +205,14 @@ export function MetricContracts({ databaseId }: MetricContractsProps) {
   if (databaseId === null) return <p className="sl-metric-muted">Chọn database để xem metric.</p>;
 
   const state = selectedMetric?.state;
-  const canPropose = state === 'not_started' || state === 'outdated' || state === 'revoked';
-  const canRevoke = state === 'candidate' || state === 'approved' || state === 'outdated';
+  const canPropose = !readOnly && (state === 'not_started' || state === 'outdated' || state === 'revoked');
+  const canApprove = !readOnly && state === 'candidate';
+  const canRevoke = !readOnly && (state === 'candidate' || state === 'approved' || state === 'outdated');
   const hasDefinition = Boolean(selectedMetric?.definition);
   const proposedByViewer = state === 'candidate' && selectedMetric?.contract?.owner_id === reviewList.current_user_id;
   const approvalBlocked = proposedByViewer && reviewList.require_second_reviewer;
-  const canTry = state === 'approved' || state === 'candidate';
+  // Only an administrator previews a candidate; anyone else runs approved metrics, given the query permission.
+  const canTry = canQuery && (state === 'approved' || (state === 'candidate' && !readOnly));
   const visibleTab: DetailTab = canTry ? activeTab : 'definition';
   const summary = selectedMetric
     ? reviewSummary(selectedMetric, reviewList.current_user_id, reviewList.require_second_reviewer)
@@ -289,7 +292,7 @@ export function MetricContracts({ databaseId }: MetricContractsProps) {
                     <FilePlus2 data-icon="inline-start" /> Tạo bản đề xuất
                   </Button>
                 ) : null}
-                {state === 'candidate' ? (
+                {canApprove ? (
                   <Button
                     disabled={deciding || approvalBlocked}
                     title={approvalBlocked ? 'Người đề xuất không thể tự duyệt.' : undefined}
@@ -319,7 +322,9 @@ export function MetricContracts({ databaseId }: MetricContractsProps) {
                 role="tab"
                 aria-selected={visibleTab === 'trial'}
                 disabled={!canTry}
-                title={canTry ? undefined : 'Chỉ chạy thử được metric đang chờ duyệt hoặc đã duyệt.'}
+                title={canTry ? undefined : canQuery
+                  ? 'Chỉ chạy thử được metric đang chờ duyệt hoặc đã duyệt.'
+                  : 'Cần nhóm quyền Semantic Layer Query để chạy thử metric.'}
                 onClick={() => setActiveTab('trial')}
               >
                 Chạy thử
@@ -338,6 +343,7 @@ export function MetricContracts({ databaseId }: MetricContractsProps) {
                 dataset={datasetById.get(selectedMetric.dataset_id)}
                 users={reviewList.users}
                 historyRevision={historyRevision}
+                readOnly={readOnly}
                 onDefinitionSaved={() => void refreshAfterChange()}
               />
             )}

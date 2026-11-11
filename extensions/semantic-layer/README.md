@@ -1,7 +1,8 @@
 # Superset Semantic Layer extension
 
-This extension adds two admin-only menus to Superset's top navigation bar. Both open the same page,
-`/semantic-layer/?module=<module>`, rendered below the navbar with Superset's SPA template:
+This extension adds two menus to Superset's top navigation bar for administrators. Both open the same page,
+`/semantic-layer/?module=<module>`, rendered below the navbar with Superset's SPA template. A user with the
+"Semantic Layer Viewer" role sees only Metrics, Business Glossary and Expert Rules, read-only (see Roles below):
 
 | Menu | Module | `module=` |
 | --- | --- | --- |
@@ -10,6 +11,24 @@ This extension adds two admin-only menus to Superset's top navigation bar. Both 
 | Quản trị nghiệp vụ | Metrics: business definitions, review and trial runs | `metrics` |
 | Quản trị nghiệp vụ | Business Glossary: governed business terms | `glossary` |
 | Quản trị nghiệp vụ | Expert Rules: governed business rules | `rules` |
+| Quản trị nghiệp vụ | Phân quyền: assign the Semantic Layer roles to users | `access` |
+
+### Roles
+
+The extension creates two Superset roles the first time an administrator opens it (with its tables, under the same
+migration lock), backed by FAB permissions on the view menu `Text to BI Semantic Layer`:
+
+| Role | Permissions | Reaches |
+| --- | --- | --- |
+| Semantic Layer Viewer | `can_view`; `can_read` on the Semantic Layer and Expert Rule APIs | The page's read-only routes |
+| Semantic Layer Query | `can_query`; `can_read` on both APIs; `can_read`, `can_write` on the AI Agent API | Consumer routes, metric runs, AI Agent chat |
+
+`Admin` holds both and stays the only role that edits or approves. Superset's datasource permissions and row level
+security still apply: lists leave out datasets the user cannot read, and per-dataset reads answer 403. The view menu
+is declared admin-only when the extension loads, so `superset init` never hands the two permissions to Alpha or
+Gamma; creating the roles also removes them from those built-in roles. A user still needs a base role such as Gamma
+for Superset's own pages. "Phân quyền" lists active users and ticks each role on or off (`GET /role-assignments`,
+`PUT /role-assignments/<user_id>` with `{"roles": [...]}`); a user's other roles are kept.
 
 Metrics, glossary terms and expert rules move from draft to approved to revoked, and every step is logged with
 its actor and reason. By default an administrator may approve their own work; set
@@ -137,9 +156,9 @@ semantic-layer/
     └── webpack.config.js
 ```
 
-The backend access endpoint checks the authenticated user's `Admin` role before the
-frontend adds the navigation bar item. Non-admin users receive a forbidden
-response and do not see the entry point. Datasets are fetched using
+The backend access endpoint answers `is_admin`, `can_view` and `can_query` before the
+frontend adds the navigation bar items. A user without the view permission receives a
+forbidden response and does not see the entry point. Datasets are fetched using
 Superset's database and dataset APIs, which continue to enforce Superset access.
 
 This first increment shows the Superset dataset-level semantic metadata. It does

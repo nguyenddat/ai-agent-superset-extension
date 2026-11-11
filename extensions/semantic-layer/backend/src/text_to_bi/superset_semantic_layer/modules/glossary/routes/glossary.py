@@ -7,7 +7,15 @@ from superset import db
 
 from ....common.utils.type_formatter import iso_datetime
 from ....core.database import handle_errors, rollback_on_error
-from ....core.security import csrf_protected, require_admin, second_reviewer_required
+from ....core.exceptions import DatasetAccessError
+from ....core.security import (
+    can_access_dataset,
+    csrf_protected,
+    require_admin,
+    require_semantic_layer_query,
+    require_semantic_layer_view,
+    second_reviewer_required,
+)
 from ....migrations import ensure_dictionary_tables
 from ...superset.services.datasets import datasets_by_name, get_dataset, is_internal_dataset
 from ...superset.services.users import user_names
@@ -24,6 +32,8 @@ from ..services.discovery import (
     glossary_link_target,
     glossary_links,
     glossary_metric_approved,
+    glossary_revision_readable,
+    glossary_term_readable,
 )
 from ..services.glossary import approve_revision, create_draft, revision_author_id, revoke_revision, update_draft
 from ..services.group import create_group, delete_group, group_reference, move_term, update_group
@@ -130,14 +140,14 @@ class GlossaryRoutes:
     @permission_name("read")
     @handle_errors
     def list_glossary(self):
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
         user_name = user_names()
         terms = []
         revision_repository = glossary_term_revision_repository()
         for term in glossary_term_repository().by_canonical_name():
             revision = revision_repository.current_for(term.id)
-            if revision is not None:
+            if revision is not None and glossary_revision_readable(revision.id):
                 terms.append(self._glossary_review_entry(term, revision, user_name))
         return self.response(
             200,
@@ -155,10 +165,10 @@ class GlossaryRoutes:
     @handle_errors
     def glossary_options(self):
         """What a term may link to: each dataset with its physical active columns and its saved metrics."""
-        require_admin()
+        require_semantic_layer_view()
         datasets = []
         for dataset in datasets_by_name():
-            if is_internal_dataset(dataset):
+            if is_internal_dataset(dataset) or not can_access_dataset(dataset):
                 continue
             datasets.append(
                 {
@@ -186,11 +196,13 @@ class GlossaryRoutes:
     @permission_name("read")
     @handle_errors
     def get_glossary(self, term_id: int):
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
         term = self._glossary_term_by_id(term_id)
         if term is None:
             raise GlossaryTermNotFoundError()
+        if not glossary_term_readable(term_id):
+            raise DatasetAccessError()
         revisions = glossary_term_revision_repository().for_term(term_id)
         return self.response(200, term=self._glossary_term(term, revisions))
 
@@ -319,8 +331,10 @@ class GlossaryRoutes:
     @permission_name("read")
     @handle_errors
     def glossary_audit(self, term_id: int):
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
+        if not glossary_term_readable(term_id):
+            raise DatasetAccessError()
         events = glossary_term_audit_event_repository().for_term(term_id)
         user_name = user_names()
         return self.response(
@@ -346,6 +360,7 @@ class GlossaryRoutes:
     @handle_errors
     def glossary_discovery(self):
         """Return only approved, current, fresh links to caller-authorized datasets."""
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         return self.response(200, terms=discoverable_glossary_terms())
 

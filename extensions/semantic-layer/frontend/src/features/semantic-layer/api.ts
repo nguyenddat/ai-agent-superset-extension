@@ -25,6 +25,8 @@ export const expertRulesApi = {
 
 export const semanticLayerApi = {
   access: `${SEMANTIC_LAYER_API}/access`,
+  roleAssignments: `${SEMANTIC_LAYER_API}/role-assignments`,
+  roleAssignment: (userId: number) => `${SEMANTIC_LAYER_API}/role-assignments/${encodeURIComponent(userId)}`,
   datasetDictionary: (datasetId: number) => (
     `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/dictionary`
   ),

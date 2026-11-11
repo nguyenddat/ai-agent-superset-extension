@@ -13,7 +13,7 @@ from ....common.exceptions import AgentError
 from ....common.utils.type_formatter import sse_event
 from ....core.chat_models import get_chat_model
 from ....core.database import handle_errors, rollback_on_error
-from ....core.security import csrf_protected
+from ....core.security import csrf_protected, require_semantic_layer_query
 from ....migrations import ensure_agent_tables
 from ...definitions.services.definitions import definitions_for_agent
 from ...semantic_layer.services.catalog import cached_semantic_catalog
@@ -54,6 +54,7 @@ class TextToBIAgentAPI(RestApi):
         The reply streams as SSE: `session` first, then each step as a tool call, the answer, and `done`, which carries
         the definitions the user is asked to confirm.
         """
+        require_semantic_layer_query()
         asked = parse_chat_request(request.get_json(silent=True))
         user_id = int(current_user.id)
         ensure_agent_tables()

@@ -209,8 +209,11 @@ function draftFromRequest(request: ConceptRequest): ExpertRuleDraft {
   };
 }
 
-/** Admin workspace for expert rules: write a draft, have a second administrator approve it, revoke with a reason. */
-export function ExpertRules() {
+/**
+ * Admin workspace for expert rules: write a draft, have a second administrator approve it, revoke with a reason. A
+ * Semantic Layer Viewer gets it `readOnly`, with every editing control hidden.
+ */
+export function ExpertRules({ readOnly = false }: { readOnly?: boolean }) {
   // Set when "Xử lý câu hỏi" sent the administrator here to cover a concept users defined for themselves.
   const [creation, setCreation] = useState<ConceptRequest | null>(() => takeConceptRequest('expert_rule'));
   const [ruleList, setRuleList] = useState<ExpertRuleList>(
@@ -351,12 +354,16 @@ export function ExpertRules() {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <Button variant="outline" disabled={datasets.length === 0} onClick={() => startNew()}>
-            <Plus data-icon="inline-start" /> Tạo rule
-          </Button>
-          <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
-            <FolderPlus data-icon="inline-start" /> Tạo nhóm
-          </Button>
+          {readOnly ? null : (
+            <>
+              <Button variant="outline" disabled={datasets.length === 0} onClick={() => startNew()}>
+                <Plus data-icon="inline-start" /> Tạo rule
+              </Button>
+              <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
+                <FolderPlus data-icon="inline-start" /> Tạo nhóm
+              </Button>
+            </>
+          )}
         </div>
         <div className="sl-metrics-list">
           {loading && ruleList.rules.length === 0 ? (
@@ -374,8 +381,8 @@ export function ExpertRules() {
               items={visibleRules}
               groupIdOf={rule => rule.group?.id ?? null}
               filtered={filtering}
-              onEditGroup={group => groupWorkspace.startEditing(group)}
-              onDeleteGroup={groupWorkspace.setDeleting}
+              onEditGroup={readOnly ? undefined : group => groupWorkspace.startEditing(group)}
+              onDeleteGroup={readOnly ? undefined : groupWorkspace.setDeleting}
               renderItem={rule => (
                 <button
                   key={rule.id}
@@ -439,32 +446,34 @@ export function ExpertRules() {
                   {reviewSummary(selectedRule, ruleList.current_user_id, ruleList.require_second_reviewer)}
                 </p>
               </div>
-              <div className="sl-metrics-actions">
-                <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
-                  <Pencil data-icon="inline-start" /> Sửa
-                </Button>
-                {state === 'draft' ? (
-                  <Button
-                    disabled={deciding || approvalBlocked}
-                    title={approvalBlocked ? 'Người soạn rule không thể tự duyệt.' : undefined}
-                    onClick={() => setOpenDecision('approve')}
-                  >
-                    <Check data-icon="inline-start" /> Duyệt
+              {readOnly ? null : (
+                <div className="sl-metrics-actions">
+                  <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
+                    <Pencil data-icon="inline-start" /> Sửa
                   </Button>
-                ) : null}
-                {state === 'approved' || state === 'outdated' ? (
-                  <Button variant="outline" disabled={deciding} onClick={() => setOpenDecision('revoke')}>
-                    <Ban data-icon="inline-start" /> Thu hồi
-                  </Button>
-                ) : null}
-              </div>
+                  {state === 'draft' ? (
+                    <Button
+                      disabled={deciding || approvalBlocked}
+                      title={approvalBlocked ? 'Người soạn rule không thể tự duyệt.' : undefined}
+                      onClick={() => setOpenDecision('approve')}
+                    >
+                      <Check data-icon="inline-start" /> Duyệt
+                    </Button>
+                  ) : null}
+                  {state === 'approved' || state === 'outdated' ? (
+                    <Button variant="outline" disabled={deciding} onClick={() => setOpenDecision('revoke')}>
+                      <Ban data-icon="inline-start" /> Thu hồi
+                    </Button>
+                  ) : null}
+                </div>
+              )}
             </header>
             <RuleDetail
               key={selectedRule.id}
               rule={selectedRule}
               groups={ruleList.groups}
               historyRevision={historyRevision}
-              moving={moving}
+              moving={moving || readOnly}
               onMove={groupId => void moveRule(selectedRule, groupId)}
             />
           </>

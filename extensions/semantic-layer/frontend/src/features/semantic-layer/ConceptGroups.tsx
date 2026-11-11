@@ -205,8 +205,9 @@ type GroupedListProps<Item> = {
   /** While a search or filter narrows the list, groups with no matching member are hidden. */
   filtered: boolean;
   renderItem: (item: Item) => ReactNode;
-  onEditGroup: (group: ConceptGroup) => void;
-  onDeleteGroup: (group: ConceptGroup) => void;
+  /** Left out for a read-only viewer, which hides the edit and delete buttons of every group. */
+  onEditGroup?: (group: ConceptGroup) => void;
+  onDeleteGroup?: (group: ConceptGroup) => void;
 };
 
 /** The members under their groups, each group collapsible, and the ungrouped members last. */
@@ -246,7 +247,7 @@ export function GroupedList<Item>(
               >
                 <ChevronRight /> <span>{name}</span> <span className="sl-group-count">{members.length}</span>
               </button>
-              {group ? (
+              {group && onEditGroup && onDeleteGroup ? (
                 <span className="sl-group-actions">
                   <Button
                     variant="ghost"
