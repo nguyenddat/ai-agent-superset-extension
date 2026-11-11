@@ -13,6 +13,10 @@ class ReferencedColumnMissingError(ValidationError):
     message = "Referenced column no longer exists."
 
 
+class TransformationSourceMissingError(ValidationError):
+    message = "Cột nguồn của phép biến đổi không còn tồn tại."
+
+
 class NotIndicatorCatalogError(ValidationError):
     message = "The dataset is not declared an indicator catalog."
 

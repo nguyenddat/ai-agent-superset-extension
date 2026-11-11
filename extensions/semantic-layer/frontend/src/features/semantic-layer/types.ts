@@ -338,6 +338,14 @@ export type ColumnDictionary = {
   description: string | null;
   /** Whether the column holds personal data (PII). */
   contains_pii?: boolean;
+  /** How an administrator declared the column is computed from other columns; null when not declared. */
+  transformation?: ColumnTransformation | null;
+};
+
+/** Input columns picked explicitly and a free-text expression (SQL or pseudo code) that is never parsed. */
+export type ColumnTransformation = {
+  expression: string | null;
+  sources: Array<{ dataset_id: number; column_name: string }>;
 };
 
 export type TemporalKind = 'date' | 'timestamp';
@@ -529,7 +537,8 @@ export type BusinessDomain = {
 };
 
 /** "flow": data moves from source into target. "relation": source references target inside one layer. */
-export type LineageEdgeKind = 'flow' | 'relation';
+/** `flow` and `relation` are reference edges from PK/FK; `transform` edges come from declared column transformations. */
+export type LineageEdgeKind = 'flow' | 'relation' | 'transform';
 
 export type LineageEdge = {
   source: number;
@@ -545,6 +554,8 @@ export type LineageEdge = {
   columns: string[];
   /** Column pairs behind the edge, oriented from its source dataset to its target; empty on manual edges. */
   column_links: Array<{ source: string; target: string }>;
+  /** On transform edges: each target column fed, with its expression and all of its input columns ("table.column"). */
+  transformations?: Array<{ target_column: string; expression: string | null; sources: string[] }>;
 };
 
 export type ModelMetric = {

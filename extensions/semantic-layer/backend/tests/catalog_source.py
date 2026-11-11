@@ -31,6 +31,7 @@ SHARED_SERVICE_PATHS = [
     MODULES_PATH / "semantic_query" / "services" / "chart_data.py",
     MODULES_PATH / "glossary" / "services" / "discovery.py",
     MODULES_PATH / "data_dictionary" / "services" / "seeding.py",
+    MODULES_PATH / "data_dictionary" / "services" / "transformations.py",
     *SUPERSET_SERVICE_PATHS,
 ]
 CORE_PATHS = [PACKAGE_PATH / "core" / "security.py", PACKAGE_PATH / "core" / "database.py"]

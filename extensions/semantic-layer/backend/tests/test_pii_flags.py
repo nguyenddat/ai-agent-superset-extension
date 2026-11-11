@@ -64,6 +64,7 @@ def test_the_dictionary_returns_the_pii_marks_of_the_dataset_and_its_columns():
         "dataset_grain_repository": lambda: SimpleNamespace(by_row_kind=lambda dataset_id: []),
         "get_datasets": lambda dataset_ids: [],
         "stored_indicator_model": lambda value: None,
+        "stored_transformations": lambda column_ids: {},
     }
     serialize = compile_into(namespace, module_function("serialize_dictionary"))["serialize_dictionary"]
     payload = serialize(dataset, dictionary, [record])

@@ -34,7 +34,7 @@ from ..services.business_model import (
     dataset_metrics,
     ensure_dataset_dictionaries,
     find_edge_override,
-    infer_dictionary_edges,
+    infer_edges,
     lineage_edges,
     serialize_domain,
     serialize_layer,
@@ -476,11 +476,11 @@ class BusinessModelRoutes:
 
     @staticmethod
     def _edge_override(key: tuple[int, int, str]) -> tuple[LineageEdge | None, bool]:
-        """The override row for an edge and whether the data dictionary infers that edge."""
+        """The override row for an edge and whether the Data Dictionary infers that edge (FK or transformation)."""
         datasets = {
             dataset.id: dataset for dataset in get_datasets(key[:2])
         }
-        inferred = infer_dictionary_edges(datasets)
+        inferred = infer_edges(datasets)
         return find_edge_override(key, inferred), key in inferred
 
     @expose("/lineage-edges", methods=("POST",))

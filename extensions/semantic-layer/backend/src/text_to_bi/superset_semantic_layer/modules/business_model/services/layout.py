@@ -8,7 +8,7 @@ CANVAS_MAX_COORDINATE = 100_000
 
 LINEAGE_NODE_KEY = re.compile(r"^(table|metric)-\d+$")
 
-LINEAGE_EDGE_KEY = re.compile(r"^((flow|relation)-\d+-\d+|metric-edge-\d+)$")
+LINEAGE_EDGE_KEY = re.compile(r"^((flow|relation|transform)-\d+-\d+|metric-edge-\d+)$")
 
 LINEAGE_EDGE_STYLES = {"orthogonal", "straight", "curved"}
 

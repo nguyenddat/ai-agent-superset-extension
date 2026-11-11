@@ -170,6 +170,8 @@ def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=()):
     dictionary.ColumnDictionary = type("ColumnDictionary", (), {})
     dictionary.DatasetDictionary = type("DatasetDictionary", (), {})
     dictionary.DatasetGrain = type("DatasetGrain", (), {})
+    dictionary.ColumnTransformation = type("ColumnTransformation", (), {})
+    dictionary.ColumnTransformationSource = type("ColumnTransformationSource", (), {})
     glossary = types.ModuleType("text_to_bi.superset_semantic_layer.modules.glossary.models")
     glossary.GlossaryTermLink = type("GlossaryTermLink", (), {})
     glossary.GlossaryTerm = type("GlossaryTerm", (), {})

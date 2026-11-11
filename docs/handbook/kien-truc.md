@@ -36,7 +36,7 @@ thuộc một nghiệp vụ.
 
 | Module | Nghiệp vụ |
 | --- | --- |
-| `data_dictionary` | Từ điển dataset và cột, grain, chỉ số, đánh dấu dữ liệu cá nhân (PII), AI AutoFill (`autofill/`) |
+| `data_dictionary` | Từ điển dataset và cột, grain, chỉ số, đánh dấu dữ liệu cá nhân (PII), biến đổi cột do quản trị viên khai báo, AI AutoFill (`autofill/`) |
 | `business_model` | Tầng dữ liệu, nghiệp vụ, canvas và lineage |
 | `glossary` | Thuật ngữ nghiệp vụ, nhóm thuật ngữ cùng nghĩa, vòng đời duyệt, khám phá thuật ngữ |
 | `expert_rules` | Expert rule, nhóm rule tương đồng, vòng đời duyệt, khám phá rule (API riêng `ExpertRuleAPI`) |

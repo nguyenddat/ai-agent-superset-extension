@@ -6,9 +6,10 @@ from ....common.base_model import AuditedModel
 class LineageEdge(AuditedModel):
     """Manual lineage override between two datasets.
 
-    Edges inferred from the data dictionary are not stored. A row here adds an edge the dictionary does not describe
-    (``is_manual``), suppresses an inferred edge (``is_hidden``), or only carries a display ``color`` for an inferred
-    edge — such a row disappears from the diagram along with the FK that produced the edge.
+    Edges inferred from the data dictionary (FK declarations and column transformations) are not stored. A row here
+    adds an edge the dictionary does not describe (``is_manual``), suppresses an inferred edge (``is_hidden``), or only
+    carries a display ``color`` for an inferred edge — such a row disappears from the diagram along with the FK or
+    transformation that produced the edge.
     """
 
     __table_args__ = (
@@ -29,7 +30,8 @@ class LineageEdge(AuditedModel):
         nullable=False,
         index=True,
     )
-    # "flow": data moves from source into target; "relation": source references target (dashed in the diagram).
+    # Reference edges from PK/FK: "flow" when the referenced source sits on an earlier level than the target, else
+    # "relation" (source references target, dashed). "transform": target columns are computed from source columns.
     kind = Column(String(16), nullable=False)
     label = Column(String(32), nullable=True)
     is_hidden = Column(Boolean, nullable=False, default=False)
