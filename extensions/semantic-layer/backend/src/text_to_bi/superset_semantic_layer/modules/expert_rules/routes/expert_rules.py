@@ -14,7 +14,15 @@ from superset_core.rest_api.decorators import api
 from ....common.utils.table_file import import_report
 from ....common.utils.type_formatter import compact_json, iso_datetime
 from ....core.database import handle_errors, rollback_on_error
-from ....core.security import can_access_dataset, csrf_protected, require_admin, second_reviewer_required
+from ....core.exceptions import DatasetAccessError
+from ....core.security import (
+    can_access_dataset,
+    csrf_protected,
+    require_admin,
+    require_semantic_layer_query,
+    require_semantic_layer_view,
+    second_reviewer_required,
+)
 from ...data_dictionary.dependencies import column_dictionary_repository, dataset_dictionary_repository
 from ...glossary.dependencies import (
     glossary_term_link_repository,
@@ -403,7 +411,11 @@ class ExpertRuleAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def audit(self, rule_id: int):
-        require_admin()
+        require_semantic_layer_view()
+        rule = expert_rule_repository().get(rule_id)
+        dataset = self._dataset(rule.dataset_id) if rule else None
+        if dataset is not None and not can_access_dataset(dataset):
+            raise DatasetAccessError()
         events = expert_rule_audit_event_repository().for_rule(rule_id)
         user_name = user_names()
         audit = [
@@ -482,14 +494,16 @@ class ExpertRuleAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def list_rules(self):
-        """Every rule with its current revision and review state, for the administrator review page."""
-        require_admin()
+        """Every rule with its current revision and review state, for the review page; viewers read it too."""
+        require_semantic_layer_view()
         user_name = user_names()
         rules = []
         rule_repository, link_repository = expert_rule_repository(), expert_rule_link_repository()
         for revision in self._review_revisions():
             rule = rule_repository.get(revision.rule_id)
             dataset = self._dataset(rule.dataset_id) if rule else None
+            if dataset is not None and not can_access_dataset(dataset):
+                continue
             links = link_repository.for_revision(revision.id)
             metrics = getattr(dataset, "metrics", [])
             metric_names = {metric.id: metric.verbose_name or metric.metric_name for metric in metrics}
@@ -537,7 +551,7 @@ class ExpertRuleAPI(RestApi):
     @handle_errors
     def rule_options(self):
         """What a rule editor may reference per dataset: dictionary columns, approved glossary terms and metrics."""
-        require_admin()
+        require_semantic_layer_view()
         terms_by_dataset: dict[int, list[dict[str, Any]]] = {}
         link_repository = glossary_term_link_repository()
         for revision in glossary_term_revision_repository().serving():
@@ -596,6 +610,7 @@ class ExpertRuleAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def discover(self):
+        require_semantic_layer_query()
         rules = []
         rule_repository, link_repository = expert_rule_repository(), expert_rule_link_repository()
         for revision in expert_rule_revision_repository().approved_current():

@@ -11,7 +11,13 @@ from ....common.utils.table_file import import_report
 from ....common.utils.type_formatter import sse_event
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatasetAccessError
-from ....core.security import csrf_protected, is_superset_access_error, require_admin
+from ....core.security import (
+    csrf_protected,
+    is_superset_access_error,
+    require_admin,
+    require_dataset_access,
+    require_semantic_layer_view,
+)
 from ....migrations import ensure_dictionary_tables
 from ...business_model.dependencies import data_layer_repository
 from ...superset.services.datasets import datasets_by_name, get_dataset, is_internal_dataset, require_dataset
@@ -142,9 +148,10 @@ class DataDictionaryRoutes:
     @handle_errors
     def get_dataset_dictionary(self, dataset_id: int):
         """Return dictionary metadata in the same order as the dataset's Superset columns."""
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
         dataset = require_dataset(dataset_id)
+        require_dataset_access(dataset)
         try:
             seed_dictionary(dataset)
             dataset_repository = dataset_dictionary_repository()

@@ -14,7 +14,7 @@ export const AGENT_DEFINITIONS_API = '/extensions/text-to-bi/superset-ai-agent/d
 export const SEMANTIC_LAYER_PAGE = '/semantic-layer/';
 
 export type SemanticLayerModule =
-  | 'dictionary' | 'semantic' | 'overview' | 'metrics' | 'glossary' | 'rules' | 'questions';
+  | 'dictionary' | 'semantic' | 'overview' | 'metrics' | 'glossary' | 'rules' | 'questions' | 'access';
 
 export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: string; description: string }> = [
   { id: 'dictionary', label: 'Data Dictionary', description: 'Chỉnh metadata datasets và columns' },
@@ -24,7 +24,18 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
   { id: 'glossary', label: 'Business Glossary', description: 'Thuật ngữ nghiệp vụ được quản trị' },
   { id: 'rules', label: 'Expert Rules', description: 'Quy tắc nghiệp vụ của chuyên gia' },
   { id: 'questions', label: 'Xử lý câu hỏi', description: 'Cách hiểu riêng của người dùng, câu hỏi thiếu metric và đề xuất dataset' },
+  { id: 'access', label: 'Phân quyền', description: 'Gán nhóm quyền xem và truy vấn Semantic Layer cho người dùng' },
 ];
+
+/** What the signed-in user may do, from the `access` endpoint; it answers 403 to a user who may not even view. */
+export type SemanticLayerAccess = { is_admin: boolean; can_view: boolean; can_query: boolean };
+
+/** A Semantic Layer Viewer reads these modules, read-only; every other module is an administrator's. */
+const VIEWER_MODULES: SemanticLayerModule[] = ['metrics', 'glossary', 'rules'];
+
+export function allowedModules(access: SemanticLayerAccess): SemanticLayerModule[] {
+  return access.is_admin ? semanticLayerModules.map(module => module.id) : VIEWER_MODULES;
+}
 
 /**
  * The navbar shows one menu per audience: data engineers model datasets, business owners govern what AI Agent may
@@ -32,16 +43,23 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
  */
 export const semanticLayerModuleGroups: Array<{ id: string; label: string; modules: SemanticLayerModule[] }> = [
   { id: 'modeling', label: 'Mô hình dữ liệu', modules: ['dictionary', 'semantic'] },
-  { id: 'governance', label: 'Quản trị nghiệp vụ', modules: ['overview', 'metrics', 'glossary', 'rules', 'questions'] },
+  {
+    id: 'governance',
+    label: 'Quản trị nghiệp vụ',
+    modules: ['overview', 'metrics', 'glossary', 'rules', 'questions', 'access'],
+  },
 ];
 
 export function semanticLayerModuleHref(module: SemanticLayerModule): string {
   return `${SEMANTIC_LAYER_PAGE}?module=${module}`;
 }
 
-export function semanticLayerModuleFromLocation(): SemanticLayerModule {
+/** The module the URL names, or the first one the user may open when it names none of `allowed`. */
+export function semanticLayerModuleFromLocation(
+  allowed: SemanticLayerModule[] = semanticLayerModules.map(module => module.id),
+): SemanticLayerModule {
   const module = new URLSearchParams(window.location.search).get('module');
-  return semanticLayerModules.some(item => item.id === module) ? module as SemanticLayerModule : 'dictionary';
+  return allowed.includes(module as SemanticLayerModule) ? module as SemanticLayerModule : allowed[0];
 }
 
 export const semanticLayerEvents = {

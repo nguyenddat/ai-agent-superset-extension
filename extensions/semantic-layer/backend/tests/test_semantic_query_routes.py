@@ -9,6 +9,11 @@ from typing import Any
 import pytest
 from catalog_source import SOURCE_PATHS, api_class, compile_into, module_function
 
+from text_to_bi.superset_semantic_layer.core.exceptions import (
+    DatasetAccessError,
+    SemanticLayerQueryRequiredError,
+    SemanticLayerViewRequiredError,
+)
 from text_to_bi.superset_semantic_layer.modules.semantic_query.exceptions import RelationshipValidationError
 from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import (
     METRIC_CONTRACT_RULE,
@@ -504,7 +509,8 @@ def _metric_list_api(dataset, contracts):
     namespace["dataset_grain_repository"] = lambda: SimpleNamespace(list_for_datasets=lambda dataset_ids: [])
     namespace["request"] = SimpleNamespace(args=SimpleNamespace(get=lambda key, type=None: 1))
     namespace["security_manager"] = SimpleNamespace(
-        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: "Ada Admin", username="admin")
+        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: "Ada Admin", username="admin"),
+        raise_for_access=lambda **_: None,
     )
     api._active_users = lambda: [{"id": 3, "name": "Ada Admin"}]
     return api, namespace
@@ -543,13 +549,44 @@ def test_metric_list_reports_state_formula_and_reason_and_skips_the_default_coun
     assert [column["column_name"] for column in payload["datasets"][0]["columns"]] == ["temperature"]
 
 
-def test_metric_list_requires_admin_and_a_database():
+def test_metric_list_requires_the_view_permission_and_a_database():
     dataset = _dataset()
     api, namespace = _metric_list_api(dataset, [])
     namespace["request"] = SimpleNamespace(args=SimpleNamespace(get=lambda key, type=None: None))
     assert api.list_metric_contracts()[0] == 400
-    namespace["current_user"].roles = []
-    assert api.list_metric_contracts()[0] == 403
+
+    def refuse():
+        raise SemanticLayerViewRequiredError()
+
+    namespace["require_semantic_layer_view"] = refuse
+    assert api.list_metric_contracts() == (403, {"message": SemanticLayerViewRequiredError.message})
+
+
+def test_metric_list_leaves_out_datasets_the_caller_may_not_access():
+    dataset = _dataset()
+    api, namespace = _metric_list_api(dataset, [])
+    namespace["can_access_dataset"] = lambda _: False
+    status, payload = api.list_metric_contracts()
+    assert status == 200 and payload["datasets"] == [] and payload["metrics"] == []
+
+
+def test_metric_events_need_access_to_the_metric_dataset():
+    dataset = _dataset()
+    api, namespace = _route_api({dataset.id: dataset})
+    namespace["can_access_dataset"] = lambda _: False
+    assert api.list_metric_contract_events(dataset.id, 4) == (403, {"message": DatasetAccessError.message})
+
+
+def test_running_a_metric_needs_the_query_permission():
+    dataset = _dataset()
+    api, namespace = _route_api({dataset.id: dataset})
+
+    def refuse():
+        raise SemanticLayerQueryRequiredError()
+
+    namespace["require_semantic_layer_query"] = refuse
+    assert api.execute_metric_contract(dataset.id, 4) == (403, {"message": SemanticLayerQueryRequiredError.message})
+    assert api.semantic_catalog() == (403, {"message": SemanticLayerQueryRequiredError.message})
 
 
 def _proposed_contract(dataset, owner_id=3):
@@ -764,7 +801,8 @@ def test_metric_events_are_listed_newest_first_with_actor_names():
     namespace["db"].session.query = Query
     names = {3: "Ada Admin", 5: "Bao Reviewer"}
     namespace["security_manager"] = SimpleNamespace(
-        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: names[user_id], username="user")
+        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: names[user_id], username="user"),
+        raise_for_access=lambda **_: None,
     )
     status, payload = api.list_metric_contract_events(dataset.id, 4)
     assert status == 200

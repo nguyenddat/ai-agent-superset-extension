@@ -8,7 +8,12 @@ from superset.connectors.sqla.models import SqlaTable
 
 from ....core.database import handle_errors
 from ....core.exceptions import DatabaseIdRequiredError
-from ....core.security import can_access_dataset, is_superset_access_error, require_dataset_access
+from ....core.security import (
+    can_access_dataset,
+    is_superset_access_error,
+    require_dataset_access,
+    require_semantic_layer_query,
+)
 from ....migrations import ensure_dictionary_tables
 from ...agent_ladder.services.agent_ladder import AGGREGATE_DATASET
 from ...business_model.dependencies import data_layer_repository
@@ -59,6 +64,7 @@ class ConsumerRoutes:
         Only a dataset with an approved metric, or an aggregate dataset the AI Agent may build a metric on, is served;
         the pairs are read through Superset ChartData as the caller.
         """
+        require_semantic_layer_query()
         dataset = require_dataset(dataset_id)
         require_dataset_access(dataset)
         approved = metric_contract_repository().first_approved_on(dataset_id)
@@ -123,6 +129,7 @@ class ConsumerRoutes:
     @handle_errors
     def semantic_catalog(self):
         """List current approved semantic metadata filtered by caller datasource access."""
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         metric_contracts = metric_contract_repository().approved()
         relationship_contracts = relationship_contract_repository().approved()
@@ -176,6 +183,7 @@ class ConsumerRoutes:
         This is what the AI Agent's schema link searches for join paths, as the caller: a table the caller may not
         read, or one a row-level security rule applies to, is no node, and its relationships are no edges.
         """
+        require_semantic_layer_query()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
             raise DatabaseIdRequiredError()

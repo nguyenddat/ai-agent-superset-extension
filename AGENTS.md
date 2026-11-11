@@ -39,8 +39,11 @@ When a change alters one of these rules, update the handbook in the same commit.
 - `extensions/ai-agents/` contains the AI Agent frontend and backend. Its
   `/ai-agent/` chat page keeps each user's conversations and streams each step
   as a tool call; see its own `AGENTS.md`.
-- `extensions/semantic-layer/` contains the admin-only semantic metadata UI and
-  backend. Its metadata tables live in Superset's metadata database.
+- `extensions/semantic-layer/` contains the semantic metadata UI and backend. Its
+  metadata tables live in Superset's metadata database. Administrators edit it; the
+  Superset roles "Semantic Layer Viewer" (read-only pages) and "Semantic Layer Query"
+  (consumer reads, metric runs, AI Agent chat) open it to others, assigned in
+  "Quản trị nghiệp vụ" → "Phân quyền".
 - `extensions/*.supx` contains the bundles copied into the running Superset
   container. Keep one current bundle per extension here.
 - `docs/handbook/` holds the agreed conventions, architecture and API behaviour;

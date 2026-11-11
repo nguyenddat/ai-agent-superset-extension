@@ -123,6 +123,9 @@ def compile_into(namespace: dict, *nodes: ast.stmt) -> dict:
             if isinstance(value, type) and issubclass(value, Exception):
                 namespace.setdefault(name, value)
     namespace.setdefault("wraps", wraps)
+    # The Semantic Layer roles live in Superset; a test that checks them puts its own checks in the namespace.
+    for name in ("require_semantic_layer_view", "require_semantic_layer_query", "ensure_semantic_layer_roles"):
+        namespace.setdefault(name, lambda: None)
     nodes = [module_function(name) for name in ROUTE_HELPERS if name not in namespace] + list(nodes)
     # The routes reach the database through core.database's dataset lookups and each module's repositories and
     # dependencies; their real code then runs on the test's fake db and fake models.

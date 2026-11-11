@@ -11,7 +11,13 @@ from superset.connectors.sqla.models import SqlaTable, SqlMetric
 from ....common.utils.type_formatter import iso_datetime
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatasetIdRequiredError
-from ....core.security import can_access_dataset, csrf_protected, require_admin, require_dataset_access
+from ....core.security import (
+    can_access_dataset,
+    csrf_protected,
+    require_admin,
+    require_dataset_access,
+    require_semantic_layer_query,
+)
 from ....migrations import ensure_dictionary_tables
 from ...business_model.dependencies import lineage_edge_repository
 from ...business_model.models import LineageEdge
@@ -80,6 +86,7 @@ class AgentLadderRoutes:
         When no approved metric answers a question, the AI Agent builds a metric on an aggregate dataset, following the
         formulas already saved on it, or else drafts a dataset over base datasets, joined through their foreign keys.
         """
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         dictionaries = {
             dictionary.id: dictionary
@@ -179,6 +186,7 @@ class AgentLadderRoutes:
         proposed earlier answers as provisional again. A new metric gets its business definition and an AI Agent
         candidate contract, so it answers the asker at once as a provisional figure and waits for an administrator.
         """
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
@@ -302,6 +310,7 @@ class AgentLadderRoutes:
 
         The same SQL already waiting for review is returned instead of a second proposal.
         """
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         values = checked_dataset_proposal(request.get_json(silent=True), self._base_datasets(for_agent=True))
         user_name = user_names()

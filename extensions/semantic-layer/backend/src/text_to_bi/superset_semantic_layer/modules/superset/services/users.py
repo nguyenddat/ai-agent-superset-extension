@@ -4,11 +4,19 @@ from typing import Any
 from superset import security_manager
 
 from ..dependencies import superset_user_repository
+from ..exceptions import UserNotFoundError
 
 
 def active_users() -> list[Any]:
     """Active Superset users, by username."""
     return superset_user_repository().active()
+
+
+def require_user(user_id: int) -> Any:
+    user = superset_user_repository().get(user_id)
+    if user is None:
+        raise UserNotFoundError()
+    return user
 
 
 def user_names() -> Callable[[int | None], str | None]:

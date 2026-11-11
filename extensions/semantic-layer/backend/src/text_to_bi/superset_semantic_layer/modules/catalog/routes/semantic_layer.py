@@ -3,8 +3,9 @@ from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
 
 from ....core.database import handle_errors
-from ....core.security import require_admin
+from ....core.security import can_query_semantic_layer, is_admin, require_semantic_layer_view
 from ....migrations import ensure_dictionary_tables
+from ...access_control.routes.access_control import AccessControlRoutes
 from ...agent_ladder.routes.agent import AgentLadderRoutes
 from ...business_model.routes.business_model import BusinessModelRoutes
 from ...data_dictionary.routes.dictionary import DataDictionaryRoutes
@@ -28,6 +29,7 @@ class SemanticLayerAPI(
     DataDictionaryRoutes,
     BusinessModelRoutes,
     GlossaryRoutes,
+    AccessControlRoutes,
     RestApi,
 ):
     openapi_spec_tag = "Text to BI Semantic Layer"
@@ -39,7 +41,7 @@ class SemanticLayerAPI(
     @permission_name("read")
     @handle_errors
     def get_access(self):
-        """Return whether the authenticated user is a Superset administrator."""
-        require_admin()
+        """What the signed-in user may do in the Semantic Layer; 403 when they may not even view it."""
+        require_semantic_layer_view()
         ensure_dictionary_tables()
-        return self.response(200, is_admin=True)
+        return self.response(200, is_admin=is_admin(), can_view=True, can_query=can_query_semantic_layer())

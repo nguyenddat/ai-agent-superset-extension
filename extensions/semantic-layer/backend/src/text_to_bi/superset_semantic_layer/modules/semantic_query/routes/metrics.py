@@ -13,11 +13,14 @@ from ....common.utils.type_formatter import iso_datetime
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatabaseIdRequiredError
 from ....core.security import (
+    can_access_dataset,
     csrf_protected,
     is_admin,
     is_superset_access_error,
     require_admin,
     require_dataset_access,
+    require_semantic_layer_query,
+    require_semantic_layer_view,
     second_reviewer_required,
 )
 from ....migrations import ensure_dictionary_tables
@@ -191,12 +194,16 @@ class MetricContractRoutes:
     @handle_errors
     def list_metric_contracts(self):
         """Every saved metric of one database with its contract state, parsed formula and why it is ineligible."""
-        require_admin()
+        require_semantic_layer_view()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
             raise DatabaseIdRequiredError()
         ensure_dictionary_tables()
-        datasets = datasets_on_database(database_id).order_by(SqlaTable.table_name).all()
+        datasets = [
+            dataset
+            for dataset in datasets_on_database(database_id).order_by(SqlaTable.table_name).all()
+            if can_access_dataset(dataset)
+        ]
         dataset_ids = [dataset.id for dataset in datasets]
         contracts = {
             (contract.dataset_id, contract.metric_id): contract
@@ -460,8 +467,9 @@ class MetricContractRoutes:
     @handle_errors
     def list_metric_contract_events(self, dataset_id: int, metric_id: int):
         """A metric's review history, newest first."""
-        require_admin()
+        require_semantic_layer_view()
         ensure_dictionary_tables()
+        require_dataset_access(require_dataset(dataset_id))
         events = metric_contract_event_repository().history(dataset_id, metric_id)
         user_name = user_names()
         return self.response(
@@ -489,6 +497,7 @@ class MetricContractRoutes:
     @handle_errors
     def execute_metric_contract(self, dataset_id: int, metric_id: int):
         """Run a current approved metric, or let an administrator preview a candidate, through Superset ChartData."""
+        require_semantic_layer_query()
         ensure_dictionary_tables()
         dataset = require_dataset(dataset_id)
         require_dataset_access(dataset)

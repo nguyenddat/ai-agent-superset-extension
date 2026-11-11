@@ -11,9 +11,11 @@ import { Glossary } from '../features/semantic-layer/Glossary';
 import { MetricContracts } from '../features/semantic-layer/MetricContracts';
 import { Overview } from '../features/semantic-layer/Overview';
 import { QuestionReview } from '../features/semantic-layer/QuestionReview';
+import { RoleAssignments } from '../features/semantic-layer/RoleAssignments';
 import { requestJson, semanticLayerApi, supersetApi } from '../features/semantic-layer/api';
 import {
   SEMANTIC_LAYER_PAGE,
+  allowedModules,
   semanticLayerEvents,
   semanticLayerModuleFromLocation,
   semanticLayerModuleGroups,
@@ -21,7 +23,7 @@ import {
   semanticLayerModules,
   semanticLayerSelectors,
 } from '../features/semantic-layer/constants';
-import type { SemanticLayerModule } from '../features/semantic-layer/constants';
+import type { SemanticLayerAccess, SemanticLayerModule } from '../features/semantic-layer/constants';
 import { getDatasetName, groupDatasetsByLayer } from '../features/semantic-layer/datasets';
 import { HeaderPicker } from '../features/semantic-layer/HeaderPicker';
 import { LayersDialog } from '../features/semantic-layer/LayersDialog';
@@ -52,7 +54,8 @@ function activeSupersetTheme(): ThemeMode {
   return foreground !== null && foreground > 128 ? 'dark' : 'light';
 }
 
-function SemanticLayerPage() {
+function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
+  const modules = allowedModules(access);
   const [databases, setDatabases] = useState<SupersetDatabase[]>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<number | null>(null);
   const [pageElement, setPageElement] = useState<HTMLDivElement | null>(null);
@@ -62,7 +65,7 @@ function SemanticLayerPage() {
   const [error, setError] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<number | null>(null);
   const [themeMode, setThemeMode] = useState(activeSupersetTheme);
-  const [activeModule, setActiveModule] = useState<SemanticLayerModule>(semanticLayerModuleFromLocation);
+  const [activeModule, setActiveModule] = useState<SemanticLayerModule>(() => semanticLayerModuleFromLocation(modules));
   const [dictionaryDirty, setDictionaryDirty] = useState(false);
   const [layers, setLayers] = useState<DataLayer[]>([]);
   const [layersDialogOpen, setLayersDialogOpen] = useState(false);
@@ -94,12 +97,12 @@ function SemanticLayerPage() {
   useEffect(() => {
     const onModuleRequest = (event: Event) => {
       const module = (event as CustomEvent<SemanticLayerModule>).detail;
-      if (module === activeModule) return;
+      if (module === activeModule || !modules.includes(module)) return;
       if (activeModule === 'dictionary' && !canLeaveDictionary()) return;
       window.history.pushState(null, '', semanticLayerModuleHref(module));
       setActiveModule(module);
     };
-    const onPopState = () => setActiveModule(semanticLayerModuleFromLocation());
+    const onPopState = () => setActiveModule(semanticLayerModuleFromLocation(modules));
     window.addEventListener(semanticLayerEvents.moduleRequest, onModuleRequest);
     window.addEventListener('popstate', onPopState);
     return () => {
@@ -299,11 +302,15 @@ function SemanticLayerPage() {
               ) : activeModule === 'questions' ? (
                 <main className="sl-details"><QuestionReview /></main>
               ) : activeModule === 'glossary' ? (
-                <main className="sl-details"><Glossary /></main>
+                <main className="sl-details"><Glossary readOnly={!access.is_admin} /></main>
               ) : activeModule === 'rules' ? (
-                <main className="sl-details"><ExpertRules /></main>
+                <main className="sl-details"><ExpertRules readOnly={!access.is_admin} /></main>
+              ) : activeModule === 'access' ? (
+                <main className="sl-details"><RoleAssignments /></main>
               ) : activeModule === 'metrics' ? (
-                <main className="sl-details"><MetricContracts databaseId={selectedDatabase} /></main>
+                <main className="sl-details">
+                  <MetricContracts databaseId={selectedDatabase} readOnly={!access.is_admin} canQuery={access.can_query} />
+                </main>
               ) : currentDataset ? (
                 activeModule === 'dictionary' ? (
                   <main className="sl-dictionary-main">
@@ -338,10 +345,16 @@ function SemanticLayerPage() {
   );
 }
 
-/** Adds the admin-only Semantic Layer menus to Superset's navigation bar and renders their page. */
+/**
+ * Adds the Semantic Layer menus to Superset's navigation bar and renders their page: every module for an
+ * administrator, the read-only governance modules for a Semantic Layer Viewer, nothing for anyone else.
+ */
 export function installSemanticLayer(): () => void {
   let host: HTMLDivElement | undefined;
   let frame = 0;
+  // Set from the access endpoint before the menus are first drawn.
+  let access: SemanticLayerAccess = { is_admin: false, can_view: false, can_query: false };
+  let moduleGroups = semanticLayerModuleGroups;
 
   const isSemanticLayerPage = () => `${window.location.pathname.replace(/\/$/, '')}/` === SEMANTIC_LAYER_PAGE;
 
@@ -350,8 +363,8 @@ export function installSemanticLayer(): () => void {
 
   const currentModuleGroup = () => {
     if (!isSemanticLayerPage()) return null;
-    const currentModule = semanticLayerModuleFromLocation();
-    return semanticLayerModuleGroups.find(group => group.modules.includes(currentModule)) ?? null;
+    const currentModule = semanticLayerModuleFromLocation(allowedModules(access));
+    return moduleGroups.find(group => group.modules.includes(currentModule)) ?? null;
   };
 
   const openDropdown = (anchor: Element, group: typeof semanticLayerModuleGroups[number]) => {
@@ -385,7 +398,7 @@ export function installSemanticLayer(): () => void {
     dropdown.style.top = `${rect.bottom}px`;
     dropdown.style.left = `${rect.left}px`;
     dropdown.setAttribute('data-theme-mode', activeSupersetTheme());
-    const currentModule = isSemanticLayerPage() ? semanticLayerModuleFromLocation() : null;
+    const currentModule = isSemanticLayerPage() ? semanticLayerModuleFromLocation(allowedModules(access)) : null;
     dropdown.querySelectorAll<HTMLAnchorElement>('a[data-module]').forEach(link => {
       link.classList.toggle('is-active', link.dataset.module === currentModule);
     });
@@ -414,7 +427,7 @@ export function installSemanticLayer(): () => void {
     const navbar = document.querySelector<HTMLUListElement>(semanticLayerSelectors.navbar);
     if (navbar) {
       const activeGroup = currentModuleGroup();
-      semanticLayerModuleGroups.forEach(group => {
+      moduleGroups.forEach(group => {
         let item = navbar.querySelector(`${semanticLayerSelectors.navItem}[data-module-group="${group.id}"]`);
         if (!item) {
           item = document.createElement('li');
@@ -451,7 +464,7 @@ export function installSemanticLayer(): () => void {
     host = document.createElement('div');
     host.style.setProperty('--sl-nav-height', `${header.offsetHeight}px`);
     header.after(host);
-    ReactDOM.render(<SemanticLayerPage />, host);
+    ReactDOM.render(<SemanticLayerPage access={access} />, host);
   };
 
   const schedule = () => {
@@ -464,8 +477,13 @@ export function installSemanticLayer(): () => void {
     headers: { Accept: 'application/json' },
   })
     .then(response => response.ok ? response.json() : null)
-    .then(payload => {
-      if (payload?.is_admin !== true) return;
+    .then((payload: SemanticLayerAccess | null) => {
+      if (payload?.can_view !== true) return;
+      access = payload;
+      const modules = allowedModules(access);
+      moduleGroups = semanticLayerModuleGroups
+        .map(group => ({ ...group, modules: group.modules.filter(module => modules.includes(module)) }))
+        .filter(group => group.modules.length > 0);
       observer.observe(document.body, { childList: true, subtree: true });
       window.addEventListener('popstate', schedule);
       sync();

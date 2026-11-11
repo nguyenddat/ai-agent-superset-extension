@@ -107,8 +107,11 @@ def test_admin_glossary_management_routes_are_explicitly_guarded_and_csrf_protec
         assert decorators[-1] == "handle_errors"
         if expected_route[1] != "GET":
             assert "csrf_protected" in decorators and "rollback_on_error" in decorators
-        assert "require_admin()" in ast.unparse(method)
+        # Reads are open to the Semantic Layer Viewer role; every change stays with administrators.
+        guard = "require_semantic_layer_view()" if expected_route[1] == "GET" else "require_admin()"
+        assert guard in ast.unparse(method)
     assert (AdminRequiredError.status, AdminRequiredError.message) == (403, "Admin access required.")
+    assert "require_semantic_layer_query()" in ast.unparse(api_methods()["glossary_discovery"])
 
 
 def test_management_routes_delegate_to_governed_service_with_expected_revision_and_actor():

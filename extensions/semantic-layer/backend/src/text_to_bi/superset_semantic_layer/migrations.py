@@ -5,6 +5,7 @@ import time
 from sqlalchemy import inspect, text
 from superset import db
 
+from .modules.access_control.services.roles import ensure_semantic_layer_roles
 from .modules.agent_ladder.models import DatasetProposal
 from .modules.business_model.models import (
     BusinessCanvas,
@@ -95,6 +96,8 @@ def _migrate_dictionary_tables():
     dictionary schema renames and alters constraints, which only PostgreSQL installations ever needed.
     """
     postgres = db.engine.dialect.name == "postgresql"
+    # The Semantic Layer's Superset roles are bootstrapped with its tables, under the same lock.
+    ensure_semantic_layer_roles()
     inspector = inspect(db.engine)
     if postgres and inspector.has_table(ColumnDictionary.__tablename__):
         columns = {column["name"] for column in inspector.get_columns(ColumnDictionary.__tablename__)}

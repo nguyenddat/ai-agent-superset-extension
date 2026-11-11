@@ -64,7 +64,19 @@ def approve_glossary(self, term_id: int):
 
 ## Quyền và CSRF
 
-- Route quản trị gọi `require_admin()` ở đầu hàm; nó ném `AdminRequiredError` (403 "Admin access required.").
+- Route thay đổi dữ liệu và màn chỉ dành cho quản trị gọi `require_admin()` ở đầu hàm; nó ném `AdminRequiredError`
+  (403 "Admin access required."). Chỉ `Admin` được sửa, duyệt, thu hồi.
+- Semantic Layer có hai nhóm quyền Superset (module `access_control`), dựa trên permission FAB `can_view` / `can_query`
+  của view menu "Text to BI Semantic Layer":
+  - Route đọc của trang quản trị (danh sách metric, thuật ngữ, expert rule, lịch sử, Data Dictionary của một dataset,
+    tầng dữ liệu) gọi `require_semantic_layer_view()`: `Admin` hoặc nhóm "Semantic Layer Viewer"; thiếu quyền là 403
+    `SemanticLayerViewRequiredError`.
+  - Route tiêu thụ (semantic catalog, schema graph, dimension members, glossary discovery, expert rule discover, chạy
+    metric, các route AI Agent ladder) gọi `require_semantic_layer_query()`: `Admin` hoặc nhóm "Semantic Layer Query";
+    thiếu quyền là 403 `SemanticLayerQueryRequiredError`. `/chat/stream` của AI Agent kiểm tra cùng permission.
+  - Quyền dataset của Superset vẫn áp lên trên: route đọc lọc bỏ hoặc từ chối (403) dataset người gọi không đọc được.
+  - Superset tự gán mọi permission không thuộc admin-only cho Alpha và Gamma khi `superset init`; vì vậy extension khai
+    báo view menu này là admin-only khi nạp và gỡ hai permission khỏi nhóm dựng sẵn khi tạo nhóm quyền.
 - Route đọc dữ liệu của một dataset gọi `require_dataset(...)` rồi `require_dataset_access(dataset)` để Superset kiểm
   tra quyền đọc; thiếu quyền là 403 "Dataset and database access required.".
 - Mọi route thay đổi dữ liệu dùng chung `csrf_protected` của `core/security.py`; token sai trả 403

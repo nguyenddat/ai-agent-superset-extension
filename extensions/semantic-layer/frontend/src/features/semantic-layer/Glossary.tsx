@@ -214,8 +214,11 @@ function draftFromRequest(request: ConceptRequest): GlossaryDraft {
   return { name: request.name, definition: '', synonyms: [], link: null };
 }
 
-/** Admin workspace for the business glossary: write a draft term, approve it, revoke it with a reason. */
-export function Glossary() {
+/**
+ * Admin workspace for the business glossary: write a draft term, approve it, revoke it with a reason. A Semantic
+ * Layer Viewer gets it `readOnly`, with every editing control hidden.
+ */
+export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
   // Set when "Xử lý câu hỏi" sent the administrator here to cover a concept users defined for themselves.
   const [creation, setCreation] = useState<ConceptRequest | null>(() => takeConceptRequest('glossary'));
   const [termList, setTermList] = useState<GlossaryTermList>(
@@ -362,18 +365,22 @@ export function Glossary() {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <Button variant="outline" disabled={datasets.length === 0} onClick={() => startNew()}>
-            <Plus data-icon="inline-start" /> Tạo thuật ngữ
-          </Button>
-          <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
-            <FolderPlus data-icon="inline-start" /> Tạo nhóm
-          </Button>
-          <FileTransfer
-            subject="thuật ngữ"
-            endpoint={semanticLayerApi.glossaryFile}
-            guide={GLOSSARY_FILE_GUIDE}
-            onImported={() => void refreshAfterChange(null)}
-          />
+          {readOnly ? null : (
+            <>
+              <Button variant="outline" disabled={datasets.length === 0} onClick={() => startNew()}>
+                <Plus data-icon="inline-start" /> Tạo thuật ngữ
+              </Button>
+              <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
+                <FolderPlus data-icon="inline-start" /> Tạo nhóm
+              </Button>
+              <FileTransfer
+                subject="thuật ngữ"
+                endpoint={semanticLayerApi.glossaryFile}
+                guide={GLOSSARY_FILE_GUIDE}
+                onImported={() => void refreshAfterChange(null)}
+              />
+            </>
+          )}
         </div>
         <div className="sl-metrics-list">
           {loading && termList.terms.length === 0 ? (
@@ -391,8 +398,8 @@ export function Glossary() {
               items={visibleTerms}
               groupIdOf={term => term.group?.id ?? null}
               filtered={filtering}
-              onEditGroup={group => groupWorkspace.startEditing(group)}
-              onDeleteGroup={groupWorkspace.setDeleting}
+              onEditGroup={readOnly ? undefined : group => groupWorkspace.startEditing(group)}
+              onDeleteGroup={readOnly ? undefined : groupWorkspace.setDeleting}
               renderItem={term => (
                 <button
                   key={term.id}
@@ -444,32 +451,34 @@ export function Glossary() {
                 </h3>
                 <p>{reviewSummary(selectedTerm, termList.current_user_id, termList.require_second_reviewer)}</p>
               </div>
-              <div className="sl-metrics-actions">
-                <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
-                  <Pencil data-icon="inline-start" /> Sửa
-                </Button>
-                {state === 'draft' ? (
-                  <Button
-                    disabled={deciding || approvalBlocked}
-                    title={approvalBlocked ? 'Người soạn thuật ngữ không thể tự duyệt.' : undefined}
-                    onClick={() => setOpenDecision('approve')}
-                  >
-                    <Check data-icon="inline-start" /> Duyệt
+              {readOnly ? null : (
+                <div className="sl-metrics-actions">
+                  <Button variant="outline" disabled={deciding} onClick={() => setEditing('existing')}>
+                    <Pencil data-icon="inline-start" /> Sửa
                   </Button>
-                ) : null}
-                {revocable ? (
-                  <Button variant="outline" disabled={deciding} onClick={() => setOpenDecision('revoke')}>
-                    <Ban data-icon="inline-start" /> Thu hồi
-                  </Button>
-                ) : null}
-              </div>
+                  {state === 'draft' ? (
+                    <Button
+                      disabled={deciding || approvalBlocked}
+                      title={approvalBlocked ? 'Người soạn thuật ngữ không thể tự duyệt.' : undefined}
+                      onClick={() => setOpenDecision('approve')}
+                    >
+                      <Check data-icon="inline-start" /> Duyệt
+                    </Button>
+                  ) : null}
+                  {revocable ? (
+                    <Button variant="outline" disabled={deciding} onClick={() => setOpenDecision('revoke')}>
+                      <Ban data-icon="inline-start" /> Thu hồi
+                    </Button>
+                  ) : null}
+                </div>
+              )}
             </header>
             <TermDetail
               key={selectedTerm.id}
               term={selectedTerm}
               groups={termList.groups}
               historyRevision={historyRevision}
-              moving={moving}
+              moving={moving || readOnly}
               onMove={groupId => void moveTerm(selectedTerm, groupId)}
             />
           </>

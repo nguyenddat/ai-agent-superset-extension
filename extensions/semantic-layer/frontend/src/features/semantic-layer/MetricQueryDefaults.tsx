@@ -338,17 +338,22 @@ function QueryDefaultsFacts({ defaults, dataset }: FactsProps) {
   );
 }
 
-type SectionProps = { metric: MetricReviewItem; dataset: MetricQueryDataset | undefined; onSaved: () => void };
+type SectionProps = {
+  metric: MetricReviewItem;
+  dataset: MetricQueryDataset | undefined;
+  readOnly?: boolean;
+  onSaved: () => void;
+};
 
 /** The metric's grain, time anchor and default filters: how it is read unless a question says otherwise. */
-export function MetricQueryDefaultsSection({ metric, dataset, onSaved }: SectionProps) {
+export function MetricQueryDefaultsSection({ metric, dataset, readOnly = false, onSaved }: SectionProps) {
   const [editing, setEditing] = useState(false);
   const defaults = metric.query_defaults;
   return (
     <section className="sl-metrics-section">
       <div className="sl-metrics-section-heading">
         <h4>Grain, mốc thời gian và bộ lọc mặc định</h4>
-        {metric.definition && !editing ? (
+        {metric.definition && !editing && !readOnly ? (
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
             {defaults ? <Pencil data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
             {defaults ? 'Sửa' : 'Đặt'}

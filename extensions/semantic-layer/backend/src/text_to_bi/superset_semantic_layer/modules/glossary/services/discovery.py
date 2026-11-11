@@ -29,6 +29,21 @@ def glossary_metric_approved(dataset: SqlaTable, metric: Any) -> bool:
     return contract_is_approved_current(contract, dataset, metric, metric_query_defaults_for(dataset.id, metric.id))
 
 
+def glossary_revision_readable(revision_id: int) -> bool:
+    """Every dataset the revision links to, while it still exists, is one the caller may read."""
+    for link in glossary_links(revision_id):
+        dataset = get_dataset(link.dataset_id)
+        if dataset is not None and not can_access_dataset(dataset):
+            return False
+    return True
+
+
+def glossary_term_readable(term_id: int) -> bool:
+    """A term is shown to the caller only when its current revision links to no dataset hidden from them."""
+    revision = glossary_term_revision_repository().current_for(term_id)
+    return revision is None or glossary_revision_readable(revision.id)
+
+
 def discoverable_glossary_terms() -> list[dict[str, Any]]:
     """Each term's serving revision with only its fresh links to datasets the caller may access."""
     rows = glossary_term_revision_repository().serving()

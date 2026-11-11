@@ -207,12 +207,14 @@ type MetricDefinitionPanelProps = {
   dataset: MetricQueryDataset | undefined;
   users: MetricUser[];
   historyRevision: number;
+  /** Hides the editing controls, for a Semantic Layer Viewer. */
+  readOnly?: boolean;
   onDefinitionSaved: () => void;
 };
 
 /** The Definition tab: business meaning, how the metric is read and its formula up front, the review history below. */
 export function MetricDefinitionPanel(
-  { metric, dataset, users, historyRevision, onDefinitionSaved }: MetricDefinitionPanelProps,
+  { metric, dataset, users, historyRevision, readOnly = false, onDefinitionSaved }: MetricDefinitionPanelProps,
 ) {
   const [editing, setEditing] = useState(false);
   const definition = metric.definition;
@@ -228,7 +230,7 @@ export function MetricDefinitionPanel(
       <section className="sl-metrics-section">
         <div className="sl-metrics-section-heading">
           <h4>Định nghĩa nghiệp vụ</h4>
-          {definition && !editing ? (
+          {definition && !editing && !readOnly ? (
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               <Pencil data-icon="inline-start" /> Sửa
             </Button>
@@ -254,13 +256,15 @@ export function MetricDefinitionPanel(
             <span>
               Chưa có định nghĩa nghiệp vụ. Cần nhập trước khi đề xuất để AI Agent hiểu metric này nghĩa là gì.
             </span>
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Plus data-icon="inline-start" /> Thêm định nghĩa
-            </Button>
+            {readOnly ? null : (
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Plus data-icon="inline-start" /> Thêm định nghĩa
+              </Button>
+            )}
           </div>
         )}
       </section>
-      <MetricQueryDefaultsSection metric={metric} dataset={dataset} onSaved={onDefinitionSaved} />
+      <MetricQueryDefaultsSection metric={metric} dataset={dataset} readOnly={readOnly} onSaved={onDefinitionSaved} />
       <MetricFormula metric={metric} />
       <ReviewHistory metric={metric} revision={historyRevision} />
     </div>
