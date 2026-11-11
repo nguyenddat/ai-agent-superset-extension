@@ -45,8 +45,11 @@ function reviewSummary(metric: MetricReviewItem, viewerId: number | null, second
       return `Bạn đã đề xuất · ${secondReviewerRequired ? 'cần một quản trị viên khác duyệt' : 'chờ duyệt'}`;
     case 'revoked':
       return `Thu hồi bởi ${contract?.revoker_name ?? '—'} · ${formatDate(contract?.revoked_at ?? null)}`;
-    case 'outdated':
-      return 'Công thức, grain, mốc thời gian hoặc bộ lọc mặc định đã đổi sau lần duyệt · cần đề xuất lại';
+    case 'outdated': {
+      // An outdated contract may be a candidate that was never approved.
+      const recordedAt = contract?.status === 'approved' ? 'lần duyệt' : 'lần đề xuất';
+      return `Công thức, grain, mốc thời gian hoặc bộ lọc mặc định đã đổi sau ${recordedAt} · cần đề xuất lại`;
+    }
     case 'not_started':
       return metric.definition ? 'Chưa đề xuất' : 'Chưa có định nghĩa nghiệp vụ';
     default:
@@ -159,7 +162,8 @@ export function MetricContracts({ databaseId, readOnly = false, canQuery = true 
     .map(dataset => ({ dataset, metrics: visibleMetrics.filter(metric => metric.dataset_id === dataset.id) }))
     .filter(group => group.metrics.length > 0), [reviewList, visibleMetrics]);
 
-  const selectedMetric = reviewList.metrics.find(metric => metricKey(metric) === selectedKey)
+  // A metric the search or filters hide is not shown, so the detail never contradicts the list.
+  const selectedMetric = visibleMetrics.find(metric => metricKey(metric) === selectedKey)
     ?? visibleMetrics[0] ?? null;
   const selectedMetricKey = selectedMetric ? metricKey(selectedMetric) : null;
   const stateItems = [
@@ -202,7 +206,10 @@ export function MetricContracts({ databaseId, readOnly = false, canQuery = true 
     }
   };
 
-  if (databaseId === null) return <p className="sl-metric-muted">Chọn database để xem metric.</p>;
+  // The page selects the first database it lists, so no database means the user may read none.
+  if (databaseId === null) {
+    return <p className="sl-metric-muted">Chưa có database nào bạn được phép đọc, nên chưa có metric để xem.</p>;
+  }
 
   const state = selectedMetric?.state;
   const canPropose = !readOnly && (state === 'not_started' || state === 'outdated' || state === 'revoked');

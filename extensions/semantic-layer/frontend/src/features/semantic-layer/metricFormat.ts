@@ -3,14 +3,20 @@ import { format } from 'd3-format';
 const integerFormat = format(',d');
 const decimalFormat = format(',.2~f');
 
+// A date as Superset's JSON writes it: ISO ("2026-11-17") or HTTP style ("Tue, 17 Nov 2026 00:00:00 GMT").
+const DATE_TEXT = /^(?:\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2}, \d{1,2} [A-Z][a-z]{2} \d{4})/;
+
 /**
  * Formats a metric value with the metric's Superset d3 format. Superset-only names such as SMART_NUMBER, or no format,
- * fall back to grouped digits with at most two decimals.
+ * fall back to grouped digits with at most two decimals. A metric whose value is a date, such as the latest day with
+ * data, is shown like a date column.
  */
 export function formatMetricValue(value: unknown, d3Format: string | null): string {
   if (value === null || value === undefined || value === '') return '—';
   const number = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(number)) return String(value);
+  if (!Number.isFinite(number)) {
+    return typeof value === 'string' && DATE_TEXT.test(value) ? formatDateValue(value) : String(value);
+  }
   if (d3Format) {
     try {
       return format(d3Format)(number);

@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { requestJson, semanticLayerApi } from './api';
-import { buildFilters, columnLabel, isListOperator, OPERATORS, type FilterDraft } from './metricFilters';
+import {
+  buildFilters, columnLabel, datasetColumnLabel, isListOperator, OPERATORS, type FilterDraft,
+} from './metricFilters';
 import type {
   MetricAppliedDefaults, MetricFilterOperator, MetricGrain, MetricQueryDataset, MetricQueryDefaults,
   MetricQueryDefaultsPayload, MetricQueryFilter, MetricReviewItem, MetricTimeAnchor,
@@ -16,9 +18,15 @@ export const GRAIN_LABELS: Record<string, string> = {
 const grainWord = (grain: string) => (GRAIN_LABELS[grain] ?? grain).toLowerCase();
 const READ_GRAINS: MetricGrain[] =['hour', 'day', 'week', 'month', 'quarter', 'year'];
 const WINDOW_UNITS: MetricGrain[] = READ_GRAINS;
+/** How the facts line ends a time window, such as "7 ngày gần nhất, tính từ thời điểm hiện tại". */
 const ANCHOR_LABELS: Record<MetricTimeAnchor, string> = {
   now: 'tính từ thời điểm hiện tại',
   latest_data: 'tính từ mốc dữ liệu mới nhất',
+};
+/** The same anchors as choices under the "Mốc tính" label. */
+const ANCHOR_CHOICES: Record<MetricTimeAnchor, string> = {
+  now: 'Thời điểm hiện tại',
+  latest_data: 'Mốc dữ liệu mới nhất',
 };
 const NONE = 'none';
 
@@ -67,8 +75,7 @@ export function describeWindow(value: string | null): string | null {
 const OPERATOR_LABELS = new Map(OPERATORS.map(item => [item.value, item.label]));
 
 export function describeFilter(filter: MetricQueryFilter, dataset: MetricQueryDataset | undefined): string {
-  const column = dataset?.columns.find(item => item.column_name === filter.column);
-  const name = column ? columnLabel(column) : filter.column;
+  const name = datasetColumnLabel(dataset, filter.column);
   const value = Array.isArray(filter.value) ? filter.value.join(', ') : String(filter.value);
   return `${name} ${OPERATOR_LABELS.get(filter.operator) ?? filter.operator} ${value}`;
 }
@@ -147,18 +154,16 @@ function QueryDefaultsEditor({ metric, dataset, onCancel, onSaved }: EditorProps
         label: `${item.label || item.value} (${(GRAIN_LABELS[item.grain] ?? item.grain).toLowerCase()})`,
       })),
   ];
+  const dictionaryTimeColumn = dataset?.time_column ? datasetColumnLabel(dataset, dataset.time_column) : null;
   const timeColumnItems = [
-    { value: NONE, label: dataset?.time_column ? `Theo từ điển dữ liệu (${dataset.time_column})` : 'Không đặt' },
-    ...(dataset?.temporal_columns ?? []).map(name => {
-      const column = dataset?.columns.find(item => item.column_name === name);
-      return { value: name, label: column ? columnLabel(column) : name };
-    }),
+    { value: NONE, label: dictionaryTimeColumn ? `Theo từ điển dữ liệu (${dictionaryTimeColumn})` : 'Không đặt' },
+    ...(dataset?.temporal_columns ?? []).map(name => ({ value: name, label: datasetColumnLabel(dataset, name) })),
   ];
   const unitItems = WINDOW_UNITS
     .filter(unit => timeWindow.kind === 'last' || unit !== 'hour')
     .map(unit => ({ value: unit, label: GRAIN_LABELS[unit] }));
-  const anchorItems = (Object.keys(ANCHOR_LABELS) as MetricTimeAnchor[])
-    .map(value => ({ value, label: ANCHOR_LABELS[value] }));
+  const anchorItems = (Object.keys(ANCHOR_CHOICES) as MetricTimeAnchor[])
+    .map(value => ({ value, label: ANCHOR_CHOICES[value] }));
   const filterColumnItems = filterableColumns
     .filter(column => column.column_name !== dataset?.row_kind_column && !column.is_dttm)
     .map(column => ({ value: column.column_name, label: columnLabel(column) }));
@@ -325,7 +330,10 @@ function QueryDefaultsFacts({ defaults, dataset }: FactsProps) {
       {defaults.row_kind_value ? (
         <div><dt>Loại dòng</dt><dd>{rowKind?.label || defaults.row_kind_value}</dd></div>
       ) : null}
-      <div><dt>Cột thời gian</dt><dd>{defaults.time_column ?? '—'}</dd></div>
+      <div>
+        <dt>Cột thời gian</dt>
+        <dd>{defaults.time_column ? datasetColumnLabel(dataset, defaults.time_column) : '—'}</dd>
+      </div>
       <div>
         <dt>Khoảng thời gian</dt>
         <dd>{windowText ? `${windowText}, ${ANCHOR_LABELS[defaults.time_anchor ?? 'now']}` : 'Không giới hạn'}</dd>

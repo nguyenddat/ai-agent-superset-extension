@@ -412,7 +412,7 @@
 .sl-metric-definition-editor label, .sl-metric-decision-field { display: flex; flex-direction: column; gap: 5px; color: var(--sl-text-secondary); font-size: 12px; font-weight: 500; }
 .sl-metric-definition-row { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 280px); gap: 10px; }
 .sl-metric-defaults-grid {
-  display: grid; max-width: 640px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;
+  display: grid; max-width: 960px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
 }
 .sl-metric-defaults-toggle {
   flex-direction: row; align-items: center; gap: 8px; color: var(--sl-text-secondary); font-size: 12px;
