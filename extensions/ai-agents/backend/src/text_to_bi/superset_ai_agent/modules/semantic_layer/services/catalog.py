@@ -70,6 +70,8 @@ def dataset_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str,
         "labelled_values": [
             {
                 "column": item["key_column"],
+                # The column holding the labels as stored, when it is not a calculated one; a filter on it uses them.
+                "label_column": item.get("label_column"),
                 "label": item.get("label"),
                 "values": [{"value": member["value"], "label": member["label"]} for member in item.get("members", [])],
             }

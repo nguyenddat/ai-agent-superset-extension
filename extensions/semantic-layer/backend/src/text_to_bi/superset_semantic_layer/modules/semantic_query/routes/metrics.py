@@ -39,7 +39,6 @@ from ..dependencies import (
 )
 from ..exceptions import (
     ApprovedContractExistsError,
-    ApprovedMetricContractRequiredError,
     MetricContractNotFoundError,
     MetricContractValidationError,
     MetricExecutionDeniedError,
@@ -120,12 +119,15 @@ class MetricContractRoutes:
         }
 
     @staticmethod
-    def _query_dataset(dataset: SqlaTable) -> dict[str, Any]:
-        """A dataset with the columns a metric run may group or filter by: active, physical and flagged in Superset."""
+    def _query_dataset(dataset: SqlaTable, column_labels: dict[str, str]) -> dict[str, Any]:
+        """A dataset with the columns a metric run may group or filter by: active, physical and flagged in Superset.
+
+        Each column is named by `column_labels`, the label its formula pseudo code uses.
+        """
         query_columns = [
             {
                 "column_name": column.column_name,
-                "verbose_name": column.verbose_name,
+                "verbose_name": column_labels.get(column.column_name) or column.verbose_name,
                 "type": column.type,
                 "is_dttm": bool(column.is_dttm),
                 "groupby": column.groupby is True,
@@ -253,7 +255,10 @@ class MetricContractRoutes:
                 )
         return self.response(
             200,
-            datasets=[{**self._query_dataset(dataset), **time_context[dataset.id]} for dataset in datasets],
+            datasets=[
+                {**self._query_dataset(dataset, column_labels[dataset.id]), **time_context[dataset.id]}
+                for dataset in datasets
+            ],
             metrics=metrics,
             users=self._active_users(),
             current_user_id=current_user.id,
@@ -324,7 +329,7 @@ class MetricContractRoutes:
         if metric is None or contract is None:
             raise MetricContractNotFoundError()
         if contract.status != "candidate":
-            raise MetricContractValidationError("Only a candidate metric contract can be approved.")
+            raise MetricContractValidationError("Chỉ duyệt được metric đang chờ duyệt.")
         proposed_by_viewer = contract.owner_id is not None and contract.owner_id == current_user.id
         if proposed_by_viewer and second_reviewer_required():
             raise MetricSelfApprovalError()
@@ -332,7 +337,7 @@ class MetricContractRoutes:
             raise MetricContractValidationError(ineligibility)
         defaults = metric_query_defaults_for(dataset_id, metric_id)
         if contract.expression_hash != metric_contract_hash(dataset, metric, defaults):
-            raise MetricContractValidationError("Metric changed; create a new candidate before approval.")
+            raise MetricContractValidationError("Metric đã đổi sau lần đề xuất; tạo bản đề xuất mới trước khi duyệt.")
         note = review_reason(request.get_json(silent=True))
         contract.status = "approved"
         contract.approver_id = current_user.id
@@ -386,7 +391,7 @@ class MetricContractRoutes:
             raise MetricNotFoundError()
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
-            raise MetricContractValidationError("A JSON object is required.")
+            raise MetricContractValidationError("Nội dung gửi lên phải là một đối tượng JSON.")
         business_definition = body.get("business_definition")
         unit, steward_id = body.get("unit"), body.get("steward_id")
         if not isinstance(business_definition, str) or not business_definition.strip():
@@ -504,7 +509,7 @@ class MetricContractRoutes:
         metric = self._dataset_metric(dataset, metric_id)
         contract = metric_contract_for(dataset_id, metric_id) if metric else None
         if metric is None:
-            raise ApprovedMetricContractRequiredError()
+            raise MetricNotFoundError()
         body = request.get_json(silent=True)
         try:
             # validate() is Superset's datasource/RLS permission gate and runs as
@@ -543,9 +548,9 @@ class MetricContractRoutes:
             if is_superset_access_error(error):
                 raise MetricExecutionDeniedError() from error
             logger.exception("Superset ChartData metric execution failed")
-            return self.response_500(message="Metric execution was rejected by Superset.")
+            return self.response_500(message="Superset không chạy được truy vấn metric này.")
         if result.get("error"):
-            return self.response_500(message="Metric execution failed.")
+            return self.response_500(message="Truy vấn metric chạy không thành công.")
         rows = result.get("data", [])
         return self.response(
             200,

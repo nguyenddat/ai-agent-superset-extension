@@ -6,7 +6,10 @@ from text_to_bi.superset_semantic_layer.modules.semantic_query.services.members 
     build_members_payload,
     build_time_range_payload,
     labelled_key_columns,
+    labels_from_rows,
     members_from_rows,
+    stored_label_candidates,
+    stored_label_members,
     temporal_columns,
     time_ranges_from_rows,
 )
@@ -37,7 +40,7 @@ def test_a_calculated_column_reading_one_physical_column_labels_it():
 
 
 def test_the_payload_reads_only_the_key_and_label_with_a_bounded_row_limit():
-    payload = build_members_payload(_dataset([]), "city_key", "city_name")
+    payload = build_members_payload(_dataset([]), "city_key", ["city_name"])
 
     query = payload["queries"][0]
     assert payload["datasource"] == {"id": 12, "type": "table"}
@@ -58,6 +61,45 @@ def test_members_are_unique_labelled_pairs_sorted_by_label():
         {"value": 1, "label": "Ha Noi"},
         {"value": 2, "label": "Hue"},
     ]
+
+
+def test_a_key_column_is_offered_the_physical_text_columns_that_may_name_it():
+    city_name, region, kind = _column("city_name"), _column("region"), _column("row_kind")
+    for column in (city_name, region, kind):
+        column.type = "VARCHAR(100)"
+    observed_on = _column("observed_on", is_dttm=True)
+    observed_on.type = "DATE"
+    dataset = _dataset([
+        _column("observation_id"), _column("city_key"), observed_on, city_name, region, kind,
+        _column("label_lookup", "(SELECT 1)"),
+    ])
+    entries = {
+        "observation_id": SimpleNamespace(semantic_role="key", is_fk=True, is_pk=False, is_unique=True),
+        "city_key": SimpleNamespace(semantic_role="key", is_fk=True, is_pk=False, is_unique=False),
+        "observed_on": SimpleNamespace(semantic_role="key", is_fk=True, is_pk=False, is_unique=False),
+        "city_name": SimpleNamespace(semantic_role="dimension", is_fk=False, is_pk=False, is_unique=False),
+    }
+
+    assert stored_label_candidates(dataset, entries) == [("city_key", ["city_name", "region", "row_kind"])]
+    assert build_members_payload(dataset, "city_key", ["city_name", "region"])["queries"][0]["columns"] == [
+        "city_key", "city_name", "region",
+    ]
+
+
+def test_a_text_column_labels_a_key_only_when_the_data_gives_each_key_one_value():
+    rows = [
+        {"city_key": 1, "city_name": "Ha Noi", "region": "Dong Bac Bo", "row_kind": "HOURLY"},
+        {"city_key": 1, "city_name": "Ha Noi", "region": "Dong Bac Bo", "row_kind": "DAILY"},
+        {"city_key": 2, "city_name": "Hue", "region": "Bac Trung Bo", "row_kind": "HOURLY"},
+    ]
+
+    labelled = labels_from_rows(rows, "city_key", ["city_name", "region", "row_kind"])
+
+    assert labelled == {
+        "city_name": [{"value": 1, "label": "Ha Noi"}, {"value": 2, "label": "Hue"}],
+        "region": [{"value": 2, "label": "Bac Trung Bo"}, {"value": 1, "label": "Dong Bac Bo"}],
+    }
+    assert labels_from_rows(rows * (MAX_MEMBERS // 2), "city_key", ["city_name"]) == {}
 
 
 def test_the_date_range_is_read_for_physical_date_columns_only():
@@ -81,3 +123,26 @@ def test_a_date_range_reads_dates_timestamps_and_epoch_milliseconds():
     assert time_ranges_from_rows(rows, ["day_key", "other"]) == [
         {"column": "day_key", "min": "2026-10-12", "max": "2026-11-01"},
     ]
+
+
+def test_a_varying_text_column_does_not_lose_the_city_labels():
+    city_name, note = _column("ten_thanh_pho"), _column("ghi_chu")
+    city_name.type = note.type = "VARCHAR(255)"
+    dataset = _dataset([_column("thanh_pho_key"), city_name, note])
+    entries = {"thanh_pho_key": SimpleNamespace(semantic_role="key", is_fk=True, is_pk=False, is_unique=False)}
+    stored = [
+        {"thanh_pho_key": city, "ten_thanh_pho": f"City {city}", "ghi_chu": f"Note {index}"}
+        for city in range(12) for index in range(MAX_MEMBERS)
+    ]
+    queries = []
+
+    def read_rows(key_column, label_columns):
+        queries.append(label_columns)
+        distinct = {tuple(row[name] for name in (key_column, *label_columns)) for row in stored}
+        return [dict(zip((key_column, *label_columns), values)) for values in distinct][:MAX_MEMBERS + 1]
+
+    found = stored_label_members(dataset, entries, read_rows)
+
+    assert queries == [["ten_thanh_pho"], ["ghi_chu"]]
+    assert [(key, label) for key, label, _ in found] == [("thanh_pho_key", "ten_thanh_pho")]
+    assert found[0][2][0] == {"value": 0, "label": "City 0"}

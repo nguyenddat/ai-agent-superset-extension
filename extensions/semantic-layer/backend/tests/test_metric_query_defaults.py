@@ -87,7 +87,7 @@ def test_defaults_take_the_row_kind_from_the_formula_and_the_time_column_from_th
         ({"time_window": "last_3_hour"}, "mịn hơn"),
         ({"time_window": "current_month", "time_anchor": "yesterday"}, "latest_data"),
         ({"time_column": "loai_quan_sat"}, "cột ngày hoặc ngày giờ"),
-        ({"default_filters": [{"column": "ghi_chu", "operator": "==", "value": "x"}]}, "not available"),
+        ({"default_filters": [{"column": "ghi_chu", "operator": "==", "value": "x"}]}, "không được dùng để lọc"),
         ({"default_filters": [{"column": "loai_quan_sat", "operator": "==", "value": "x"}]}, "loại dòng"),
         ({"default_filters": [{"column": "thoi_diem_quan_sat", "operator": ">=", "value": "2026-10-01"}]}, "thời gian"),
         ({"surprise": 1}, "Chỉ gửi"),
@@ -274,7 +274,7 @@ def test_changing_the_defaults_outdates_an_approval_like_a_formula_edit():
     # A metric without defaults keeps the hash it had before they existed.
     assert metric_contract_hash(dataset, metric, MetricQueryDefaults()) == metric_contract_hash(dataset, metric)
 
-    with pytest.raises(Exception, match="approved metric contract"):
+    with pytest.raises(Exception, match="chưa được duyệt"):
         execute_approved_chart_query(contract, dataset, metric, {}, 100, lambda payload: {}, defaults=None)
     result = execute_approved_chart_query(
         contract, dataset, metric, {}, 100, lambda payload: {"data": []}, defaults=approved_defaults

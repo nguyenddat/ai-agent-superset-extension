@@ -321,24 +321,26 @@ def planned_metric_chart(
     to group the metric's time column by another grain, and `apply_defaults: false` to skip the metric's defaults.
     """
     if isinstance(query, dict) and "joins" in query:
-        raise MetricContractValidationError("Multi-dataset joins are not supported at execution time.")
+        raise MetricContractValidationError("Truy vấn metric không nối nhiều dataset.")
     if not isinstance(query, dict) or set(query) - {"dimensions", "filters", "time_grain", "apply_defaults"}:
         raise MetricContractValidationError(
-            "Request may contain only dimensions, filters, time_grain and apply_defaults."
+            "Truy vấn chỉ gồm dimensions, filters, time_grain và apply_defaults."
         )
     dimensions = query.get("dimensions", [])
     filters = query.get("filters", [])
     if not isinstance(dimensions, list) or not isinstance(filters, list):
-        raise MetricContractValidationError("dimensions and filters must be arrays.")
+        raise MetricContractValidationError("dimensions và filters phải là mảng.")
     if len(dimensions) > MAX_DIMENSIONS or len(filters) > MAX_FILTERS:
-        raise MetricContractValidationError("Too many dimensions or filters.")
+        raise MetricContractValidationError(
+            f"Truy vấn có tối đa {MAX_DIMENSIONS} chiều phân tích và {MAX_FILTERS} bộ lọc."
+        )
     apply_defaults = query.get("apply_defaults", True)
     if not isinstance(apply_defaults, bool):
         raise MetricContractValidationError("apply_defaults phải là true hoặc false.")
     columns = {str(getattr(column, "column_name", "")): column for column in getattr(dataset, "columns", [])}
     selected = [query_column(columns, name, "groupby") for name in dimensions]
     if len(set(selected)) != len(selected):
-        raise MetricContractValidationError("Duplicate dimensions are not allowed.")
+        raise MetricContractValidationError("Mỗi chiều phân tích chỉ chọn một lần.")
     chart_filters = [checked_query_filter(columns, item) for item in filters]
     filtered_columns = {item["col"] for item in chart_filters}
     default_filters, time_grain, applied = applied_query_defaults(

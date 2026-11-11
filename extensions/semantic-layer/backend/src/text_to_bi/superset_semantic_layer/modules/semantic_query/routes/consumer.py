@@ -39,6 +39,7 @@ from ..services.members import (
     build_time_range_payload,
     labelled_key_columns,
     members_from_rows,
+    stored_label_members,
     temporal_columns,
     time_ranges_from_rows,
 )
@@ -61,8 +62,10 @@ class ConsumerRoutes:
     def dimension_members(self, dataset_id: int):
         """Key and label pairs of the dataset's labelled key columns, for filtering a metric by a name.
 
-        Only a dataset with an approved metric, or an aggregate dataset the AI Agent may build a metric on, is served;
-        the pairs are read through Superset ChartData as the caller.
+        A key is labelled by a calculated column that reads it, or by a physical text column that gives each key one
+        value, such as the city name a fact table stores next to the city key. Only a dataset with an approved metric,
+        or an aggregate dataset the AI Agent may build a metric on, is served; the pairs are read through Superset
+        ChartData as the caller.
         """
         require_semantic_layer_query()
         dataset = require_dataset(dataset_id)
@@ -71,37 +74,42 @@ class ConsumerRoutes:
         dictionary = dataset_dictionary_repository().get(dataset_id) if approved is None else None
         if approved is None and getattr(dictionary, "dataset_type", None) != AGGREGATE_DATASET:
             raise ApprovedMetricDatasetRequiredError()
-        from superset.charts.schemas import ChartDataQueryContextSchema
-        from superset.commands.chart.data.get_data_command import ChartDataCommand
+        labels = {column.column_name: column.verbose_name for column in dataset.columns}
+
+        def dimension(key_column: str, label_column: str, members: list[dict[str, Any]]) -> dict[str, Any]:
+            label = labels.get(label_column) or label_column
+            return {"key_column": key_column, "label_column": label_column, "label": label, "members": members}
 
         dimensions = []
         for key_column, label_column in labelled_key_columns(dataset):
-            try:
-                command = ChartDataCommand(
-                    ChartDataQueryContextSchema().load(build_members_payload(dataset, key_column, label_column))
-                )
-                command.validate()
-                result = command.run()["queries"][0]
-            except Exception as ex:
-                if is_superset_access_error(ex):
-                    continue
-                logger.exception("Reading the members of %s.%s failed", dataset.table_name, label_column)
-                continue
-            if result.get("error"):
-                continue
-            label = next(
-                (column.verbose_name for column in dataset.columns if column.column_name == label_column),
-                None,
-            )
-            dimensions.append(
-                {
-                    "key_column": key_column,
-                    "label_column": label_column,
-                    "label": label or label_column,
-                    "members": members_from_rows(result.get("data", []), key_column, label_column),
-                }
-            )
+            rows = self._member_rows(dataset, key_column, [label_column])
+            if rows is not None:
+                members = members_from_rows(rows, key_column, label_column)
+                dimensions.append(dimension(key_column, label_column, members))
+        entries = {entry.column_name: entry for entry in column_dictionary_repository().list_for_dataset(dataset_id)}
+        def read_rows(key_column: str, label_columns: list[str]) -> list[dict[str, Any]] | None:
+            return self._member_rows(dataset, key_column, label_columns)
+
+        for key_column, label_column, members in stored_label_members(dataset, entries, read_rows):
+            dimensions.append(dimension(key_column, label_column, members))
         return self.response(200, dataset_id=dataset_id, dimensions=dimensions, time_ranges=self._time_ranges(dataset))
+
+    @staticmethod
+    def _member_rows(dataset: SqlaTable, key_column: str, label_columns: list[str]) -> list[dict[str, Any]] | None:
+        """The distinct key and label rows, read through ChartData as the caller; None when they cannot be read."""
+        from superset.charts.schemas import ChartDataQueryContextSchema
+        from superset.commands.chart.data.get_data_command import ChartDataCommand
+
+        try:
+            payload = build_members_payload(dataset, key_column, label_columns)
+            command = ChartDataCommand(ChartDataQueryContextSchema().load(payload))
+            command.validate()
+            result = command.run()["queries"][0]
+        except Exception as ex:
+            if not is_superset_access_error(ex):
+                logger.exception("Reading the members of %s.%s failed", dataset.table_name, key_column)
+            return None
+        return None if result.get("error") else result.get("data", [])
 
     @staticmethod
     def _time_ranges(dataset: SqlaTable) -> list[dict[str, Any]]:

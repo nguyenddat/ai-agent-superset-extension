@@ -1,3 +1,4 @@
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -137,8 +138,43 @@ def _shown_value(value: Any, labels: dict[str, str]) -> Any:
     return labels.get(_key(value), value)
 
 
+def _folded(text: Any) -> str:
+    """Text without case, accents or extra spaces, so "Hà Nội" and "ha  noi" both find "Ha Noi"."""
+    decomposed = unicodedata.normalize("NFD", str(text).replace("đ", "d").replace("Đ", "D"))
+    return " ".join("".join(char for char in decomposed if not unicodedata.combining(char)).casefold().split())
+
+
+def _stored_spellings(dataset: dict[str, Any], value_labels: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """For each column with labelled values, the stored value that each label, however spelled, stands for.
+
+    The warehouse may store names without accents ("Ha Noi") while a question writes "Hà Nội". A key column takes the
+    key its label names, when no other key shares that label; a column holding the labels takes the stored label.
+    """
+    spellings: dict[str, dict[str, Any]] = {}
+    for item in dataset.get("labelled_values", []):
+        if item.get("label_column"):
+            stored = {_folded(member["label"]): member["label"] for member in item.get("values", [])}
+            spellings.setdefault(item["label_column"], {}).update(stored)
+    for column, labels in value_labels.items():
+        keys_by_label: dict[str, list[str]] = {}
+        for key, label in labels["values"].items():
+            keys_by_label.setdefault(_folded(label), []).append(key)
+        spellings[column] = {label: keys[0] for label, keys in keys_by_label.items() if len(keys) == 1}
+    return spellings
+
+
+def _respelled(value: Any, spellings: dict[str, Any]) -> Any:
+    """A value as the column stores it, when it is a known label spelled another way."""
+    if isinstance(value, list):
+        return [_respelled(item, spellings) for item in value]
+    if not isinstance(value, str):
+        return value
+    return spellings.get(_folded(value), value)
+
+
 def _checked_filter(
     item: dict[str, Any], columns: dict[str, dict[str, Any]], source: str, value_labels: dict[str, dict[str, Any]],
+    spellings: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     column = columns.get(item.get("column"))
     if column is None or not column.get("filterable"):
@@ -155,7 +191,7 @@ def _checked_filter(
             value = value[0]
     if value is None or value == [] or value == "":
         raise QueryPlanError(f"Bộ lọc trên cột “{column['name']}” chưa có giá trị.")
-    value = _coerced(value, column)
+    value = _coerced(_respelled(value, (spellings or {}).get(column["name"], {})), column)
     return {
         "column": column["name"],
         "label": column.get("label") or column["name"],
@@ -170,7 +206,8 @@ def checked_conditions(dataset: dict[str, Any], filters: list[dict[str, Any]]) -
     """A definition's conditions checked against its dataset, kept as `{column, label, operator, value}`."""
     columns = {column["name"]: column for column in dataset["columns"]}
     value_labels = _value_labels(dataset)
-    checked = [_checked_filter(item, columns, "user_definition", value_labels) for item in filters]
+    spellings = _stored_spellings(dataset, value_labels)
+    checked = [_checked_filter(item, columns, "user_definition", value_labels, spellings) for item in filters]
     return [{key: item[key] for key in ("column", "label", "operator", "value")} for item in checked]
 
 
@@ -301,6 +338,7 @@ def plan_query(
         raise QueryPlanError("Dataset của truy vấn không có trong semantic layer.")
     columns = {column["name"]: column for column in dataset["columns"]}
     value_labels = _value_labels(dataset)
+    spellings = _stored_spellings(dataset, value_labels)
     metrics_by_id = {metric["metric_id"]: metric for metric in catalog_metrics if metric["dataset_id"] == dataset["id"]}
     metric_ids = dict.fromkeys(plan.get("metric_ids") or [])
     metrics = [metrics_by_id[metric_id] for metric_id in metric_ids if metric_id in metrics_by_id]
@@ -327,7 +365,7 @@ def plan_query(
             continue
         if rule.get("filters") is None:
             raise QueryPlanError(f"Điều kiện của “{rule['name']}” chưa chuyển được thành bộ lọc.")
-        filters += [_checked_filter(item, columns, source, value_labels) for item in rule["filters"]]
+        filters += [_checked_filter(item, columns, source, value_labels, spellings) for item in rule["filters"]]
         if source == "user_definition":
             stored_columns.update(item["column"] for item in rule["filters"])
     # A stored threshold comes from where it was stored, never from the model's copy of it.
@@ -335,7 +373,7 @@ def plan_query(
         source = item.get("source") or "question"
         retyped = source == "expert_rule" or (source == "user_definition" and item.get("column") in stored_columns)
         if not retyped:
-            filters.append(_checked_filter(item, columns, source, value_labels))
+            filters.append(_checked_filter(item, columns, source, value_labels, spellings))
     if len(metrics) > MAX_METRICS or len(dimensions) > MAX_DIMENSIONS or len(filters) > MAX_FILTERS:
         raise QueryPlanError("Truy vấn quá rộng; hãy hỏi cụ thể hơn.")
 

@@ -382,7 +382,10 @@ def test_consumer_payloads_flatten_to_the_ids_the_agent_answers_with():
     assert catalog.datasets == [{
         "id": 12, "name": "fact", "columns": [dimension],
         "labelled_values": [
-            {"column": "thanh_pho_key", "label": "Thành phố", "values": [{"value": 1, "label": "Ha Noi"}]},
+            {
+                "column": "thanh_pho_key", "label_column": "ten_thanh_pho", "label": "Thành phố",
+                "values": [{"value": 1, "label": "Ha Noi"}],
+            },
         ],
         "time_ranges": [],
     }]

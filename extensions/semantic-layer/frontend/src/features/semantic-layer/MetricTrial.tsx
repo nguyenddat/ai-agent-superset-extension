@@ -72,6 +72,8 @@ export function MetricTrial({ metric, dataset }: MetricTrialProps) {
 
   const run = async () => {
     setRunError('');
+    // The previous result belongs to the previous filters, so it must not stay under a new run or its error.
+    setResult(null);
     try {
       const filters = buildFilters(filterDrafts, filterableColumns);
       setRunning(true);
@@ -113,12 +115,22 @@ export function MetricTrial({ metric, dataset }: MetricTrialProps) {
       {metric.state === 'candidate' ? (
         <div className="sl-metric-warning" role="note">
           <AlertCircle />
-          <div>
-            <strong>Bản xem trước</strong>
-            <span>
-              Metric chưa được duyệt; chỉ quản trị viên chạy được, AI Agent và người dùng khác chưa dùng được.
-            </span>
-          </div>
+          {metric.contract?.origin === 'ai_agent' ? (
+            <div>
+              <strong>Số liệu tạm tính</strong>
+              <span>
+                Metric do AI Agent dựng, chưa được duyệt; AI Agent dùng nó để trả lời tạm tính cho tới khi được duyệt
+                hoặc thu hồi.
+              </span>
+            </div>
+          ) : (
+            <div>
+              <strong>Bản xem trước</strong>
+              <span>
+                Metric chưa được duyệt; chỉ quản trị viên chạy được, AI Agent và người dùng khác chưa dùng được.
+              </span>
+            </div>
+          )}
         </div>
       ) : null}
       <div className="sl-metric-trial-config">
@@ -234,6 +246,8 @@ export function MetricTrial({ metric, dataset }: MetricTrialProps) {
           <p className="sl-metric-result-empty">Chọn chiều phân tích, bộ lọc rồi bấm Chạy thử để xem kết quả.</p>
         ) : showSql ? (
           <pre className="sl-metric-sql" aria-label="SQL Superset đã chạy">{result.sql}</pre>
+        ) : result.rows.length === 0 ? (
+          <p className="sl-metric-result-empty">Không có dòng nào khớp chiều phân tích và bộ lọc đã chọn.</p>
         ) : (
           <table>
             <thead>

@@ -16,11 +16,11 @@ class RelationshipValidationError(ValidationError):
 
 
 class MetricNotFoundError(NotFoundError):
-    message = "Metric not found in this dataset."
+    message = "Không tìm thấy metric này trong dataset."
 
 
 class MetricContractNotFoundError(NotFoundError):
-    message = "Metric contract not found in this dataset."
+    message = "Metric này chưa được đề xuất trong dataset."
 
 
 class ForeignKeyColumnNotFoundError(NotFoundError):
@@ -36,11 +36,11 @@ class RelationshipCandidateRequiredError(NotFoundError):
 
 
 class ApprovedMetricContractRequiredError(NotAuthorizedError):
-    message = "A current approved metric contract is required."
+    message = "Metric chưa được duyệt, hoặc đã đổi sau lần duyệt, nên chưa chạy được."
 
 
 class ApprovedMetricDatasetRequiredError(NotAuthorizedError):
-    message = "A dataset with an approved metric contract is required."
+    message = "Dataset chưa có metric nào được duyệt."
 
 
 class MetricSelfApprovalError(SelfApprovalError):
@@ -48,8 +48,8 @@ class MetricSelfApprovalError(SelfApprovalError):
 
 
 class MetricExecutionDeniedError(NotAuthorizedError):
-    message = "Superset denied metric execution."
+    message = "Superset không cho bạn chạy metric này."
 
 
 class ApprovedContractExistsError(ConflictError):
-    message = "Revoke the current approved contract before creating another candidate."
+    message = "Thu hồi bản đã duyệt trước khi tạo bản đề xuất mới."
