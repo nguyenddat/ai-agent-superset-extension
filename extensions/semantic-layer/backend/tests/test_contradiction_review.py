@@ -103,6 +103,34 @@ def test_without_a_key_nothing_is_asked_and_the_pairs_stay_unchecked(monkeypatch
     assert judgement.semantic_judge() is judgement.model_judge
 
 
+def test_a_deferred_check_asks_nothing_and_leaves_the_pairs_for_the_ai_step():
+    asked = []
+
+    def judge(batch):
+        asked.append(batch)
+        return {}
+
+    cached = {"fingerprint-1": Verdict(True, "a")}
+    verdicts, fresh, outcome = judge_candidates([_candidate(1), _candidate(2)], cached, judge, defer=True)
+    assert verdicts == cached and fresh == {} and asked == []
+    assert outcome == SemanticOutcome("deferred", 1)
+    # Without a key there is no AI step to wait for.
+    assert judge_candidates([_candidate(2)], {}, None, defer=True)[2].status == "unavailable"
+    assert judge_candidates([_candidate(1)], cached, judge, defer=True)[2] == SemanticOutcome("checked")
+
+
+def test_the_judgement_model_gives_up_before_the_worker_timeout(monkeypatch):
+    chat_models = importlib.import_module(f"{PACKAGE}.modules.data_dictionary.autofill.chat_models")
+    monkeypatch.setattr(chat_models.settings, "OPENROUTER_API_KEY", "khóa-thử")
+    chat_models.get_judgement_chat_model.cache_clear()
+    try:
+        model = chat_models.get_judgement_chat_model()
+    finally:
+        chat_models.get_judgement_chat_model.cache_clear()
+    assert model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS and model.max_retries == 1
+    assert chat_models.JUDGEMENT_TIMEOUT_SECONDS * (1 + model.max_retries) < 120
+
+
 def test_a_failing_model_leaves_the_pairs_for_the_next_check():
     def judge(batch):
         raise TimeoutError("OpenRouter")
@@ -336,6 +364,18 @@ def test_without_a_key_the_rule_based_findings_are_still_stored(world):
     assert [row.kind for row in world.contradictions.rows] == ["rule_term_threshold"]
 
 
+def test_a_rule_only_check_stores_the_rule_findings_and_the_ai_step_adds_its_own(world):
+    asked = []
+    outcome = world.review.refresh_contradictions(_stub_judge(asked), defer_model=True)
+    assert outcome == SemanticOutcome("deferred", 2) and asked == []
+    assert [row.kind for row in world.contradictions.rows] == ["rule_term_threshold"]
+    assert world.review.refresh_contradictions(_stub_judge(asked)) == SemanticOutcome("checked")
+    assert sorted(row.kind for row in world.contradictions.rows) == ["rule_term_threshold", "term_term_meaning"]
+    # Once judged, the AI findings come back from the cache in the rule-only step too.
+    assert world.review.refresh_contradictions(_stub_judge(asked), defer_model=True) == SemanticOutcome("checked")
+    assert len(world.contradictions.rows) == 2
+
+
 def test_a_failing_model_keeps_earlier_verdicts(world):
     world.review.refresh_contradictions(_stub_judge([]))
 
@@ -404,7 +444,7 @@ def _api(*, admin=True, body=None, refresh=None, dismiss=None):
         "db": SimpleNamespace(session=SimpleNamespace(commit=lambda: commits.append(True), rollback=lambda: None)),
         "IntegrityError": IntegrityError,
         "semantic_judge": lambda: "judge",
-        "refresh_contradictions": refresh or (lambda judge: SemanticOutcome("checked")),
+        "refresh_contradictions": refresh or (lambda judge, defer_model=False: SemanticOutcome("checked")),
         "contradictions_for_review": lambda: [row],
         "mark_contradiction_dismissed": dismiss or (lambda contradiction_id, reason, actor_id: row),
         "dismissal_reason": dismissal_reason,
@@ -418,20 +458,36 @@ def _api(*, admin=True, body=None, refresh=None, dismiss=None):
 def test_a_check_answers_the_contradictions_and_the_ai_outcome_after_one_commit():
     judges = []
 
-    def refresh(judge):
-        judges.append(judge)
+    def refresh(judge, defer_model=False):
+        judges.append((judge, defer_model))
         return SemanticOutcome("unavailable", 2, "Chưa cấu hình")
 
     api, commits = _api(refresh=refresh)
     status, payload = api.check_contradictions()
-    assert status == 200 and commits == [True] and judges == ["judge"]
+    assert status == 200 and commits == [True] and judges == [("judge", False)]
     assert payload["semantic"] == {"status": "unavailable", "unchecked": 2, "message": "Chưa cấu hình"}
     [entry] = payload["contradictions"]
     assert entry["found_by"] == "rule" and entry["detected_at"] == "2026-11-11T00:00:00+00:00"
 
 
+def test_a_rules_only_check_leaves_the_model_for_the_next_request():
+    judges = []
+
+    def refresh(judge, defer_model=False):
+        judges.append(defer_model)
+        return SemanticOutcome("deferred", 3)
+
+    api, commits = _api(body={"rules_only": True}, refresh=refresh)
+    status, payload = api.check_contradictions()
+    assert status == 200 and commits == [True] and judges == [True]
+    assert payload["semantic"] == {"status": "deferred", "unchecked": 3, "message": None}
+    api, commits = _api(body={"rules_only": "yes"}, refresh=refresh)
+    api.check_contradictions()
+    assert judges == [True, False]
+
+
 def test_a_concurrent_check_is_a_conflict_and_saves_nothing():
-    def refresh(judge):
+    def refresh(judge, defer_model=False):
         raise IntegrityError("insert", {}, Exception("duplicate pair_key"))
 
     api, commits = _api(refresh=refresh)

@@ -3,7 +3,7 @@ from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
 
 from ....core.database import handle_errors
-from ....core.security import can_query_semantic_layer, is_admin, require_semantic_layer_view
+from ....core.security import can_query_semantic_layer, can_view_semantic_layer, is_admin
 from ....migrations import ensure_dictionary_tables
 from ...access_control.routes.access_control import AccessControlRoutes
 from ...agent_ladder.routes.agent import AgentLadderRoutes
@@ -43,7 +43,12 @@ class SemanticLayerAPI(
     @permission_name("read")
     @handle_errors
     def get_access(self):
-        """What the signed-in user may do in the Semantic Layer; 403 when they may not even view it."""
-        require_semantic_layer_view()
-        ensure_dictionary_tables()
-        return self.response(200, is_admin=is_admin(), can_view=True, can_query=can_query_semantic_layer())
+        """What the signed-in user may do in the Semantic Layer.
+
+        Every page asks, so a user without the view permission gets 200 with `can_view` false rather than a 403 the
+        browser logs as an error; the page and every other route still refuse them.
+        """
+        can_view = can_view_semantic_layer()
+        if can_view:
+            ensure_dictionary_tables()
+        return self.response(200, is_admin=is_admin(), can_view=can_view, can_query=can_query_semantic_layer())

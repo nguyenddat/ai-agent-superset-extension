@@ -67,39 +67,41 @@ export function RoleAssignments() {
       {loading ? (
         <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang tải người dùng…</p>
       ) : (
-        <table className="sl-time-semantics-table">
-          <thead>
-            <tr>
-              <th>Người dùng</th>
-              <th>Nhóm quyền khác</th>
-              {assignments.roles.map(role => (
-                <th key={role.name}>{role.name}<br /><span className="sl-metric-muted">{role.description}</span></th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {assignments.users.map(user => (
-              <tr key={user.id}>
-                <td>{user.name} <span className="sl-metric-muted">({user.username})</span></td>
-                <td className="sl-metric-muted">{user.other_roles.join(', ') || '—'}</td>
+        <div className="sl-role-assignments">
+          <table className="sl-time-semantics-table">
+            <thead>
+              <tr>
+                <th>Người dùng</th>
+                <th>Nhóm quyền khác</th>
                 {assignments.roles.map(role => (
-                  <td key={role.name}>
-                    {user.is_admin ? (
-                      <span className="sl-metric-muted">Admin: đủ quyền</span>
-                    ) : (
-                      <Checkbox
-                        aria-label={`${role.name} cho ${user.name}`}
-                        checked={user.roles.includes(role.name)}
-                        disabled={savingUserId !== null}
-                        onCheckedChange={checked => void toggleRole(user, role.name, checked === true)}
-                      />
-                    )}
-                  </td>
+                  <th key={role.name}>{role.name}<span className="sl-role-description">{role.description}</span></th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {assignments.users.map(user => (
+                <tr key={user.id}>
+                  <td>{user.name} <span className="sl-metric-muted">({user.username})</span></td>
+                  <td className="sl-metric-muted">{user.other_roles.join(', ') || '—'}</td>
+                  {assignments.roles.map(role => (
+                    <td key={role.name}>
+                      {user.is_admin ? (
+                        <span className="sl-metric-muted">Admin: đủ quyền</span>
+                      ) : (
+                        <Checkbox
+                          aria-label={`${role.name} cho ${user.name}`}
+                          checked={user.roles.includes(role.name)}
+                          disabled={savingUserId !== null}
+                          onCheckedChange={checked => void toggleRole(user, role.name, checked === true)}
+                        />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

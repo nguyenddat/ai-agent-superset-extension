@@ -30,7 +30,36 @@ const DISMISS_TEXT = {
   reasonRequired: true,
 };
 
+// The server's model calls give up within about 90 seconds; past this the screen stops waiting for the AI step.
+const AI_STEP_TIMEOUT_MS = 100_000;
+const AI_STEP_TIMEOUT_MESSAGE =
+  'AI chưa trả lời kịp; các cặp chưa kiểm tra sẽ được kiểm tra ở lần sau. Chờ khoảng nửa phút rồi hãy kiểm tra lại.';
+
+const KIND_ORDER = Object.keys(KIND_LABELS);
+
 const itemNames = (contradiction: Contradiction) => contradiction.items.map(item => item.name).join(' ↔ ');
+
+/** The server's order: open contradictions first, then dismissed ones, each by kind. */
+function reviewOrder(contradictions: Contradiction[]): Contradiction[] {
+  return [...contradictions].sort((first, second) => (
+    Number(first.status !== 'open') - Number(second.status !== 'open')
+    || KIND_ORDER.indexOf(first.kind) - KIND_ORDER.indexOf(second.kind)
+    || first.id - second.id
+  ));
+}
+
+/** The request's answer, or an error once `milliseconds` pass without one. */
+async function withTimeout<T>(request: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timer = 0;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 /** What the list shows next to a kind: a dismissal, or that the AI model judged it. */
 function listBadge(contradiction: Contradiction): string {
@@ -106,13 +135,15 @@ function ContradictionDetail({ contradiction, busy, onDismiss }: {
 
 /**
  * Contradictions between glossary terms, expert rules and the metrics terms link, found automatically. Opening the
- * view checks the current content again; an administrator opens the items to fix them, or dismisses a contradiction
- * with a reason until either item changes.
+ * view checks the current content again: the rule-based findings first, then the AI model's, which may take a while.
+ * An administrator opens the items to fix them, or dismisses a contradiction with a reason until either item changes.
  */
 export function Contradictions() {
   const [result, setResult] = useState<ContradictionCheck | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [checking, setChecking] = useState(true);
+  // Pairs the AI step is judging now; 0 when it is not running.
+  const [aiPairs, setAiPairs] = useState(0);
   const [dismissing, setDismissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -120,11 +151,20 @@ export function Contradictions() {
   const check = useCallback(async () => {
     setChecking(true);
     try {
-      setResult(await requestJson<ContradictionCheck>(semanticLayerApi.contradictionsCheck, 'POST', {}));
+      const ruleCheck = await requestJson<ContradictionCheck>(
+        semanticLayerApi.contradictionsCheck, 'POST', { rules_only: true },
+      );
+      setResult(ruleCheck);
       setError('');
+      if (ruleCheck.semantic.status === 'deferred') {
+        setAiPairs(ruleCheck.semantic.unchecked);
+        const aiCheck = requestJson<ContradictionCheck>(semanticLayerApi.contradictionsCheck, 'POST', {});
+        setResult(await withTimeout(aiCheck, AI_STEP_TIMEOUT_MS, AI_STEP_TIMEOUT_MESSAGE));
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không kiểm tra được mâu thuẫn.');
     }
+    setAiPairs(0);
     setChecking(false);
   }, []);
   useEffect(() => { void check(); }, [check]);
@@ -143,11 +183,15 @@ export function Contradictions() {
       );
       setResult(current => current && {
         ...current,
-        contradictions: current.contradictions.map(item => (item.id === contradiction.id ? contradiction : item)),
+        contradictions: reviewOrder(
+          current.contradictions.map(item => (item.id === contradiction.id ? contradiction : item)),
+        ),
       });
       setDismissing(false);
       setError('');
     } catch (reason) {
+      // Close the dialog so the error shows, as Glossary and Expert Rules do.
+      setDismissing(false);
       setError(reason instanceof Error ? reason.message : 'Không bỏ qua được mâu thuẫn.');
     } finally {
       setBusy(false);
@@ -160,16 +204,31 @@ export function Contradictions() {
         <div className="sl-metrics-browser-filters">
           <div className="sl-metrics-search">
             <span className="sl-proposal-count">{result ? `${openCount} mâu thuẫn chưa xử lý` : ''}</span>
-            <Button variant="outline" disabled={checking} onClick={() => void check()}>
-              <CheckIcon className={checking ? 'sl-spin' : undefined} data-icon="inline-start" /> Kiểm tra lại
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Kiểm tra lại"
+              title="Kiểm tra lại"
+              disabled={checking}
+              onClick={() => void check()}
+            >
+              <CheckIcon className={checking ? 'sl-spin' : undefined} />
             </Button>
           </div>
         </div>
         <div className="sl-metrics-list">
-          {result === null && checking ? (
-            <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang kiểm tra thuật ngữ và rule…</p>
+          {result === null ? (
+            checking ? (
+              <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang kiểm tra thuật ngữ và rule…</p>
+            ) : (
+              <p className="sl-metric-muted sl-question-list-empty">
+                Chưa kiểm tra được mâu thuẫn; bấm “Kiểm tra lại” để thử lại.
+              </p>
+            )
           ) : contradictions.length === 0 ? (
-            <p className="sl-metric-muted sl-question-list-empty">Không phát hiện mâu thuẫn nào.</p>
+            <p className="sl-metric-muted sl-question-list-empty">
+              {aiPairs ? 'Quy tắc chưa phát hiện mâu thuẫn nào; đang chờ AI.' : 'Không phát hiện mâu thuẫn nào.'}
+            </p>
           ) : contradictions.map(contradiction => (
             <button
               key={contradiction.id}
@@ -180,7 +239,7 @@ export function Contradictions() {
               <span className="sl-question-item-text">{itemNames(contradiction)}</span>
               <span className="sl-question-item-meta">
                 {KIND_LABELS[contradiction.kind]}
-                <span>{listBadge(contradiction)}</span>
+                <span className="sl-contradiction-badge">{listBadge(contradiction)}</span>
               </span>
             </button>
           ))}
@@ -188,10 +247,20 @@ export function Contradictions() {
       </aside>
       <section className="sl-metrics-detail" aria-label="Chi tiết mâu thuẫn">
         {error ? <div className="sl-metric-error" role="alert"><AlertCircle /> {error}</div> : null}
-        {result?.semantic.message ? <p className="sl-proposal-note">{result.semantic.message}</p> : null}
+        {aiPairs ? (
+          <p className="sl-proposal-note sl-contradiction-notice">
+            <LoaderCircle className="sl-spin" /> AI đang kiểm tra {aiPairs} cặp nội dung về nghĩa, có thể mất tới hai
+            phút. Mâu thuẫn tìm bằng quy tắc đã có trong danh sách.
+          </p>
+        ) : result?.semantic.message ? (
+          <div className="sl-metric-warning sl-contradiction-notice" role="note">
+            <AlertCircle /> {result.semantic.message}
+          </div>
+        ) : null}
         {selected ? (
-          <ContradictionDetail contradiction={selected} busy={busy} onDismiss={() => setDismissing(true)} />
-        ) : result ? (
+          // A running check would overwrite a dismissal made meanwhile with the status it read before it.
+          <ContradictionDetail contradiction={selected} busy={busy || checking} onDismiss={() => setDismissing(true)} />
+        ) : result && !aiPairs ? (
           <div className="sl-question-empty">
             <CheckCheck aria-hidden="true" />
             <p>Thuật ngữ và rule đang dùng không nói trái nhau.</p>
@@ -202,7 +271,7 @@ export function Contradictions() {
         text={dismissing ? DISMISS_TEXT : null}
         subject={selected ? itemNames(selected) : ''}
         reasonMaxLength={512}
-        busy={busy}
+        busy={busy || checking}
         onConfirm={reason => void dismiss(reason)}
         onClose={() => setDismissing(false)}
       />

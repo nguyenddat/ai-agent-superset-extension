@@ -120,11 +120,12 @@ def governed_items() -> tuple[list[TermItem], list[RuleItem], list[MetricItem]]:
     return terms, _governed_rules(), _linked_metrics(metric_datasets)
 
 
-def refresh_contradictions(judge: Judge | None) -> SemanticOutcome:
+def refresh_contradictions(judge: Judge | None, defer_model: bool = False) -> SemanticOutcome:
     """Check every current term and rule and store what is found; the caller commits.
 
     Rule-based checks always run. The AI model judges only candidate pairs it has not judged with the same content,
-    and its verdicts are kept for the next check. Returns how the AI part went.
+    and its verdicts are kept for the next check; with `defer_model` it is not asked yet. Returns how the AI part
+    went.
     """
     terms, rules, metrics = governed_items()
     findings = detect(terms, rules)
@@ -135,7 +136,7 @@ def refresh_contradictions(judge: Judge | None) -> SemanticOutcome:
         row.fingerprint: Verdict(row.contradiction, row.explanation or "")
         for row in judgement_repository.for_fingerprints(fingerprints)
     }
-    verdicts, fresh, outcome = judge_candidates(candidates, cached, judge)
+    verdicts, fresh, outcome = judge_candidates(candidates, cached, judge, defer=defer_model)
     now = datetime.now(timezone.utc)
     if outcome.status == "checked":
         judgement_repository.delete_except(fingerprints)

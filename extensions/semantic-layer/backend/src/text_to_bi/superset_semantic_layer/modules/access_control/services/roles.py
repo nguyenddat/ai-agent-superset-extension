@@ -21,7 +21,7 @@ QUERY_ROLE = "Semantic Layer Query"
 # Each role's own permission plus the API permissions Flask-AppBuilder's @protect checks before the route runs.
 SEMANTIC_LAYER_ROLES: dict[str, dict[str, Any]] = {
     VIEWER_ROLE: {
-        "description": "Xem Data Dictionary, metric, thuật ngữ và expert rule ở chế độ chỉ đọc.",
+        "description": "Xem Metrics, Business Glossary và Expert Rules ở chế độ chỉ đọc.",
         "permissions": [
             (VIEW_PERMISSION, SEMANTIC_LAYER_VIEW_MENU),
             ("can_read", SEMANTIC_LAYER_API),
@@ -29,7 +29,9 @@ SEMANTIC_LAYER_ROLES: dict[str, dict[str, Any]] = {
         ],
     },
     QUERY_ROLE: {
-        "description": "Đọc semantic catalog và chạy metric đã duyệt, qua AI Agent hoặc nút chạy thử.",
+        "description": (
+            "Hỏi AI Agent: đọc semantic catalog và chạy metric đã duyệt. Nút “Chạy thử” ở Metrics cần thêm nhóm Viewer."
+        ),
         "permissions": [
             (QUERY_PERMISSION, SEMANTIC_LAYER_VIEW_MENU),
             ("can_read", SEMANTIC_LAYER_API),

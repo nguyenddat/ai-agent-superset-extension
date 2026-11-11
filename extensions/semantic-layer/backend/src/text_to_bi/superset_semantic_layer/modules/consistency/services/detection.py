@@ -222,7 +222,7 @@ def _differing_lines(first: RuleItem, second: RuleItem, first_domains: dict, sec
         label = first.label(column_id) if column_id in first.column_labels else second.label(column_id)
         for rule, domain in ((first, first_domain), (second, second_domain)):
             described = domain.describe(label) if domain else f"{label}: không ràng buộc"
-            lines.append(f"“{rule.name}”: {described}")
+            lines.append(f"Rule “{rule.name}”: {described}")
     return lines
 
 

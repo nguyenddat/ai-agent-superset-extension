@@ -66,7 +66,8 @@ class Verdict:
 
 @dataclass(frozen=True)
 class SemanticOutcome:
-    """How the AI part of a check went: `checked`, `pending` (more pairs left), `unavailable` (no key) or `failed`."""
+    """How the AI part of a check went: `checked`, `pending` (more pairs left), `unavailable` (no key), `failed`,
+    or `deferred` (a rule-only check left the pairs for the AI step that follows it)."""
 
     status: str
     unchecked: int = 0
@@ -112,10 +113,10 @@ def parse_verdicts(raw: Any, candidates: list[Candidate]) -> dict[str, Verdict]:
 def _verdict_agent():
     from langchain.agents import create_agent
 
-    from ...data_dictionary.autofill.chat_models import get_chat_model
+    from ...data_dictionary.autofill.chat_models import get_judgement_chat_model
 
     return create_agent(
-        model=get_chat_model(),
+        model=get_judgement_chat_model(),
         name="contradiction-judge",
         tools=[],
         response_format=PairVerdicts,
@@ -149,12 +150,13 @@ def _judged_safely(judge: Judge) -> Callable[[list[Candidate]], dict[str, Verdic
 
 
 def judge_candidates(
-    candidates: list[Candidate], cached: dict[str, Verdict], judge: Judge | None
+    candidates: list[Candidate], cached: dict[str, Verdict], judge: Judge | None, defer: bool = False
 ) -> tuple[dict[str, Verdict], dict[str, Verdict], SemanticOutcome]:
     """The verdicts for the candidates: cached ones as they are, the rest asked of the model in parallel batches.
 
     Returns every verdict known now, the new ones to cache, and how the AI part went. Without a judge, or when it
-    fails, the rule-based findings still stand and the pairs left are judged by a later check.
+    fails, the rule-based findings still stand and the pairs left are judged by a later check. With `defer`, nothing
+    is asked: the caller shows the rule-based findings first and asks the model in a second check.
     """
     fingerprints = [candidate.fingerprint for candidate in candidates]
     known = {fingerprint: cached[fingerprint] for fingerprint in fingerprints if fingerprint in cached}
@@ -163,6 +165,8 @@ def judge_candidates(
         return known, {}, SemanticOutcome("checked")
     if judge is None:
         return known, {}, SemanticOutcome("unavailable", len(pending), UNAVAILABLE_MESSAGE)
+    if defer:
+        return known, {}, SemanticOutcome("deferred", len(pending))
     selected = pending[:PAIRS_PER_CHECK]
     batches = [selected[start:start + PAIRS_PER_CALL] for start in range(0, len(selected), PAIRS_PER_CALL)]
     fresh: dict[str, Verdict] = {}

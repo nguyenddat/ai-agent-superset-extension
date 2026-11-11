@@ -102,7 +102,11 @@ gửi tối đa 6 cặp, chạy song song; mỗi lượt kiểm tra gửi tối 
 `contradiction` (đúng/sai) và một câu giải thích tiếng Việt ngắn (tối đa 600 ký tự). Câu hỏi gửi kèm cho từng kiểu nêu rõ
 chỉ tính mâu thuẫn thật, không tính khác cách diễn đạt hay một bên chi tiết hơn.
 
-Khi không gọi được AI, phần quy tắc vẫn chạy và màn hình hiện một dòng nhắc:
+Mỗi lần gọi mô hình kiểm tra mâu thuẫn chờ tối đa 45 giây và thử lại một lần, để một nhà cung cấp treo không giữ request quá 120 giây
+timeout của Gunicorn. Giới hạn này chỉ áp cho bước kiểm tra mâu thuẫn (`get_judgement_chat_model`); AutoFill của
+Data Dictionary vẫn dùng chat model không giới hạn riêng.
+
+Khi không gọi được AI, phần quy tắc vẫn chạy và màn hình hiện một dòng nhắc (khung cảnh báo):
 
 | Tình huống | Dòng nhắc |
 | --- | --- |
@@ -131,7 +135,7 @@ Cả hai route chỉ cho quản trị viên (`require_admin`), có CSRF, đúng 
 
 | Route | Việc làm | Trả về |
 | --- | --- | --- |
-| `POST /semantic-layer/contradictions/check` | Chạy toàn bộ kiểm tra, cập nhật bảng mâu thuẫn | `contradictions` và `semantic` (`status`: `checked`, `pending`, `unavailable`, `failed`; `unchecked`; `message`) |
+| `POST /semantic-layer/contradictions/check` | Chạy toàn bộ kiểm tra, cập nhật bảng mâu thuẫn. Body `{ "rules_only": true }` không gọi AI: kết quả AI đã lưu vẫn dùng, cặp chưa có kết quả để lại cho lượt sau | `contradictions` và `semantic` (`status`: `checked`, `pending`, `unavailable`, `failed`, hoặc `deferred` khi `rules_only` còn cặp chờ AI; `unchecked`; `message`) |
 | `POST /semantic-layer/contradictions/<id>/dismiss` | Bỏ qua một mâu thuẫn, body `{ "reason": "..." }` | `contradiction` |
 
 Mỗi mâu thuẫn có `id`, `kind`, `found_by` (`rule` hoặc `ai`), `status`, `items` (loại, id, tên), `evidence` (các dòng bằng
@@ -149,14 +153,22 @@ Không có route chỉ đọc danh sách: màn hình luôn kiểm tra lại khi 
 
 Menu "Quản trị nghiệp vụ" có thêm mục "Mâu thuẫn", chỉ quản trị viên thấy.
 
-- Mở màn hình thì chạy kiểm tra. Cột trái liệt kê mâu thuẫn, chưa xử lý trước, sau đó theo kiểu. Mỗi dòng ghi tên hai
-  nội dung, kiểu mâu thuẫn, và "AI" hoặc "Đã bỏ qua". Phía trên có số mâu thuẫn chưa xử lý và nút "Kiểm tra lại".
+- Mở màn hình thì chạy kiểm tra theo hai bước: lượt `rules_only` hiện ngay mâu thuẫn tìm bằng quy tắc (và kết quả AI
+  đã lưu); nếu còn cặp chờ AI (`deferred`), màn hình hiện "AI đang kiểm tra N cặp nội dung về nghĩa…" rồi gọi lượt đầy
+  đủ. Màn hình thôi chờ lượt AI sau 100 giây và báo "AI chưa trả lời kịp…", kèm lời nhắc chờ khoảng nửa phút rồi hãy
+  kiểm tra lại vì request cũ có thể vẫn chạy trên server. Trong lúc kiểm tra, nút "Bỏ qua" bị khoá, để kết quả trả về
+  không ghi đè một lần bỏ qua vừa làm.
+- Cột trái liệt kê mâu thuẫn, chưa xử lý trước, sau đó theo kiểu; bỏ qua một mâu thuẫn thì nó chuyển xuống sau các mâu
+  thuẫn chưa xử lý. Mỗi dòng ghi tên hai nội dung, kiểu mâu thuẫn, và "AI" hoặc "Đã bỏ qua". Phía trên có số mâu thuẫn
+  chưa xử lý và nút biểu tượng "Kiểm tra lại". Khi kiểm tra lỗi, danh sách báo chưa kiểm tra được chứ không báo "Không
+  phát hiện mâu thuẫn nào".
 - Cột phải hiện kiểu, trạng thái, cách phát hiện (quy tắc hay AI), thời điểm phát hiện, và ba phần:
   - "Nội dung liên quan": thuật ngữ và rule là liên kết, bấm vào thì mở Business Glossary hoặc Expert Rules với nội dung
     đó được chọn. Metric chỉ hiện tên.
   - "Bằng chứng", hoặc "Nội dung AI đã đọc".
   - "Vì sao mâu thuẫn", hoặc "Nhận định của AI".
-- Nút "Bỏ qua" mở hộp thoại nhập lý do. Mâu thuẫn đã bỏ qua hiện người bỏ qua, thời điểm và lý do.
+- Nút "Bỏ qua" mở hộp thoại nhập lý do. Mâu thuẫn đã bỏ qua hiện người bỏ qua, thời điểm và lý do. Bỏ qua lỗi thì hộp
+  thoại đóng lại để thấy thông báo lỗi.
 - Dòng nhắc về AI (mục 3.2) hiện phía trên chi tiết.
 
 ## 7. Chưa làm
@@ -174,7 +186,8 @@ Menu "Quản trị nghiệp vụ" có thêm mục "Mâu thuẫn", chỉ quản t
   - Đọc ngưỡng từ câu văn.
   - Từng kiểu kiểm bằng quy tắc, dấu vân tay đổi theo nội dung, chọn ứng viên cho AI.
 - `tests/test_contradiction_review.py`:
-  - Đọc kết quả AI với mô hình giả: chia lô, bộ nhớ đệm, không có khóa, gọi lỗi, giới hạn số cặp.
+  - Đọc kết quả AI với mô hình giả: chia lô, bộ nhớ đệm, không có khóa, gọi lỗi, giới hạn số cặp, lượt `rules_only`
+    (`deferred`), timeout của chat model.
   - Giữ và mở lại mâu thuẫn đã bỏ qua.
   - Service với repository giả.
   - Thứ tự decorator, route commit một lần, 400, 403, 404, 409.

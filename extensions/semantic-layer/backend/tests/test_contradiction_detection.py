@@ -192,7 +192,7 @@ def test_two_rules_defining_one_term_with_different_thresholds_contradict():
     second = _rule(2, "Mưa lớn B", [_condition(RAIN, "greater_than_or_equal", 30)], [6])
     [finding] = detect([term], [first, second])
     assert finding.kind == "rule_rule_same_term"
-    assert finding.evidence == ("“Mưa lớn A”: Tổng mưa (mm) ≥ 50", "“Mưa lớn B”: Tổng mưa (mm) ≥ 30")
+    assert finding.evidence == ("Rule “Mưa lớn A”: Tổng mưa (mm) ≥ 50", "Rule “Mưa lớn B”: Tổng mưa (mm) ≥ 30")
     assert "một rule nằm trọn trong rule kia" in finding.explanation
     disjoint = _rule(3, "Mưa lớn C", [_condition(RAIN, "less_than", 30)], [6])
     assert "không có dòng nào thỏa cả hai" in detect([term], [first, disjoint])[0].explanation
