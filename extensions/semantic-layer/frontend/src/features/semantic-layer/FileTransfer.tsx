@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertCircle, Check, Download, FileSpreadsheet, LoaderCircle } from 'lucide-react';
+import { AlertCircle, Check, Download, FileSpreadsheet, LoaderCircle, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -88,6 +88,8 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
   const [upload, setUpload] = useState<{ filename: string; content: string } | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [applied, setApplied] = useState<ImportReport | null>(null);
+  // The browser's own file input is hidden behind a button that matches the dialog's other buttons.
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const reset = () => { setError(''); setUpload(null); setReport(null); setApplied(null); };
   const close = () => { if (!busy) { setOpen(false); reset(); } };
@@ -171,15 +173,17 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
               <Button variant="outline" disabled={busy} onClick={() => void download('xlsx')}>
                 <Download data-icon="inline-start" /> Tải file XLSX
               </Button>
-              <label className="sl-file-transfer-upload">
-                Tải lên file đã sửa (CSV hoặc XLSX, tối đa 1 MB)
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  disabled={busy}
-                  onChange={event => { void preview(event.target.files?.[0]); event.target.value = ''; }}
-                />
-              </label>
+              <Button variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>
+                <Upload data-icon="inline-start" /> Tải lên file đã sửa
+              </Button>
+              <span className="sl-file-transfer-upload">CSV hoặc XLSX, tối đa 1 MB</span>
+              <input
+                ref={fileInput}
+                type="file"
+                hidden
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={event => { void preview(event.target.files?.[0]); event.target.value = ''; }}
+              />
             </div>
             {busy ? <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang xử lý…</p> : null}
             {error ? <div className="sl-metric-error" role="alert"><AlertCircle /> {error}</div> : null}
@@ -192,6 +196,7 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
             {report && summary ? (
               <>
                 <p className="sl-metric-muted">
+                  {upload ? <>File <strong>{upload.filename}</strong>: </> : null}
                   {summary.create} tạo mới · {summary.update} cập nhật · {summary.unchanged} giữ nguyên ·{' '}
                   {summary.error} lỗi
                   {summary.unchanged > 0 ? ' (dòng giữ nguyên không hiện trong bảng)' : ''}

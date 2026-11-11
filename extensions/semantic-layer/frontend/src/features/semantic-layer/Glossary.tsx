@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { requestJson, semanticLayerApi } from './api';
-import { GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace } from './ConceptGroups';
+import {
+  firstListed, GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorkspace,
+} from './ConceptGroups';
 import { takeConceptFocus } from './conceptFocus';
 import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
@@ -159,11 +161,12 @@ function TermHistory({ term, revision }: { term: GlossaryReviewTerm; revision: n
   );
 }
 
-function TermDetail({ term, groups, historyRevision, moving, onMove }: {
+function TermDetail({ term, groups, historyRevision, moving, readOnly, onMove }: {
   term: GlossaryReviewTerm;
   groups: ConceptGroup[];
   historyRevision: number;
   moving: boolean;
+  readOnly: boolean;
   onMove: (groupId: number | null) => void;
 }) {
   const revision = term.current_revision;
@@ -180,7 +183,14 @@ function TermDetail({ term, groups, historyRevision, moving, onMove }: {
         <div>
           <dt>Nhóm</dt>
           <dd>
-            <GroupSelect groups={groups} groupId={term.group?.id ?? null} disabled={moving} inline onChange={onMove} />
+            <GroupSelect
+              groups={groups}
+              groupId={term.group?.id ?? null}
+              disabled={moving}
+              inline
+              readOnly={readOnly}
+              onChange={onMove}
+            />
           </dd>
         </div>
       </dl>
@@ -274,7 +284,10 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
   }, [termList, stateFilter, searchText]);
 
   const filtering = stateFilter !== 'all' || searchText.trim() !== '';
-  const selectedTerm = termList.terms.find(term => term.id === selectedId) ?? visibleTerms[0] ?? null;
+  const termGroupId = (term: GlossaryReviewTerm) => term.group?.id ?? null;
+  // The detail follows the list: a term the search or filter hides is not shown, and the first listed term opens.
+  const selectedTerm = visibleTerms.find(term => term.id === selectedId)
+    ?? firstListed(termList.groups, visibleTerms, termGroupId);
   const stateItems = [
     { value: 'all', label: `Mọi trạng thái (${termList.terms.length})` },
     ...STATE_ORDER.map(state => ({ value: state, label: `${STATE_LABELS[state]} (${stateCounts.get(state) ?? 0})` })),
@@ -345,7 +358,8 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
             <Search />
             <Input
               aria-label="Tìm thuật ngữ"
-              placeholder="Tìm thuật ngữ hoặc từ đồng nghĩa"
+              placeholder="Tìm thuật ngữ"
+              title="Tìm theo tên thuật ngữ hoặc từ đồng nghĩa"
               value={searchText}
               onChange={event => setSearchText(event.target.value)}
             />
@@ -393,18 +407,20 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
         <div className="sl-metrics-list">
           {loading && termList.terms.length === 0 ? (
             <p className="sl-metric-muted"><LoaderCircle className="sl-spin" /> Đang tải thuật ngữ…</p>
-          ) : visibleTerms.length === 0 && (filtering || termList.groups.length === 0) ? (
+          ) : visibleTerms.length === 0 && (filtering || readOnly || termList.groups.length === 0) ? (
             <p className="sl-metric-muted">
-              {termList.terms.length === 0
-                ? 'Chưa có thuật ngữ nào. Bấm "Tạo thuật ngữ" để bắt đầu.'
-                : 'Không có thuật ngữ nào khớp bộ lọc.'}
+              {termList.terms.length > 0
+                ? 'Không có thuật ngữ nào khớp bộ lọc.'
+                : readOnly
+                  ? 'Chưa có thuật ngữ nào bạn được xem. Thuật ngữ chỉ hiện khi bạn có quyền đọc dataset nó liên kết.'
+                  : 'Chưa có thuật ngữ nào. Bấm "Tạo thuật ngữ" để bắt đầu.'}
             </p>
           ) : (
             <GroupedList
               noun="thuật ngữ"
               groups={termList.groups}
               items={visibleTerms}
-              groupIdOf={term => term.group?.id ?? null}
+              groupIdOf={termGroupId}
               filtered={filtering}
               onEditGroup={readOnly ? undefined : group => groupWorkspace.startEditing(group)}
               onDeleteGroup={readOnly ? undefined : groupWorkspace.setDeleting}
@@ -486,7 +502,8 @@ export function Glossary({ readOnly = false }: { readOnly?: boolean }) {
               term={selectedTerm}
               groups={termList.groups}
               historyRevision={historyRevision}
-              moving={moving || readOnly}
+              moving={moving}
+              readOnly={readOnly}
               onMove={groupId => void moveTerm(selectedTerm, groupId)}
             />
           </>
