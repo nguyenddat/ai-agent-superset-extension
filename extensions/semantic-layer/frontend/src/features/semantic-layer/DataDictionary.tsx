@@ -60,21 +60,28 @@ const AGGREGATION_LABELS: Record<Aggregation, string> = {
   SUM: 'Tổng', AVG: 'Trung bình', MIN: 'Nhỏ nhất', MAX: 'Lớn nhất', COUNT: 'Đếm', COUNT_DISTINCT: 'Đếm khác nhau',
 };
 
-/** Synonyms typed as one comma-separated line; the list is taken when the field is left, so a comma can be typed. */
+const splitSynonyms = (text: string) => text.split(',').map(word => word.trim()).filter(Boolean);
+
+/**
+ * Synonyms typed as one comma-separated line. Each keystroke updates the list, so the dictionary is marked unsaved
+ * while typing; the text stays as typed (a trailing comma or space) unless the list changes from outside.
+ */
 function SynonymsInput({ label, value, disabled, onChange }: {
   label: string; value: string[]; disabled: boolean; onChange: (value: string[]) => void;
 }) {
   const joined = value.join(', ');
   const [draft, setDraft] = useState(joined);
-  useEffect(() => setDraft(joined), [joined]);
+  useEffect(() => setDraft(current => (splitSynonyms(current).join(', ') === joined ? current : joined)), [joined]);
   return (
     <Input
       aria-label={label}
       disabled={disabled}
       placeholder="nhiệt độ, nhiệt độ không khí"
       value={draft}
-      onChange={event => setDraft(event.target.value)}
-      onBlur={() => onChange(draft.split(',').map(word => word.trim()).filter(Boolean))}
+      onChange={event => {
+        setDraft(event.target.value);
+        onChange(splitSynonyms(event.target.value));
+      }}
     />
   );
 }
@@ -137,8 +144,9 @@ const DICTIONARY_FILE_GUIDE = (
       <code>contains_pii</code>.
     </li>
     <li>
-      <code>aggregations</code> và <code>synonyms</code> cách nhau bằng <code>;</code>; <code>contains_pii</code> là{' '}
-      <code>true</code> hoặc <code>false</code>; <code>semantic_role</code> trống thì giữ vai trò hiện tại.
+      <code>aggregations</code> và <code>synonyms</code> cách nhau bằng dấu chấm phẩy (<code>;</code>).{' '}
+      <code>contains_pii</code> là <code>true</code> hoặc <code>false</code>. <code>semantic_role</code> trống thì giữ
+      vai trò hiện tại.
     </li>
     <li>
       Thiếu hẳn một cột không bắt buộc thì giữ nguyên giá trị đó. Metadata không cần duyệt: áp dụng là có hiệu lực.
@@ -641,15 +649,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                 </SelectContent>
               </Select>
             </Field>
-            <Field orientation="horizontal" className="sl-field-wide">
-              <Checkbox
-                id="sl-dataset-contains-pii" checked={dictionary.contains_pii ?? false} disabled={readOnly || saving}
-                onCheckedChange={checked => updateDataset('contains_pii', checked)}
-              />
-              <FieldLabel htmlFor="sl-dataset-contains-pii" title="Bảng chứa dữ liệu cá nhân như họ tên, số điện thoại, email">
-                Chứa dữ liệu nhạy cảm (PII)
-              </FieldLabel>
-            </Field>
             <Field>
               <FieldLabel title="Cột ghi nhận thời điểm tạo bản ghi, dùng để lọc theo thời gian">Cột thời gian tạo</FieldLabel>
               <Select items={createColumnItems} value={dictionary.create_column} disabled={readOnly || saving} onValueChange={value => updateDataset('create_column', value)}>
@@ -660,6 +659,15 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            </Field>
+            <Field orientation="horizontal" className="sl-field-full">
+              <Checkbox
+                id="sl-dataset-contains-pii" checked={dictionary.contains_pii ?? false} disabled={readOnly || saving}
+                onCheckedChange={checked => updateDataset('contains_pii', checked)}
+              />
+              <FieldLabel htmlFor="sl-dataset-contains-pii" title="Bảng chứa dữ liệu cá nhân như họ tên, số điện thoại, email">
+                Chứa dữ liệu nhạy cảm (PII)
+              </FieldLabel>
             </Field>
             <Field className="sl-field-wide">
               <FieldLabel htmlFor="sl-dataset-description">Description</FieldLabel>

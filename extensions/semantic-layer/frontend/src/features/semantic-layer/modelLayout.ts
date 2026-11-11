@@ -156,6 +156,35 @@ export function reconcileGrid(grid: CanvasGrid, domains: BusinessDomain[], datas
     const blocked = new Set([...tableAt(), ...headers(), ...others]);
     tables.set(id, findFreeCell(target.header, cell => !blocked.has(cellKey(cell))));
   }
+  // A table that joined its first domain leaves the unassigned area for the nearest free cell beside that domain, so
+  // the grey area, drawn as the rectangle around its cells, no longer frames it. That is a table still on a cell of the
+  // area, or one its domain reached only as a lone cell inside the area's rectangle.
+  const unassigned = grids.find(item => item.key === UNASSIGNED_DOMAIN);
+  if (unassigned) {
+    const frame = cellBounds(unassigned.cells);
+    const inFrame = (cell: Cell) => cell.col >= frame.col && cell.col < frame.col + frame.columns
+      && cell.row >= frame.row && cell.row < frame.row + frame.rows;
+    const areaKeys = new Set(unassigned.cells.map(cellKey));
+    const unassignedIds = new Set(entries.find(entry => entry.key === UNASSIGNED_DOMAIN)?.ids);
+    for (const item of grids.filter(grid => grid !== unassigned)) {
+      for (const id of entries.find(entry => entry.key === item.key)?.ids ?? []) {
+        const cell = tables.get(id) as Cell;
+        if (unassignedIds.has(id) || !inFrame(cell)) continue;
+        const rest = item.cells.filter(own => cellKey(own) !== cellKey(cell));
+        const inOtherDomain = grids.some(other => other !== item && other !== unassigned && other.cells.some(
+          otherCell => cellKey(otherCell) === cellKey(cell),
+        ));
+        if (inOtherDomain || (!areaKeys.has(cellKey(cell)) && touches(cell, new Set(rest.map(cellKey))))) continue;
+        item.cells = rest;
+        const own = new Set(rest.map(cellKey));
+        const others = grids.filter(other => other !== item).flatMap(other => other.cells.map(cellKey));
+        const blocked = new Set([...tableAt(), ...headers(), ...others]);
+        tables.set(id, findFreeCell(item.header, candidate => (
+          !blocked.has(cellKey(candidate)) && !inFrame(candidate) && touches(candidate, own)
+        )));
+      }
+    }
+  }
   for (const item of grids) {
     const members = new Set(entries.find(entry => entry.key === item.key)?.ids);
     const holders = new Map([...tables].map(([id, cell]) => [cellKey(cell), id]));
@@ -231,6 +260,20 @@ export function toStoredCanvas(grid: CanvasGrid): StoredCanvas {
     domains: grid.domains.map(domain => ({ key: domain.key, header: pair(domain.header), cells: domain.cells.map(pair) })),
     tables: Object.fromEntries([...grid.tables].map(([id, cell]) => [String(id), pair(cell)])),
   };
+}
+
+/**
+ * A stored canvas as text that only changes with the layout: domains by key, cells and tables in order, keys in one
+ * order. The backend returns the canvas with its keys sorted, so its own JSON never equals the client's.
+ */
+export function canvasSignature(stored: StoredCanvas): string {
+  const byCell = (a: [number, number], b: [number, number]) => a[0] - b[0] || a[1] - b[1];
+  return JSON.stringify({
+    domains: [...stored.domains]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map(domain => ({ key: domain.key, header: domain.header, cells: [...domain.cells].sort(byCell) })),
+    tables: Object.entries(stored.tables).sort(([a], [b]) => Number(a) - Number(b)),
+  });
 }
 
 /** A stored canvas, before reconcileGrid attaches the current domains to it. */
