@@ -197,8 +197,9 @@ semantic-layer/
 ```
 
 The backend access endpoint answers `is_admin`, `can_view` and `can_query` before the
-frontend adds the navigation bar items. A user without the view permission receives a
-forbidden response and does not see the entry point. Datasets are fetched using
+frontend adds the navigation bar items. Every page asks, so a user without the view permission
+receives 200 with `can_view` false (not a 403 the browser logs) and does not see the entry point;
+the page and every other route still refuse them. Datasets are fetched using
 Superset's database and dataset APIs, which continue to enforce Superset access.
 
 This first increment shows the Superset dataset-level semantic metadata. It does

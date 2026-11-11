@@ -21,7 +21,7 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
   { id: 'dictionary', label: 'Data Dictionary', description: 'Chỉnh metadata datasets và columns' },
   { id: 'semantic', label: 'Semantic Model', description: 'Nghiệp vụ và data lineage' },
   { id: 'overview', label: 'Tổng quan', description: 'Thống kê câu hỏi AI Agent và kết quả xử lý' },
-  { id: 'metrics', label: 'Metrics', description: 'Duyệt định nghĩa metric và chạy thử' },
+  { id: 'metrics', label: 'Metrics', description: 'Định nghĩa metric được quản trị' },
   { id: 'glossary', label: 'Business Glossary', description: 'Thuật ngữ nghiệp vụ được quản trị' },
   { id: 'rules', label: 'Expert Rules', description: 'Quy tắc nghiệp vụ của chuyên gia' },
   { id: 'contradictions', label: 'Mâu thuẫn', description: 'Thuật ngữ và rule nói trái nhau, phát hiện tự động' },
@@ -29,7 +29,7 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
   { id: 'access', label: 'Phân quyền', description: 'Gán nhóm quyền xem và truy vấn Semantic Layer cho người dùng' },
 ];
 
-/** What the signed-in user may do, from the `access` endpoint; it answers 403 to a user who may not even view. */
+/** What the signed-in user may do, from the `access` endpoint; `can_view` is false for a user who may not even view. */
 export type SemanticLayerAccess = { is_admin: boolean; can_view: boolean; can_query: boolean };
 
 /** A Semantic Layer Viewer reads these modules, read-only; every other module is an administrator's. */

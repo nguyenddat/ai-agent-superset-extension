@@ -124,6 +124,15 @@ def test_each_role_grants_its_own_capability(access, role_names, can_view, can_q
     assert access.security.can_query_semantic_layer() is can_query
 
 
+def test_the_role_descriptions_name_only_what_each_role_opens(access):
+    viewer = access.roles.SEMANTIC_LAYER_ROLES["Semantic Layer Viewer"]["description"]
+    query = access.roles.SEMANTIC_LAYER_ROLES["Semantic Layer Query"]["description"]
+    # A Viewer reads Metrics, Business Glossary and Expert Rules only; the Data Dictionary stays an administrator's.
+    assert "Metrics, Business Glossary và Expert Rules" in viewer and "Data Dictionary" not in viewer
+    # The page, and so its "Chạy thử" button, needs the Viewer role as well.
+    assert "AI Agent" in query and "cần thêm nhóm Viewer" in query
+
+
 def test_the_checks_answer_403_with_the_role_to_ask_for(access):
     access.user.roles = []
     with pytest.raises(SemanticLayerViewRequiredError, match="Semantic Layer Viewer"):
@@ -222,6 +231,24 @@ def test_an_invalid_role_list_is_refused_without_saving():
     api, commits = _assignment_api(None)
     assert api.update_role_assignment(5) == (400, {"message": RoleAssignmentError.message})
     assert commits == []
+
+
+@pytest.mark.parametrize(("can_view", "can_query"), [(False, False), (False, True), (True, False)])
+def test_the_access_probe_answers_200_even_without_the_view_permission(can_view, can_query):
+    tables = []
+    namespace = {
+        "RestApi": _ResponseAPI,
+        "is_admin": lambda: False,
+        "can_view_semantic_layer": lambda: can_view,
+        "can_query_semantic_layer": lambda: can_query,
+        "ensure_dictionary_tables": lambda: tables.append(True),
+    }
+    compile_into(namespace, api_class({"get_access"}))
+    assert namespace["SemanticLayerAPI"]().get_access() == (
+        200, {"is_admin": False, "can_view": can_view, "can_query": can_query}
+    )
+    # Only a viewer opens the page, so only a viewer's probe prepares its tables.
+    assert tables == ([True] if can_view else [])
 
 
 def test_assignment_routes_follow_the_route_conventions():

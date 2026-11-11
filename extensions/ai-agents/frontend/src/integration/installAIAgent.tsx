@@ -5,6 +5,8 @@ import { AGENT_PAGE, AgentPage } from '../features/chat/AgentPage';
 const HEADER_SELECTOR = 'header#main-menu';
 const NAVBAR_SELECTOR = 'ul[data-test="navbar-top"]';
 const NAV_ITEM_SELECTOR = '[data-test="ai-agent-nav-item"]';
+// The Semantic Layer extension's menus, appended once its own access request answers.
+const SEMANTIC_LAYER_NAV_ITEM_SELECTOR = '[data-test="semantic-layer-nav-item"]';
 // Lucide's "sparkles", inlined because the navbar item is plain markup rather than a React root.
 const SPARKLES_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063'
   + 'l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5'
@@ -54,9 +56,17 @@ export function installAIAgent(): () => void {
         item.innerHTML = '<span class="ant-menu-title-content">'
           + `<a class="ai-nav-link">${SPARKLES_ICON}AI Agent</a></span>`;
       }
+      // Without "SQL" (a user who may not open SQL Lab) the item goes before the Semantic Layer menus, so the order
+      // does not depend on which extension's request answers first.
       const sqlItem = sqlMenuItem(navbar);
-      if (sqlItem && item.previousElementSibling !== sqlItem) sqlItem.after(item);
-      else if (!sqlItem && !item.parentElement) navbar.append(item);
+      const semanticLayerItem = navbar.querySelector(SEMANTIC_LAYER_NAV_ITEM_SELECTOR);
+      if (sqlItem) {
+        if (item.previousElementSibling !== sqlItem) sqlItem.after(item);
+      } else if (semanticLayerItem) {
+        if (item.nextElementSibling !== semanticLayerItem) semanticLayerItem.before(item);
+      } else if (!item.parentElement) {
+        navbar.append(item);
+      }
       const link = item.querySelector<HTMLAnchorElement>('a.ai-nav-link');
       const href = agentPageHref();
       if (link && link.getAttribute('href') !== href) link.setAttribute('href', href);
