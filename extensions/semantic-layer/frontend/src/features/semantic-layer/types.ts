@@ -115,14 +115,6 @@ export type MetricFormula = MetricFormulaTerm & {
   columns: string[];
 };
 
-/** A formula in business words; `only_rows` are the row filters every part of it shares. */
-export type MetricFormulaReading = {
-  scale: string | null;
-  numerator: string;
-  denominator: string | null;
-  only_rows: string[];
-};
-
 export type MetricReviewItem = {
   dataset_id: number;
   metric_id: number;
@@ -132,7 +124,8 @@ export type MetricReviewItem = {
   expression: string | null;
   d3format: string | null;
   formula: MetricFormula | null;
-  reading: MetricFormulaReading | null;
+  /** The expression as pseudo code with the data dictionary's column labels; null when it could not be parsed. */
+  pseudo_code: string | null;
   ineligibility: string | null;
   state: MetricReviewState;
   contract: (MetricContract & { owner_name: string | null; approver_name: string | null; revoker_name: string | null }) | null;
@@ -559,6 +552,8 @@ export type ModelMetric = {
    * Null when the expression could not be parsed.
    */
   columns: Array<{ name: string; role: 'measure' | 'filter' }> | null;
+  /** The expression as pseudo code with the data dictionary's column labels; null when it could not be parsed. */
+  pseudo_code: string | null;
 };
 
 /** Stored business-view canvas: each domain's header and cells, and each table's cell, as [col, row] pairs. */

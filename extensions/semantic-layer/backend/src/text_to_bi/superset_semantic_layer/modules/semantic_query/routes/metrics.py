@@ -53,7 +53,7 @@ from ..services.contracts import (
     metric_contract_state,
     parse_contract_metric,
 )
-from ..services.formula_reading import FormulaVocabulary, RowKindGrain, formula_row_kinds, read_formula
+from ..services.formula_reading import formula_row_kinds, metric_pseudo_code
 from ..services.limits import (
     METRIC_DEFINITION_MAX_LENGTH,
     METRIC_UNIT_MAX_LENGTH,
@@ -137,8 +137,8 @@ class MetricContractRoutes:
         return {"id": dataset.id, "name": name, "columns": query_columns}
 
     @staticmethod
-    def _formula_vocabularies(datasets: list[SqlaTable]) -> dict[int, FormulaVocabulary]:
-        """Each dataset's column labels and row grains from the data dictionary, so formulas read in business words."""
+    def _column_labels(datasets: list[SqlaTable]) -> dict[int, dict[str, str]]:
+        """Each dataset's column labels, the data dictionary's display name over Superset's, for formula pseudo code."""
         dataset_ids = [dataset.id for dataset in datasets]
         labels: dict[int, dict[str, str]] = {
             dataset.id: {column.column_name: column.verbose_name for column in dataset.columns if column.verbose_name}
@@ -147,19 +147,7 @@ class MetricContractRoutes:
         for column in column_dictionary_repository().list_for_datasets(dataset_ids) if dataset_ids else []:
             if column.display_name:
                 labels[column.dataset_id][column.column_name] = column.display_name
-        row_kind_columns = {
-            dictionary.id: dictionary.row_kind_column
-            for dictionary in (dataset_dictionary_repository().list_by_ids(dataset_ids) if dataset_ids else [])
-        }
-        grains: dict[int, list[RowKindGrain]] = {dataset_id: [] for dataset_id in dataset_ids}
-        for grain in dataset_grain_repository().list_for_datasets(dataset_ids) if dataset_ids else []:
-            grains[grain.dataset_id].append(RowKindGrain(grain.row_kind_value, grain.grain, grain.label))
-        return {
-            dataset_id: FormulaVocabulary(
-                labels[dataset_id], row_kind_columns.get(dataset_id), tuple(grains[dataset_id])
-            )
-            for dataset_id in dataset_ids
-        }
+        return labels
 
     @staticmethod
     def _metric_time_context(datasets: list[SqlaTable]) -> dict[int, dict[str, Any]]:
@@ -219,7 +207,7 @@ class MetricContractRoutes:
             for definition in metric_definition_repository().for_datasets(dataset_ids)
         } if dataset_ids else {}
         user_name = user_names()
-        vocabularies = self._formula_vocabularies(datasets)
+        column_labels = self._column_labels(datasets)
         all_defaults = metric_query_defaults_on(dataset_ids)
         time_context = self._metric_time_context(datasets)
         metrics = []
@@ -241,7 +229,7 @@ class MetricContractRoutes:
                         "expression": metric.expression,
                         "d3format": metric.d3format,
                         "formula": formula.as_dict() if formula else None,
-                        "reading": read_formula(formula, vocabularies[dataset.id]) if formula else None,
+                        "pseudo_code": metric_pseudo_code(metric.expression, column_labels[dataset.id]),
                         "ineligibility": metric_contract_ineligibility(dataset, metric),
                         "state": metric_contract_state(contract, dataset, metric, defaults),
                         "query_defaults": defaults.as_dict() if defaults else None,

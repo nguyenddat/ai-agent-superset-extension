@@ -5,6 +5,7 @@ from superset.sql.parse import SQLGLOT_DIALECTS
 
 from ...data_dictionary.dependencies import column_dictionary_repository, dataset_dictionary_repository
 from ...data_dictionary.models import DatasetDictionary
+from ...semantic_query.services.formula_reading import metric_pseudo_code
 from ..dependencies import data_layer_repository, lineage_edge_repository
 from ..models import BusinessDomain, DataLayer, LineageEdge
 from .lineage_overrides import EdgeKey, flipped_key, match_override
@@ -133,12 +134,22 @@ def dataset_metrics(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
     """Superset metrics per dataset, without the default COUNT(*) metric every dataset gets.
 
     Each metric lists the dataset columns its expression uses and their roles (see metric_columns), or None for
-    ``columns`` when the expression cannot be parsed.
+    ``columns`` when the expression cannot be parsed, and its formula as pseudo code with the data dictionary's labels.
     """
+    labels = {
+        (dataset.id, column.column_name): column.verbose_name
+        for dataset in datasets.values()
+        for column in dataset.columns
+        if column.verbose_name
+    }
+    for entry in column_dictionary_repository().list_for_datasets(list(datasets)) if datasets else []:
+        if entry.display_name:
+            labels[(entry.dataset_id, entry.column_name)] = entry.display_name
     metrics = []
     for dataset in datasets.values():
         dialect = SQLGLOT_DIALECTS.get(dataset.database.db_engine_spec.engine)
         column_names = [column.column_name for column in dataset.columns]
+        column_labels = {name: labels[(dataset.id, name)] for name in column_names if (dataset.id, name) in labels}
         for metric in dataset.metrics:
             expression = str(metric.expression or "").replace(" ", "").upper()
             if metric.metric_name == "count" or expression == "COUNT(*)":
@@ -152,6 +163,7 @@ def dataset_metrics(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
                     "description": metric.description,
                     "expression": metric.expression,
                     "columns": metric_columns(metric.expression, column_names, dialect),
+                    "pseudo_code": metric_pseudo_code(metric.expression, column_labels, dialect),
                 }
             )
     return metrics
