@@ -4,13 +4,13 @@ from langchain_openai import ChatOpenAI
 
 from ....core.config import settings
 
-# A stalled provider must not hold a request past Gunicorn's 120-second worker timeout: one try and one retry fit.
-CHAT_MODEL_TIMEOUT_SECONDS = 45
-CHAT_MODEL_MAX_RETRIES = 1
+# The contradiction judge runs inside a request: a stalled provider must not hold it past Gunicorn's 120-second
+# worker timeout, so one try and one retry fit. AutoFill keeps the client defaults.
+JUDGEMENT_TIMEOUT_SECONDS = 45
+JUDGEMENT_MAX_RETRIES = 1
 
 
-@lru_cache(maxsize=1)
-def get_chat_model() -> ChatOpenAI:
+def _build_chat_model(**limits) -> ChatOpenAI:
     if not settings.OPENROUTER_API_KEY:
         raise RuntimeError(
             "OPENROUTER_API_KEY chưa được cấu hình. Đặt biến này trong file .env ở thư mục gốc repo "
@@ -22,6 +22,15 @@ def get_chat_model() -> ChatOpenAI:
         max_tokens=4096,
         api_key=settings.OPENROUTER_API_KEY,
         base_url=settings.OPENROUTER_BASE_URL,
-        timeout=CHAT_MODEL_TIMEOUT_SECONDS,
-        max_retries=CHAT_MODEL_MAX_RETRIES,
+        **limits,
     )
+
+
+@lru_cache(maxsize=1)
+def get_chat_model() -> ChatOpenAI:
+    return _build_chat_model()
+
+
+@lru_cache(maxsize=1)
+def get_judgement_chat_model() -> ChatOpenAI:
+    return _build_chat_model(timeout=JUDGEMENT_TIMEOUT_SECONDS, max_retries=JUDGEMENT_MAX_RETRIES)

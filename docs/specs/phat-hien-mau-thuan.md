@@ -102,8 +102,9 @@ gửi tối đa 6 cặp, chạy song song; mỗi lượt kiểm tra gửi tối 
 `contradiction` (đúng/sai) và một câu giải thích tiếng Việt ngắn (tối đa 600 ký tự). Câu hỏi gửi kèm cho từng kiểu nêu rõ
 chỉ tính mâu thuẫn thật, không tính khác cách diễn đạt hay một bên chi tiết hơn.
 
-Mỗi lần gọi mô hình chờ tối đa 45 giây và thử lại một lần, để một nhà cung cấp treo không giữ request quá 120 giây
-timeout của Gunicorn.
+Mỗi lần gọi mô hình kiểm tra mâu thuẫn chờ tối đa 45 giây và thử lại một lần, để một nhà cung cấp treo không giữ request quá 120 giây
+timeout của Gunicorn. Giới hạn này chỉ áp cho bước kiểm tra mâu thuẫn (`get_judgement_chat_model`); AutoFill của
+Data Dictionary vẫn dùng chat model không giới hạn riêng.
 
 Khi không gọi được AI, phần quy tắc vẫn chạy và màn hình hiện một dòng nhắc (khung cảnh báo):
 
@@ -154,7 +155,9 @@ Menu "Quản trị nghiệp vụ" có thêm mục "Mâu thuẫn", chỉ quản t
 
 - Mở màn hình thì chạy kiểm tra theo hai bước: lượt `rules_only` hiện ngay mâu thuẫn tìm bằng quy tắc (và kết quả AI
   đã lưu); nếu còn cặp chờ AI (`deferred`), màn hình hiện "AI đang kiểm tra N cặp nội dung về nghĩa…" rồi gọi lượt đầy
-  đủ. Màn hình thôi chờ lượt AI sau 100 giây và báo "AI chưa trả lời kịp…".
+  đủ. Màn hình thôi chờ lượt AI sau 100 giây và báo "AI chưa trả lời kịp…", kèm lời nhắc chờ khoảng nửa phút rồi hãy
+  kiểm tra lại vì request cũ có thể vẫn chạy trên server. Trong lúc kiểm tra, nút "Bỏ qua" bị khoá, để kết quả trả về
+  không ghi đè một lần bỏ qua vừa làm.
 - Cột trái liệt kê mâu thuẫn, chưa xử lý trước, sau đó theo kiểu; bỏ qua một mâu thuẫn thì nó chuyển xuống sau các mâu
   thuẫn chưa xử lý. Mỗi dòng ghi tên hai nội dung, kiểu mâu thuẫn, và "AI" hoặc "Đã bỏ qua". Phía trên có số mâu thuẫn
   chưa xử lý và nút biểu tượng "Kiểm tra lại". Khi kiểm tra lỗi, danh sách báo chưa kiểm tra được chứ không báo "Không

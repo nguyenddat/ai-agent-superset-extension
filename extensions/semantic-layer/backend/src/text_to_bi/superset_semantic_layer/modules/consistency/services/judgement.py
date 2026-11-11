@@ -113,10 +113,10 @@ def parse_verdicts(raw: Any, candidates: list[Candidate]) -> dict[str, Verdict]:
 def _verdict_agent():
     from langchain.agents import create_agent
 
-    from ...data_dictionary.autofill.chat_models import get_chat_model
+    from ...data_dictionary.autofill.chat_models import get_judgement_chat_model
 
     return create_agent(
-        model=get_chat_model(),
+        model=get_judgement_chat_model(),
         name="contradiction-judge",
         tools=[],
         response_format=PairVerdicts,

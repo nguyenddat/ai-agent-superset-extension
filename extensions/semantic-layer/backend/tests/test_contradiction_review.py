@@ -119,16 +119,16 @@ def test_a_deferred_check_asks_nothing_and_leaves_the_pairs_for_the_ai_step():
     assert judge_candidates([_candidate(1)], cached, judge, defer=True)[2] == SemanticOutcome("checked")
 
 
-def test_the_chat_model_gives_up_before_the_worker_timeout(monkeypatch):
+def test_the_judgement_model_gives_up_before_the_worker_timeout(monkeypatch):
     chat_models = importlib.import_module(f"{PACKAGE}.modules.data_dictionary.autofill.chat_models")
     monkeypatch.setattr(chat_models.settings, "OPENROUTER_API_KEY", "khóa-thử")
-    chat_models.get_chat_model.cache_clear()
+    chat_models.get_judgement_chat_model.cache_clear()
     try:
-        model = chat_models.get_chat_model()
+        model = chat_models.get_judgement_chat_model()
     finally:
-        chat_models.get_chat_model.cache_clear()
-    assert model.request_timeout == chat_models.CHAT_MODEL_TIMEOUT_SECONDS and model.max_retries == 1
-    assert chat_models.CHAT_MODEL_TIMEOUT_SECONDS * (1 + model.max_retries) < 120
+        chat_models.get_judgement_chat_model.cache_clear()
+    assert model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS and model.max_retries == 1
+    assert chat_models.JUDGEMENT_TIMEOUT_SECONDS * (1 + model.max_retries) < 120
 
 
 def test_a_failing_model_leaves_the_pairs_for_the_next_check():

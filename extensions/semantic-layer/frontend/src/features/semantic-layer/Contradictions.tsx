@@ -32,7 +32,8 @@ const DISMISS_TEXT = {
 
 // The server's model calls give up within about 90 seconds; past this the screen stops waiting for the AI step.
 const AI_STEP_TIMEOUT_MS = 100_000;
-const AI_STEP_TIMEOUT_MESSAGE = 'AI chưa trả lời kịp; các cặp chưa kiểm tra sẽ được kiểm tra ở lần sau.';
+const AI_STEP_TIMEOUT_MESSAGE =
+  'AI chưa trả lời kịp; các cặp chưa kiểm tra sẽ được kiểm tra ở lần sau. Chờ khoảng nửa phút rồi hãy kiểm tra lại.';
 
 const KIND_ORDER = Object.keys(KIND_LABELS);
 
@@ -248,7 +249,7 @@ export function Contradictions() {
         {error ? <div className="sl-metric-error" role="alert"><AlertCircle /> {error}</div> : null}
         {aiPairs ? (
           <p className="sl-proposal-note sl-contradiction-notice">
-            <LoaderCircle className="sl-spin" /> AI đang kiểm tra {aiPairs} cặp nội dung về nghĩa, có thể mất tới một
+            <LoaderCircle className="sl-spin" /> AI đang kiểm tra {aiPairs} cặp nội dung về nghĩa, có thể mất tới hai
             phút. Mâu thuẫn tìm bằng quy tắc đã có trong danh sách.
           </p>
         ) : result?.semantic.message ? (
@@ -257,7 +258,8 @@ export function Contradictions() {
           </div>
         ) : null}
         {selected ? (
-          <ContradictionDetail contradiction={selected} busy={busy} onDismiss={() => setDismissing(true)} />
+          // A running check would overwrite a dismissal made meanwhile with the status it read before it.
+          <ContradictionDetail contradiction={selected} busy={busy || checking} onDismiss={() => setDismissing(true)} />
         ) : result && !aiPairs ? (
           <div className="sl-question-empty">
             <CheckCheck aria-hidden="true" />
@@ -269,7 +271,7 @@ export function Contradictions() {
         text={dismissing ? DISMISS_TEXT : null}
         subject={selected ? itemNames(selected) : ''}
         reasonMaxLength={512}
-        busy={busy}
+        busy={busy || checking}
         onConfirm={reason => void dismiss(reason)}
         onClose={() => setDismissing(false)}
       />
