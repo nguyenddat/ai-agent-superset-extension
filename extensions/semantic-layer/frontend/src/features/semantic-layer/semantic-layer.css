@@ -1086,9 +1086,16 @@
   background: color-mix(in srgb, #dc2626 8%, transparent);
 }
 
-/* Top-right column: the detail levels stacked over the re-layout button, then a selected edge's panel. */
-.sl-lineage-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.sl-lineage-tools { display: flex; width: 168px; flex-direction: column; gap: 6px; }
+/* Top-right column: the detail levels stacked over the re-layout button, then a selected edge's panel. The column ends
+   above the zoom controls at the bottom right; a long edge panel scrolls its transformation list. */
+.sl-lineage-side {
+  display: flex;
+  max-height: calc(100% - 128px);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.sl-lineage-tools { display: flex; width: 168px; flex: none; flex-direction: column; gap: 6px; }
 .sl-lineage-tools > button { justify-content: flex-start; background: var(--sl-surface-raised); }
 .sl-lineage-detail {
   display: flex;
@@ -1227,6 +1234,8 @@
 .sl-edge-panel {
   display: flex;
   width: 260px;
+  min-height: 0;
+  box-sizing: border-box;
   flex-direction: column;
   gap: 10px;
   padding: 12px;
@@ -1260,7 +1269,20 @@
 .sl-lineage-flow { display: flex; align-items: center; gap: 6px; color: var(--sl-text); font-size: 12px; cursor: pointer; }
 .sl-lineage-flow-line { width: 18px; height: 0; flex: none; border-top: 2px solid var(--sl-accent); }
 .sl-lineage-flow-line.is-transform { border-top: 3px solid #0d9488; }
-.sl-edge-transformations { display: flex; max-height: 220px; flex-direction: column; gap: 8px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.sl-edge-panel > * { flex: none; }
+/* The list takes the height the canvas leaves the panel and scrolls, with its scrollbar's room kept, only beyond it. */
+.sl-edge-transformations {
+  display: flex;
+  min-height: 72px;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  list-style: none;
+}
 /* Each item reads "column ← expression" on one line, wrapping when long, with its input columns under it. */
 .sl-edge-transformations li { color: var(--sl-text); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .sl-edge-transformations strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
