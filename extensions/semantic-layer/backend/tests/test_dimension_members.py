@@ -9,6 +9,7 @@ from text_to_bi.superset_semantic_layer.modules.semantic_query.services.members 
     labels_from_rows,
     members_from_rows,
     stored_label_candidates,
+    stored_label_members,
     temporal_columns,
     time_ranges_from_rows,
 )
@@ -122,3 +123,26 @@ def test_a_date_range_reads_dates_timestamps_and_epoch_milliseconds():
     assert time_ranges_from_rows(rows, ["day_key", "other"]) == [
         {"column": "day_key", "min": "2026-10-12", "max": "2026-11-01"},
     ]
+
+
+def test_a_varying_text_column_does_not_lose_the_city_labels():
+    city_name, note = _column("ten_thanh_pho"), _column("ghi_chu")
+    city_name.type = note.type = "VARCHAR(255)"
+    dataset = _dataset([_column("thanh_pho_key"), city_name, note])
+    entries = {"thanh_pho_key": SimpleNamespace(semantic_role="key", is_fk=True, is_pk=False, is_unique=False)}
+    stored = [
+        {"thanh_pho_key": city, "ten_thanh_pho": f"City {city}", "ghi_chu": f"Note {index}"}
+        for city in range(12) for index in range(MAX_MEMBERS)
+    ]
+    queries = []
+
+    def read_rows(key_column, label_columns):
+        queries.append(label_columns)
+        distinct = {tuple(row[name] for name in (key_column, *label_columns)) for row in stored}
+        return [dict(zip((key_column, *label_columns), values)) for values in distinct][:MAX_MEMBERS + 1]
+
+    found = stored_label_members(dataset, entries, read_rows)
+
+    assert queries == [["ten_thanh_pho"], ["ghi_chu"]]
+    assert [(key, label) for key, label, _ in found] == [("thanh_pho_key", "ten_thanh_pho")]
+    assert found[0][2][0] == {"value": 0, "label": "City 0"}

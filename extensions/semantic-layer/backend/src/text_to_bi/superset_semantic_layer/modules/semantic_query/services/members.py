@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 from typing import Any
 
 from ....common.utils.type_formatter import iso_date
@@ -107,6 +108,24 @@ def labels_from_rows(
         if values and all(len(texts) == 1 for texts in values.values()):
             labelled[text_column] = members_from_rows(rows, key_column, text_column)
     return labelled
+
+
+def stored_label_members(
+    dataset: Any, entries: dict[str, Any], read_rows: Callable[[str, list[str]], list[dict[str, Any]] | None]
+) -> list[tuple[str, str, list[dict[str, Any]]]]:
+    """`(key_column, label_column, members)` for each physical text column that gives each key one value.
+
+    `read_rows(key_column, label_columns)` reads the distinct rows. Each text column is read on its own: grouping a
+    key by every text column at once multiplies the rows, so one varying column would push them past the limit and
+    lose the labels of the others.
+    """
+    found = []
+    for key_column, text_columns in stored_label_candidates(dataset, entries):
+        for text_column in text_columns:
+            rows = read_rows(key_column, [text_column]) or []
+            for label_column, members in labels_from_rows(rows, key_column, [text_column]).items():
+                found.append((key_column, label_column, members))
+    return found
 
 
 def temporal_columns(dataset: Any) -> list[str]:

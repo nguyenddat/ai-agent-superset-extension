@@ -92,8 +92,8 @@ Body của `.../semantic-query/execute` nhận thêm `time_grain` và `apply_def
    cần cột thời gian của metric trong `dimensions`.
 
 Mỗi giá trị lọc, của người gọi hay mặc định, phải hợp kiểu cột: cột ngày hoặc ngày giờ nhận `YYYY-MM-DD` hoặc
-`YYYY-MM-DD HH:MM:SS`, cột số nhận số. Giá trị sai kiểu bị từ chối với 400 và thông báo nêu cột, trước khi truy vấn tới
-database.
+`YYYY-MM-DD HH:MM:SS` (có thể kèm phần giây lẻ và múi giờ), cột số nhận số, kể cả cột ngày lưu dạng epoch số. Giá trị sai
+kiểu bị từ chối với 400 và thông báo nêu cột, trước khi truy vấn tới database.
 
 Kết quả có `applied_defaults`: `filters` (mỗi bộ lọc kèm `source`: `row_kind`, `default`, `time_window`), `time_window`
 (khoảng đã dùng, mốc tính) và `time_grain`. Cách viết `BASE_AXIS` cần xác nhận bằng `scripts/compat.py` và

@@ -197,6 +197,8 @@ export function MetricContracts({ databaseId, readOnly = false, canQuery = true 
     try {
       await requestJson<MetricContractResponse>(endpoints[decision], 'POST', { reason: reason || null });
       setOpenDecision(null);
+      // The decided metric leaves a state filter's list; show every state so its new state stays in view.
+      setStateFilter('all');
       await refreshAfterChange();
     } catch (failure) {
       setOpenDecision(null);

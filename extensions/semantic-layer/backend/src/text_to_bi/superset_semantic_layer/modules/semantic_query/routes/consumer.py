@@ -38,9 +38,8 @@ from ..services.members import (
     build_members_payload,
     build_time_range_payload,
     labelled_key_columns,
-    labels_from_rows,
     members_from_rows,
-    stored_label_candidates,
+    stored_label_members,
     temporal_columns,
     time_ranges_from_rows,
 )
@@ -88,10 +87,11 @@ class ConsumerRoutes:
                 members = members_from_rows(rows, key_column, label_column)
                 dimensions.append(dimension(key_column, label_column, members))
         entries = {entry.column_name: entry for entry in column_dictionary_repository().list_for_dataset(dataset_id)}
-        for key_column, text_columns in stored_label_candidates(dataset, entries):
-            rows = self._member_rows(dataset, key_column, text_columns)
-            for label_column, members in labels_from_rows(rows or [], key_column, text_columns).items():
-                dimensions.append(dimension(key_column, label_column, members))
+        def read_rows(key_column: str, label_columns: list[str]) -> list[dict[str, Any]] | None:
+            return self._member_rows(dataset, key_column, label_columns)
+
+        for key_column, label_column, members in stored_label_members(dataset, entries, read_rows):
+            dimensions.append(dimension(key_column, label_column, members))
         return self.response(200, dataset_id=dataset_id, dimensions=dimensions, time_ranges=self._time_ranges(dataset))
 
     @staticmethod

@@ -221,3 +221,21 @@ def test_dates_timestamps_and_numbers_pass_the_type_check():
 
     values = [item["val"] for item in payload["queries"][0]["filters"]]
     assert values == ["2026-11-01", "2026-11-02 06:00:00", [30, "31.5"]]
+
+
+def test_dates_are_read_by_one_pattern_and_an_epoch_date_column_takes_numbers():
+    dataset = _typed_dataset()
+    epoch = SimpleNamespace(**{**vars(dataset.columns[1]), "column_name": "thoi_diem_epoch", "type": "BIGINT"})
+    epoch.is_dttm = True
+    dataset.columns.append(epoch)
+    metric = SimpleNamespace(metric_name="average_temperature")
+
+    filters = [
+        {"column": "ngay_key", "operator": ">=", "value": "2026-11-17T10:00:00Z"},
+        {"column": "thoi_diem_epoch", "operator": ">=", "value": 1793491200000},
+    ]
+    assert len(build_metric_chart_payload(dataset, metric, {"filters": filters}, 1000)["queries"][0]["filters"]) == 2
+    with pytest.raises(ValueError, match="ngay_key phải là ngày"):
+        build_metric_chart_payload(
+            dataset, metric, {"filters": [{"column": "ngay_key", "operator": ">", "value": "20261117"}]}, 1000
+        )
