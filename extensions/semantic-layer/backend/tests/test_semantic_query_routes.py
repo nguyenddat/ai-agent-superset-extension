@@ -14,7 +14,10 @@ from text_to_bi.superset_semantic_layer.core.exceptions import (
     SemanticLayerQueryRequiredError,
     SemanticLayerViewRequiredError,
 )
-from text_to_bi.superset_semantic_layer.modules.semantic_query.exceptions import RelationshipValidationError
+from text_to_bi.superset_semantic_layer.modules.semantic_query.exceptions import (
+    MetricNotFoundError,
+    RelationshipValidationError,
+)
 from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import (
     METRIC_CONTRACT_RULE,
     build_metric_chart_payload,
@@ -340,7 +343,7 @@ def test_execute_returns_the_superset_sql_to_administrators_only(monkeypatch):
 
 
 def test_execute_payload_rejects_joins():
-    with pytest.raises(ValueError, match="joins are not supported"):
+    with pytest.raises(ValueError, match="không nối nhiều dataset"):
         build_metric_chart_payload(_dataset(), SimpleNamespace(metric_name="m"), {"joins": []}, 1000)
 
 
@@ -587,6 +590,14 @@ def test_running_a_metric_needs_the_query_permission():
     namespace["require_semantic_layer_query"] = refuse
     assert api.execute_metric_contract(dataset.id, 4) == (403, {"message": SemanticLayerQueryRequiredError.message})
     assert api.semantic_catalog() == (403, {"message": SemanticLayerQueryRequiredError.message})
+
+
+def test_running_a_metric_the_dataset_does_not_have_is_not_found():
+    dataset = _dataset()
+    api, namespace = _route_api({dataset.id: dataset})
+    namespace["metric_contract_for"] = lambda *_: None
+
+    assert api.execute_metric_contract(dataset.id, 99999) == (404, {"message": MetricNotFoundError.message})
 
 
 def _proposed_contract(dataset, owner_id=3):

@@ -47,7 +47,7 @@ def test_chart_payload_rejects_joins_unknown_columns_and_arbitrary_sql(body):
 def test_tablecolumn_shaped_columns_use_only_real_capability_fields():
     dataset = _dataset()
     dataset.columns[0].groupby = False
-    with pytest.raises(ValueError, match="not available"):
+    with pytest.raises(ValueError, match="không được dùng để nhóm"):
         build_metric_chart_payload(
             dataset, SimpleNamespace(metric_name="average_temperature"), {"dimensions": ["city"]}, 1000
         )
@@ -87,11 +87,11 @@ def test_chart_payload_rejects_calculated_columns_in_dimensions_and_filters():
     dataset = _dataset()
     dataset.columns[0].expression = "UPPER(city)"
 
-    with pytest.raises(ValueError, match="calculated"):
+    with pytest.raises(ValueError, match="cột tính toán"):
         build_metric_chart_payload(
             dataset, SimpleNamespace(metric_name="average_temperature"), {"dimensions": ["city"]}, 1000
         )
-    with pytest.raises(ValueError, match="calculated"):
+    with pytest.raises(ValueError, match="cột tính toán"):
         build_metric_chart_payload(
             dataset,
             SimpleNamespace(metric_name="average_temperature"),
@@ -180,3 +180,44 @@ def test_candidate_preview_runs_only_when_granted_and_unchanged(status, stale, a
     else:
         with pytest.raises(ApprovedMetricContractRequiredError):
             execute_approved_chart_query(contract, dataset, metric, query, 1000, run, allow_candidate=True)
+
+
+def _typed_dataset():
+    def column(name, column_type, is_dttm=False):
+        return SimpleNamespace(
+            column_name=name, verbose_name=None, type=column_type, is_dttm=is_dttm, is_active=True, groupby=True,
+            filterable=True, expression=None,
+        )
+
+    return SimpleNamespace(
+        id=7, columns=[column("ngay_key", "DATE", is_dttm=True), column("nhiet_do_c", "DOUBLE PRECISION")]
+    )
+
+
+@pytest.mark.parametrize(
+    ("filter_", "message"),
+    [
+        ({"column": "ngay_key", "operator": ">", "value": "abc"}, "ngay_key phải là ngày"),
+        ({"column": "ngay_key", "operator": "IN", "value": ["2026-11-01", "hôm qua"]}, "ngay_key phải là ngày"),
+        ({"column": "nhiet_do_c", "operator": ">", "value": "abc"}, "nhiet_do_c phải là số"),
+    ],
+)
+def test_a_filter_value_must_fit_its_column_type(filter_, message):
+    with pytest.raises(ValueError, match=message):
+        build_metric_chart_payload(
+            _typed_dataset(), SimpleNamespace(metric_name="average_temperature"), {"filters": [filter_]}, 1000
+        )
+
+
+def test_dates_timestamps_and_numbers_pass_the_type_check():
+    filters = [
+        {"column": "ngay_key", "operator": ">=", "value": "2026-11-01"},
+        {"column": "ngay_key", "operator": "<", "value": "2026-11-02 06:00:00"},
+        {"column": "nhiet_do_c", "operator": "IN", "value": [30, "31.5"]},
+    ]
+    payload = build_metric_chart_payload(
+        _typed_dataset(), SimpleNamespace(metric_name="average_temperature"), {"filters": filters}, 1000
+    )
+
+    values = [item["val"] for item in payload["queries"][0]["filters"]]
+    assert values == ["2026-11-01", "2026-11-02 06:00:00", [30, "31.5"]]

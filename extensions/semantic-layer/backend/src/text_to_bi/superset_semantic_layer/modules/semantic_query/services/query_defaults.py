@@ -65,38 +65,86 @@ class MetricQueryDefaults:
 def query_column(columns: dict[str, Any], name: Any, capability: str) -> str:
     """A live column the metric query may use for `capability` (`groupby` or `filterable`)."""
     if not isinstance(name, str) or name not in columns:
-        raise MetricContractValidationError("Unknown dataset column.")
+        raise MetricContractValidationError(f"Dataset không có cột “{name}”.")
     column = columns[name]
     # These are the capability fields actually present on Superset TableColumn. Datasource/RLS access remains
     # ChartData's responsibility.
     if getattr(column, "is_active", None) is not True or getattr(column, capability, None) is not True:
-        raise MetricContractValidationError("Column is not available for this operation.")
+        action = "nhóm" if capability == "groupby" else "lọc"
+        raise MetricContractValidationError(f"Cột “{name}” không được dùng để {action} khi chạy metric.")
     if getattr(column, "expression", None):
-        raise MetricContractValidationError("calculated columns are not available for this operation.")
+        raise MetricContractValidationError(f"Cột “{name}” là cột tính toán nên không dùng được khi chạy metric.")
     return name
 
 
 def checked_query_filter(columns: dict[str, Any], item: Any) -> dict[str, Any]:
-    """One `{column, operator, value}` filter as a ChartData filter, checked against the live columns."""
+    """One `{column, operator, value}` filter as a ChartData filter, checked against the live columns.
+
+    A value must also fit the column's type, so a date column is never compared with text the database cannot read.
+    """
     if not isinstance(item, dict) or set(item) != {"column", "operator", "value"}:
-        raise MetricContractValidationError("Each filter requires column, operator, and value.")
+        raise MetricContractValidationError("Mỗi bộ lọc cần đủ column, operator và value.")
     operator = item["operator"]
     if operator not in FILTER_OPERATORS:
-        raise MetricContractValidationError("Unsupported filter operator.")
+        raise MetricContractValidationError(f"Phép so sánh “{operator}” không được hỗ trợ.")
     value = item["value"]
     is_membership_operator = operator in {"IN", "NOT IN"}
     if is_membership_operator != isinstance(value, list):
-        raise MetricContractValidationError("IN and NOT IN require a list; scalar operators require a scalar value.")
+        raise MetricContractValidationError("IN và NOT IN cần một danh sách giá trị; các phép khác cần một giá trị.")
     values = value if is_membership_operator else [value]
     if not values or len(values) > MAX_FILTER_VALUES or any(not _scalar_filter_value(entry) for entry in values):
-        raise MetricContractValidationError("Filter value must be a bounded non-null scalar or list of scalars.")
-    return {"col": query_column(columns, item["column"], "filterable"), "op": operator, "val": value}
+        raise MetricContractValidationError(
+            f"Giá trị lọc phải có, tối đa {MAX_FILTER_VALUES} giá trị, mỗi giá trị tối đa "
+            f"{MAX_FILTER_STRING_LENGTH} ký tự."
+        )
+    name = query_column(columns, item["column"], "filterable")
+    _check_value_type(columns[name], values)
+    return {"col": name, "op": operator, "val": value}
 
 
 def _scalar_filter_value(value: Any) -> bool:
     if isinstance(value, str):
         return len(value) <= MAX_FILTER_STRING_LENGTH
     return isinstance(value, (int, float, bool))
+
+
+_TEMPORAL_TYPE = re.compile(r"DATE|TIME", re.IGNORECASE)
+_NUMERIC_TYPE = re.compile(r"INT|FLOAT|DOUBLE|NUMERIC|DECIMAL|REAL|SERIAL|NUMBER", re.IGNORECASE)
+
+
+def _is_number(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_moment(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.fromisoformat(value.strip())
+    except ValueError:
+        return False
+    return True
+
+
+def _check_value_type(column: Any, values: list[Any]) -> None:
+    """Raise when a filter value cannot be read as the column's type: a date, a timestamp or a number."""
+    column_type = str(getattr(column, "type", None) or "")
+    label = getattr(column, "verbose_name", None) or getattr(column, "column_name", "")
+    if getattr(column, "is_dttm", False) or _TEMPORAL_TYPE.search(column_type):
+        if not all(_is_moment(value) for value in values):
+            raise MetricContractValidationError(
+                f"Giá trị lọc của cột {label} phải là ngày dạng YYYY-MM-DD hoặc ngày giờ YYYY-MM-DD HH:MM:SS."
+            )
+    elif _NUMERIC_TYPE.search(column_type) and not all(_is_number(value) for value in values):
+        raise MetricContractValidationError(f"Giá trị lọc của cột {label} phải là số.")
 
 
 def native_grain(row_kind_value: str | None, grains: dict[str | None, str]) -> str | None:
