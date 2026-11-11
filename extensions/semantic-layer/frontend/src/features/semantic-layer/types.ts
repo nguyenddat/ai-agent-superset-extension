@@ -812,5 +812,9 @@ export type Contradiction = {
 /** A check's result: the contradictions, open ones first, and how the AI part went. */
 export type ContradictionCheck = {
   contradictions: Contradiction[];
-  semantic: { status: 'checked' | 'pending' | 'unavailable' | 'failed'; unchecked: number; message: string | null };
+  semantic: {
+    status: 'checked' | 'pending' | 'unavailable' | 'failed' | 'deferred';
+    unchecked: number;
+    message: string | null;
+  };
 };

@@ -1479,10 +1479,21 @@
 /* "Mâu thuẫn": a dismissed contradiction, and the term, rule or metric links of one. */
 .sl-proposal-status.is-dismissed { --sl-state-color: #64748b; }
 .sl-contradiction-items { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: 13px; }
+.sl-contradiction-items button { font-size: inherit; line-height: inherit; }
+.sl-contradiction-badge { flex: none; white-space: nowrap; }
 .sl-proposal-note {
   margin: 0; padding: 9px 12px; border: 1px solid var(--sl-border); border-radius: 7px; background: var(--sl-surface-muted);
   color: var(--sl-text-secondary); font-size: 12px;
 }
+/* The AI step's progress or outcome above a contradiction, inset like the error alert. */
+.sl-metrics-detail > .sl-contradiction-notice { margin: 12px 16px 0; }
+.sl-proposal-note.sl-contradiction-notice { display: flex; align-items: center; gap: 8px; }
+.sl-contradiction-notice > svg { flex: none; width: 15px; height: 15px; }
+
+/* "Phân quyền": the users and their roles in a bordered pane; each role's description in plain weight. */
+.sl-role-assignments { overflow: auto; border: 1px solid var(--sl-border); border-radius: 8px; }
+.sl-role-assignments tbody tr:last-child td { border-bottom: 0; }
+.sl-role-description { display: block; margin-top: 2px; color: var(--sl-muted); font-weight: 400; line-height: 1.45; }
 
 /* PII: the badge of a column marked as personal data, and the checkbox column that marks it. */
 .sl-type-badge.is-pii { color: #fff; background: #dc2626; }

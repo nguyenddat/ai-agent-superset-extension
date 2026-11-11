@@ -45,12 +45,18 @@ class ContradictionRoutes:
     @rollback_on_error
     @handle_errors
     def check_contradictions(self):
-        """Check every current term and rule again and answer the contradictions, open ones first."""
+        """Check every current term and rule again and answer the contradictions, open ones first.
+
+        With `{"rules_only": true}` the AI model is not asked; the screen shows the rule-based findings at once and
+        then checks again with the model.
+        """
         require_admin()
         ensure_dictionary_tables()
+        payload = request.get_json(silent=True)
+        rules_only = isinstance(payload, dict) and payload.get("rules_only") is True
         # Two checks at once may both add the same new contradiction; the second one is asked to check again.
         try:
-            outcome = refresh_contradictions(semantic_judge())
+            outcome = refresh_contradictions(semantic_judge(), defer_model=rules_only)
             db.session.commit()
         except IntegrityError as error:
             raise ContradictionCheckConflictError() from error

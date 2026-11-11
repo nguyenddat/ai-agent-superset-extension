@@ -4,6 +4,10 @@ from langchain_openai import ChatOpenAI
 
 from ....core.config import settings
 
+# A stalled provider must not hold a request past Gunicorn's 120-second worker timeout: one try and one retry fit.
+CHAT_MODEL_TIMEOUT_SECONDS = 45
+CHAT_MODEL_MAX_RETRIES = 1
+
 
 @lru_cache(maxsize=1)
 def get_chat_model() -> ChatOpenAI:
@@ -18,4 +22,6 @@ def get_chat_model() -> ChatOpenAI:
         max_tokens=4096,
         api_key=settings.OPENROUTER_API_KEY,
         base_url=settings.OPENROUTER_BASE_URL,
+        timeout=CHAT_MODEL_TIMEOUT_SECONDS,
+        max_retries=CHAT_MODEL_MAX_RETRIES,
     )
