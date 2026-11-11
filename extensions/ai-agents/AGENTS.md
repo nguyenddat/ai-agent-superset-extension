@@ -72,7 +72,9 @@ numbers, and logs the question so administrators can fill the gaps:
    metric query. The plan names the dataset, metrics, dimensions and filters
    tagged by source: `time` (dates computed from today in Vietnam's time),
    `place` (key values found through the dataset's labelled values, so "Hà Nội"
-   becomes `thanh_pho_key = 1`), `user_definition` (only for a user's definition
+   becomes `thanh_pho_key = 1`; `plan_query` also maps a label written with
+   other accents or case to the stored value, so `ten_thanh_pho = 'Hà Nội'`
+   becomes `'Ha Noi'`), `user_definition` (only for a user's definition
    without stored conditions) and `question` (a threshold the asker gave). It
    may also rank (`order_by` a metric and `limit` 1–100 groups) and compare
    (`comparison`: the same query over another period, such as last week). The

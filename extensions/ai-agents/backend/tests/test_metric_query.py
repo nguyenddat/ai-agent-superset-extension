@@ -168,6 +168,26 @@ def test_an_aggregate_over_no_rows_is_no_data_and_each_query_is_kept_for_the_pag
     assert "queries" not in result_for_answer(result)
 
 
+def test_a_place_written_with_accents_filters_by_the_value_the_warehouse_stores():
+    columns = [*COLUMNS, {"name": "ten_thanh_pho", "type": "VARCHAR(100)", "groupby": True, "filterable": True}]
+    labelled = [
+        {"column": "thanh_pho_key", "label_column": "ten_thanh_pho", "label": "Tên thành phố",
+         "values": [{"value": 1, "label": "Ha Noi"}, {"value": 7, "label": "Da Nang"}]},
+        {"column": "thanh_pho_key", "label_column": "vung", "label": "Vùng",
+         "values": [{"value": 1, "label": "Dong Bac Bo"}, {"value": 7, "label": "Nam Trung Bo"}]},
+    ]
+    datasets = [{"id": 12, "columns": columns, "labelled_values": labelled}]
+    by_name = {"column": "ten_thanh_pho", "operator": "==", "value": "Hà Nội", "source": "place"}
+    by_key = {"column": "thanh_pho_key", "operator": "IN", "value": ["hà  nội", "Đà Nẵng", 3], "source": "place"}
+
+    planned = plan_query(_plan(filters=[by_name, by_key]), datasets, METRICS, [])
+
+    assert planned.request_body()["filters"] == [
+        {"column": "ten_thanh_pho", "operator": "==", "value": "Ha Noi"},
+        {"column": "thanh_pho_key", "operator": "IN", "value": [1, 7, 3]},
+    ]
+
+
 def test_a_key_is_named_by_the_labels_that_tell_its_values_apart():
     cities = {"column": "thanh_pho_key", "values": [{"value": 1, "label": "Ha Noi"}, {"value": 2, "label": "Hue"}]}
     regions = {"column": "thanh_pho_key", "values": [{"value": 1, "label": "Bac"}, {"value": 2, "label": "Bac"}]}
