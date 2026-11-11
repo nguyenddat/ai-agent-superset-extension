@@ -21,6 +21,7 @@ export const expertRulesApi = {
   move: (ruleId: number) => `${EXPERT_RULES_API}/expert-rules/${encodeURIComponent(ruleId)}/group`,
   groups: `${EXPERT_RULES_API}/expert-rules/groups`,
   group: (groupId: number) => `${EXPERT_RULES_API}/expert-rules/groups/${encodeURIComponent(groupId)}`,
+  file: `${EXPERT_RULES_API}/expert-rules/file`,
 };
 
 export const semanticLayerApi = {
@@ -92,6 +93,8 @@ export const semanticLayerApi = {
   glossaryMove: (termId: number) => `${SEMANTIC_LAYER_API}/glossary/${encodeURIComponent(termId)}/group`,
   glossaryGroups: `${SEMANTIC_LAYER_API}/glossary/groups`,
   glossaryGroup: (groupId: number) => `${SEMANTIC_LAYER_API}/glossary/groups/${encodeURIComponent(groupId)}`,
+  glossaryFile: `${SEMANTIC_LAYER_API}/glossary/file`,
+  dictionaryFile: `${SEMANTIC_LAYER_API}/dictionary/file`,
   datasetProposals: `${SEMANTIC_LAYER_API}/dataset-proposals`,
   datasetProposal: (proposalId: number) => `${SEMANTIC_LAYER_API}/dataset-proposals/${encodeURIComponent(proposalId)}`,
   datasetProposalCreate: (proposalId: number) => (

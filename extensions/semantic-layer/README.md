@@ -41,6 +41,25 @@ each group as a collapsible section, with the ungrouped members last under "Chư
   `.../groups/<group_id>`. The admin lists (`GET .../glossary`, `GET .../expert-rules`) return `groups` and each
   member's `group`.
 
+### Bulk create and update from a file
+
+"Nhập / xuất file" on the Glossary, Expert Rules and Data Dictionary pages downloads the current rows as CSV or XLSX
+and takes the edited file back. `GET .../glossary/file?format=csv|xlsx` (and `.../expert-rules/file`,
+`.../dictionary/file`) exports; `POST .../file/preview` with `{"filename", "content": <base64>}` validates every row
+as the editors do and saves nothing; `POST .../file/import` re-runs that check and applies the whole file in one
+transaction, or nothing when any row fails. Files are limited to 1 MB and 1000 rows (400 otherwise). Lists in a cell
+are separated by `;`; a column left out of the file keeps the stored value.
+
+| Entity | Columns (required in bold) | Natural key |
+| --- | --- | --- |
+| Glossary term | **canonical_name**, **definition**, synonyms, group, steward (username), **links** (`dataset:<table>`, `column:<table>.<column>`, `metric:<table>.<metric>`) | `canonical_name` without regard to case or spacing |
+| Expert rule | **name**, **dataset**, group, **glossary_terms**, **conditions** (`<column> \| <operator> \| <value>` per line), exceptions (`when => outcome`), **examples** (`question => intent`) | `name` without regard to case or spacing |
+| Data dictionary | **dataset**, **column** (blank for the dataset row), display_name, description, semantic_role, aggregations, synonyms, unit, business_term, contains_pii | dataset table name + column name |
+
+A new term or rule is created as a draft; a content change adds a draft revision through the editor services, so
+nothing is approved by an import and each change is audited as a single edit would be. A group-only change is a
+`moved` event, and a missing group is created. Dictionary metadata has no review step and is saved directly.
+
 ## Semantic Model: base and aggregate tables
 
 The business view of the Semantic Model groups both the base tables (`dm_*`, `tb_*`) and the aggregate tables built

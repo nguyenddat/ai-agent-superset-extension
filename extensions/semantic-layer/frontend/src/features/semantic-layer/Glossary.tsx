@@ -10,6 +10,7 @@ import { GroupDeleteDialog, GroupDialog, GroupedList, GroupSelect, useGroupWorks
 import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
 import type { ConceptRequest } from './creationRequest';
+import { FileTransfer } from './FileTransfer';
 import { GlossaryEditor, glossaryErrorMessage } from './GlossaryEditor';
 import type { GlossaryDraft } from './GlossaryEditor';
 import { formatTime } from './MetricDefinitionPanel';
@@ -64,6 +65,28 @@ const DECISION_TEXT: Record<TermDecision, ReviewDecisionText> = {
     destructive: true,
   },
 };
+
+const GLOSSARY_FILE_GUIDE = (
+  <ul>
+    <li>
+      Mỗi dòng là một thuật ngữ, khớp với thuật ngữ đã có theo <code>canonical_name</code> (không phân biệt hoa
+      thường, khoảng trắng).
+    </li>
+    <li>
+      <code>synonyms</code> và <code>links</code> cách nhau bằng dấu <code>;</code>. Liên kết viết{' '}
+      <code>dataset:&lt;bảng&gt;</code>, <code>column:&lt;bảng&gt;.&lt;cột&gt;</code> hoặc{' '}
+      <code>metric:&lt;bảng&gt;.&lt;metric&gt;</code>; <code>steward</code> là tên đăng nhập.
+    </li>
+    <li>
+      <code>group</code> trống là chưa phân nhóm; nhóm chưa có sẽ được tạo. Thiếu hẳn một cột không bắt buộc thì giữ
+      nguyên giá trị đó.
+    </li>
+    <li>
+      Thuật ngữ mới hoặc được sửa đều ở trạng thái chờ duyệt; bản đã duyệt vẫn được dùng cho tới khi bản mới được
+      duyệt. Chỉ đổi nhóm thì không cần duyệt lại.
+    </li>
+  </ul>
+);
 
 const formatDate = (value: string | null | undefined) => formatTime(value ?? null).split(' ').pop() ?? '';
 
@@ -345,6 +368,12 @@ export function Glossary() {
           <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
             <FolderPlus data-icon="inline-start" /> Tạo nhóm
           </Button>
+          <FileTransfer
+            subject="thuật ngữ"
+            endpoint={semanticLayerApi.glossaryFile}
+            guide={GLOSSARY_FILE_GUIDE}
+            onImported={() => void refreshAfterChange(null)}
+          />
         </div>
         <div className="sl-metrics-list">
           {loading && termList.terms.length === 0 ? (

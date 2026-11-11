@@ -7,6 +7,7 @@ from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset import db
 
 from ....common.exceptions import SemanticLayerError
+from ....common.utils.table_file import import_report
 from ....common.utils.type_formatter import sse_event
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatasetAccessError
@@ -34,6 +35,7 @@ from ..services.dictionary import (
     serialize_dictionary,
     validate_dictionary_payload,
 )
+from ..services.dictionary_file import apply_dictionary_import, export_dictionary, preview_dictionary_import
 from ..services.indicators import (
     checked_indicator_model,
     read_indicators,
@@ -94,6 +96,44 @@ class DataDictionaryRoutes:
                 }
             )
         return self.response(200, datasets=options)
+
+    @expose("/dictionary/file", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def export_dictionary_file(self):
+        """Every business dataset and its columns as a CSV file, or XLSX with `?format=xlsx`: the import template."""
+        require_admin()
+        ensure_dictionary_tables()
+        return self.response(200, **export_dictionary(request.args.get("format", "csv")))
+
+    @expose("/dictionary/file/preview", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @handle_errors
+    def preview_dictionary_file(self):
+        """What importing the uploaded file would change on each row; no metadata is changed."""
+        require_admin()
+        ensure_dictionary_tables()
+        return self.response(200, **import_report(preview_dictionary_import(request.get_json(silent=True))))
+
+    @expose("/dictionary/file/import", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def import_dictionary_file(self):
+        """Save the dataset and column metadata of the uploaded file in one transaction; a failing row saves none."""
+        require_admin()
+        ensure_dictionary_tables()
+        rows = apply_dictionary_import(request.get_json(silent=True))
+        db.session.commit()
+        return self.response(200, **import_report(rows))
 
     @expose("/dataset/<int:dataset_id>/dictionary", methods=("GET",))
     @protect()

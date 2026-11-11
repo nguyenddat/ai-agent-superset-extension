@@ -16,6 +16,10 @@ class ExpertRuleRevisionRepository(BaseRepository[ExpertRuleRevision]):
         current = self.query().filter_by(rule_id=rule_id, is_current=True)
         return current.populate_existing().with_for_update().one_or_none()
 
+    def current(self) -> list[ExpertRuleRevision]:
+        """Every rule's current revision, by rule."""
+        return self.query().filter_by(is_current=True).order_by(ExpertRuleRevision.rule_id).all()
+
     def by_revision_number(self) -> list[ExpertRuleRevision]:
         return self.query().order_by(ExpertRuleRevision.revision_number).all()
 

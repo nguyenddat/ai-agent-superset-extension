@@ -1478,3 +1478,14 @@
 .sl-type-badge.is-pii { color: #fff; background: #dc2626; }
 .sl-dictionary-table thead th:nth-child(7) { width: 56px; }
 .sl-dictionary-table td.sl-pii-cell { vertical-align: middle; }
+
+/* "Nhập / xuất file": the file layout, the template downloads and upload, and the preview of each changed row. */
+.sl-file-transfer-guide { color: var(--sl-text-secondary); font-size: 12px; line-height: 18px; }
+.sl-file-transfer-guide ul { margin: 0; padding-left: 18px; }
+.sl-file-transfer-guide code { overflow-wrap: anywhere; }
+.sl-file-transfer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sl-file-transfer-upload { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.sl-file-transfer-preview { max-height: 320px; overflow: auto; border: 1px solid var(--sl-border); border-radius: 7px; }
+.sl-file-transfer-preview .is-row { width: 56px; }
+.sl-file-transfer-preview .is-action-label { width: 96px; }
+.sl-file-transfer-preview td { vertical-align: top; }

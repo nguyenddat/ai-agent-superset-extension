@@ -11,6 +11,7 @@ import { CreationOrigin } from './CreationOrigin';
 import { completeConceptCreation, takeConceptRequest } from './creationRequest';
 import type { ConceptRequest } from './creationRequest';
 import { ExpertRuleEditor } from './ExpertRuleEditor';
+import { FileTransfer } from './FileTransfer';
 import type { ExpertRuleDraft } from './ExpertRuleEditor';
 import { conditionPhrase, expertRuleErrorMessage } from './expertRuleFormat';
 import { formatTime } from './MetricDefinitionPanel';
@@ -28,6 +29,29 @@ const STATE_LABELS: Record<ExpertRuleState, string> = {
 };
 
 const STATE_ORDER: ExpertRuleState[] = ['draft', 'outdated', 'approved', 'revoked'];
+
+const RULE_FILE_GUIDE = (
+  <ul>
+    <li>
+      Mỗi dòng là một rule, khớp với rule đã có theo <code>name</code> (không phân biệt hoa thường);
+      {' '}<code>dataset</code> là tên bảng và không đổi được sau khi tạo.
+    </li>
+    <li>
+      <code>glossary_terms</code> là các thuật ngữ đã duyệt, cách nhau bằng <code>;</code>; metric của rule lấy từ các
+      thuật ngữ đó.
+    </li>
+    <li>
+      Trong một ô, mỗi dòng là một mục: <code>conditions</code> viết <code>&lt;cột&gt; | &lt;toán tử&gt; |
+      &lt;giá trị&gt;</code> (giá trị đọc như JSON: <code>35</code>, <code>true</code>, <code>[&quot;A&quot;,
+      &quot;B&quot;]</code>, còn lại là chữ); <code>exceptions</code> viết <code>&lt;khi nào&gt; =&gt; &lt;kết
+      quả&gt;</code>; <code>examples</code> viết <code>&lt;câu hỏi&gt; =&gt; &lt;cách hiểu&gt;</code>.
+    </li>
+    <li>
+      <code>group</code> trống là chưa phân nhóm; nhóm chưa có sẽ được tạo. Rule mới hoặc được sửa đều ở trạng thái chờ
+      duyệt; chỉ đổi nhóm thì không cần duyệt lại.
+    </li>
+  </ul>
+);
 
 const AUDIT_LABELS: Record<ExpertRuleAuditEntry['action'], string> = {
   created: 'tạo rule',
@@ -357,6 +381,12 @@ export function ExpertRules() {
           <Button variant="outline" onClick={() => groupWorkspace.startEditing('new')}>
             <FolderPlus data-icon="inline-start" /> Tạo nhóm
           </Button>
+          <FileTransfer
+            subject="rule"
+            endpoint={expertRulesApi.file}
+            guide={RULE_FILE_GUIDE}
+            onImported={() => void refreshAfterChange(null)}
+          />
         </div>
         <div className="sl-metrics-list">
           {loading && ruleList.rules.length === 0 ? (
