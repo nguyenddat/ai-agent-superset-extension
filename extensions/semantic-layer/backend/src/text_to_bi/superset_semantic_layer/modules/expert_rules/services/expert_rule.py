@@ -493,9 +493,15 @@ def update_draft(
     # resolved the authoritative rule under a row lock for this transaction.
     from ..repositories.expert_rule import ExpertRuleRepository
 
-    rule = ExpertRuleRepository(session).find(revision.rule_id)
+    rule_repository = ExpertRuleRepository(session)
+    rule = rule_repository.find(revision.rule_id)
     if rule is None or values["dataset_id"] != rule.dataset_id:
         raise ExpertRuleValidationError("An expert rule cannot move datasets.")
+    # A rename moves the rule's unique name key with it, so the old name is free and a file import finds the rule.
+    if values["normalized_name"] != rule.normalized_name:
+        if rule_repository.by_normalized_name(values["normalized_name"]) is not None:
+            raise ExpertRuleConflictError("An expert rule with this name already exists.")
+        rule.normalized_name = values["normalized_name"]
     revision.is_current = False
     next_revision = ExpertRuleRevision(
         rule_id=revision.rule_id,

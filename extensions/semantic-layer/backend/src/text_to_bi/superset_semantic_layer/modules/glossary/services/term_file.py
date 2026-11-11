@@ -142,7 +142,19 @@ def _plan_term(item: ImportRow, cells: dict[str, str], datasets: dict[str, list[
         "links": [_link(token, datasets) for token in split_list(cells["links"])],
     }
     values = checked_term_content(term_payload)
-    links = validated_links(values["links"], get_dataset, glossary_metric_approved)
+    stored_links = glossary_term_link_repository().for_revision_in_order(revision.id) if revision else []
+    stored_metric_keys = {(link.dataset_id, link.metric_id) for link in stored_links if link.kind == "metric"}
+    # A metric the term already links stays acceptable while the row leaves the term's content unchanged, so a file
+    # exported unchanged imports back even after that metric's contract stopped being approved.
+    unapproved_metrics = []
+
+    def metric_is_approved(dataset: Any, metric: Any) -> bool:
+        if glossary_metric_approved(dataset, metric):
+            return True
+        unapproved_metrics.append(metric)
+        return (dataset.id, metric.id) in stored_metric_keys
+
+    links = validated_links(values["links"], get_dataset, metric_is_approved)
     plan = TermPlan(term_payload)
     if "group" in cells:
         group = None
@@ -156,7 +168,6 @@ def _plan_term(item: ImportRow, cells: dict[str, str], datasets: dict[str, list[
     if term is None:
         item.action, item.message = "create", "Tạo thuật ngữ mới, chờ duyệt." + new_group_note
         return
-    stored_links = glossary_term_link_repository().for_revision_in_order(revision.id)
     stored_link_keys = {(link.kind, link.dataset_id, link.column_name, link.metric_id) for link in stored_links}
     link_keys = {(link["kind"], link["dataset_id"], link["column_name"], link["metric_id"]) for link in links}
     group_given = "group_id" in term_payload
@@ -173,6 +184,9 @@ def _plan_term(item: ImportRow, cells: dict[str, str], datasets: dict[str, list[
     ]
     plan.term_id, plan.revision_number = term.id, revision.revision_number
     plan.content_changed = any(field != "group" for field in changes)
+    if plan.content_changed and unapproved_metrics:
+        # A new revision is checked as the editor checks it, which accepts only approved metrics.
+        raise GlossaryValidationError("A glossary term may link only approved metrics.")
     item.changes = changes
     if not changes:
         item.action = "unchanged"

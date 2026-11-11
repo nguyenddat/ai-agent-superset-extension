@@ -489,6 +489,26 @@ def test_the_author_may_approve_unless_a_second_reviewer_is_required(monkeypatch
     assert updated.status == "approved" and updated.approver_id == 11
 
 
+def test_a_rename_moves_the_rule_name_key_and_refuses_another_rules_name(monkeypatch):
+    session, rule_model, _, _ = _lifecycle_session(monkeypatch)
+    resolvers = _lifecycle_resolvers()
+    created = service.create_draft(session, _payload(), 11, *resolvers)
+    other = service.create_draft(session, _payload(name="Exclude test stations"), 11, *resolvers)
+    session.commit()
+
+    service.update_draft(session, created, _payload(name="Exclude  Provisional rows"), 1, 11, *resolvers)
+    session.commit()
+    assert session.get(rule_model, created.rule_id).normalized_name == "exclude provisional rows"
+    # The old name is free again.
+    service.create_draft(session, _payload(), 11, *resolvers)
+    session.commit()
+
+    with pytest.raises(service.ExpertRuleConflictError):
+        service.update_draft(session, other, _payload(name="exclude provisional rows"), 1, 11, *resolvers)
+    session.rollback()
+    assert session.get(rule_model, other.rule_id).normalized_name == "exclude test stations"
+
+
 def test_a_single_administrator_approves_their_own_draft_by_default(monkeypatch):
     session, _, _, _ = _lifecycle_session(monkeypatch)
     created = service.create_draft(session, _payload(), 11, *_lifecycle_resolvers())
