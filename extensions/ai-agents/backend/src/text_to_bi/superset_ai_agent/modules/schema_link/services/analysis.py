@@ -17,7 +17,7 @@ def _goal_view(goal: Goal, graph: SchemaGraph) -> dict[str, Any]:
     return {
         "measures": [
             {**where(item.table, item.column), "label": item.label, "aggregation": item.aggregation,
-             "source": item.source, "indicator": item.indicator}
+             "source": item.source}
             for item in goal.measures
         ],
         "group_by": [
@@ -50,7 +50,7 @@ def _node_reasons(goal: Goal) -> dict[int, list[str]]:
 
 
 def graph_view(graph: SchemaGraph) -> dict[str, Any]:
-    """The tables and edges the page draws, without the columns, coded values and indicators the search reads."""
+    """The tables and edges the page draws, without the columns, and coded values the search reads."""
     return {
         "tables": [
             {"dataset_id": table_id, "table": table["table"], "label": table.get("label"), "layer": table.get("layer")}

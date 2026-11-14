@@ -1,6 +1,6 @@
 from typing import Any
 
-from .client import SEMANTIC_LAYER_API, post_json
+from .client import SEMANTIC_LAYER_API, post_public_json
 
 
 def catalog_metric(metric: dict[str, Any], dataset_name: str | None, provisional: bool) -> dict[str, Any]:
@@ -22,7 +22,7 @@ def catalog_metric(metric: dict[str, Any], dataset_name: str | None, provisional
 
 def create_agent_metric(draft: dict[str, Any], cookie_header: str, csrf_token: str) -> tuple[dict[str, Any], bool]:
     """Save the metric the agent built on an aggregate dataset; returns it and whether it is still provisional."""
-    answer = post_json(f"{SEMANTIC_LAYER_API}/agent-metrics", draft, cookie_header, csrf_token, "tạo metric")
+    answer = post_public_json(f"{SEMANTIC_LAYER_API}/metric-candidates", draft, cookie_header, csrf_token, "tạo metric")
     return answer["metric"], bool(answer.get("provisional"))
 
 
@@ -31,4 +31,4 @@ def run_metric_query(
 ) -> dict[str, Any]:
     """Run one approved metric through the Semantic Layer's governed execution endpoint, as the asking user."""
     path = f"{SEMANTIC_LAYER_API}/dataset/{dataset_id}/metrics/{metric_id}/semantic-query/execute"
-    return post_json(path, query, cookie_header, csrf_token, "chạy truy vấn")
+    return post_public_json(path, query, cookie_header, csrf_token, "chạy truy vấn")

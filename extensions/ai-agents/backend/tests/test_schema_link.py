@@ -15,9 +15,10 @@ from text_to_bi.superset_ai_agent.modules.schema_link.services.paths import (
 WEATHER = json.loads((Path(__file__).parent / "fixtures" / "schema_graph_weather.json").read_text(encoding="utf-8"))
 VALUES, OBSERVATIONS, CITIES, INDICATORS, DAYS, LOADS = 13, 15, 10, 6, 8, 14
 HANOI_HOURLY_TEMPERATURE = {
-    "measures": [{"indicator": "nhiet_do_c"}],
+    "measures": [{"dataset_id": VALUES, "column": "gia_tri_so", "aggregation": "AVG", "label": "Nhiệt độ"}],
     "group_by": [{"dataset_id": OBSERVATIONS, "column": "thoi_diem_quan_sat", "time_grain": "hour"}],
     "filters": [
+        {"dataset_id": INDICATORS, "column": "ma_chi_so", "operator": "==", "value": "nhiet_do_c"},
         {"dataset_id": CITIES, "column": "ten_thanh_pho", "operator": "==", "value": "Ha Noi"},
         {"dataset_id": OBSERVATIONS, "column": "thoi_diem_quan_sat", "operator": "==", "value": "2026-10-25"},
     ],
@@ -115,7 +116,7 @@ def test_the_temperature_goal_becomes_sql_over_base_tables():
     sql = " ".join(trace["sql"].split())
     assert 'FROM "public"."tb_gia_tri_quan_sat" AS t0' in sql
     assert 'JOIN "public"."tb_quan_sat_thoi_tiet" AS t1 ON "t0"."quan_sat_id" = "t1"."quan_sat_id"' in sql
-    assert "AVG(\"t0\".\"gia_tri_so\") AS \"nhiet_do_c\"" in sql
+    assert "AVG(\"t0\".\"gia_tri_so\") AS \"avg_gia_tri_so\"" in sql
     assert "DATE_TRUNC('hour', \"t1\".\"thoi_diem_quan_sat\")" in sql
     assert "\"t1\".\"thoi_diem_quan_sat\" >= '2026-10-25' AND \"t1\".\"thoi_diem_quan_sat\" < '2026-10-26'" in sql
     assert "\"t1\".\"loai_quan_sat\" = 'DU_BAO_GIO'" in sql and sql.endswith("LIMIT 1000")
@@ -144,7 +145,7 @@ def test_a_table_mixing_grains_without_a_chosen_kind_of_row_stops_at_the_path():
 def test_daily_rain_cannot_be_grouped_by_hour():
     goal = {
         **HANOI_HOURLY_TEMPERATURE,
-        "measures": [{"indicator": "tong_luong_mua_mm"}],
+        "measures": [{"dataset_id": VALUES, "column": "gia_tri_so", "aggregation": "SUM"}],
         "row_kinds": [{"dataset_id": OBSERVATIONS, "value": "DU_BAO_NGAY"}],
     }
 
@@ -157,8 +158,7 @@ def test_daily_rain_cannot_be_grouped_by_hour():
     "goal",
     [
         {"measures": []},
-        {"measures": [{"indicator": "khong_co"}]},
-        {"measures": [{"indicator": "la_ban_ngay"}]},
+        {"measures": [{"dataset_id": VALUES, "column": "khong_co", "aggregation": "AVG"}]},
         {"measures": [{"dataset_id": 999, "column": "x", "aggregation": "SUM"}]},
         {"measures": [{"dataset_id": CITIES, "column": "ten_thanh_pho", "aggregation": "SUM"}]},
         {"measures": [{"dataset_id": LOADS, "column": "so_quan_sat", "aggregation": "COUNT_DISTINCT"}], "limit": 0},

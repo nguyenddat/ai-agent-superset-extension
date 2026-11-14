@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertCircle, Check, Download, FileSpreadsheet, LoaderCircle, Upload } from 'lucide-react';
+import { AlertCircle, Check, Download, LoaderCircle, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -68,7 +68,7 @@ function saveFile(file: TableFile) {
 type FileTransferProps = {
   /** What one row of the file is, for the dialog title: `thuật ngữ`, `rule`, `data dictionary`. */
   subject: string;
-  /** The export endpoint; `/preview` and `/import` below it check and apply an uploaded file. */
+  /** The export endpoint; `/template` below it gives the blank sample, `/preview` and `/import` check and apply a file. */
   endpoint: string;
   /** How the file is laid out: its columns, how rows match existing items, and what review an import needs. */
   guide: ReactNode;
@@ -78,8 +78,9 @@ type FileTransferProps = {
 };
 
 /**
- * "Nhập / xuất file": download the current items as a template, upload the edited file, review what each row does,
- * then apply every row in one transaction. Nothing is saved until the administrator confirms a preview without errors.
+ * "Xuất file" downloads the current items as Excel. "Nhập file" opens a dialog: download the sample, upload the filled
+ * file, review what each row does, then apply every row in one transaction. Both files share one template layout.
+ * Nothing is saved until the administrator confirms a preview without errors.
  */
 export function FileTransfer({ subject, endpoint, guide, disabled, disabledReason, onImported }: FileTransferProps) {
   const [open, setOpen] = useState(false);
@@ -88,19 +89,33 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
   const [upload, setUpload] = useState<{ filename: string; content: string } | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [applied, setApplied] = useState<ImportReport | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   // The browser's own file input is hidden behind a button that matches the dialog's other buttons.
   const fileInput = useRef<HTMLInputElement>(null);
 
   const reset = () => { setError(''); setUpload(null); setReport(null); setApplied(null); };
   const close = () => { if (!busy) { setOpen(false); reset(); } };
 
-  const download = async (format: 'csv' | 'xlsx') => {
+  const exportItems = async () => {
+    setExporting(true);
+    setExportError('');
+    try {
+      saveFile(await requestJson<TableFile>(endpoint, 'GET'));
+    } catch (failure) {
+      setExportError(failure instanceof Error ? failure.message : 'Không xuất được file.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
     setBusy(true);
     setError('');
     try {
-      saveFile(await requestJson<TableFile>(`${endpoint}?format=${format}`, 'GET'));
+      saveFile(await requestJson<TableFile>(`${endpoint}/template`, 'GET'));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Không tải được file.');
+      setError(failure instanceof Error ? failure.message : 'Không tải được file mẫu.');
     } finally {
       setBusy(false);
     }
@@ -147,41 +162,47 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
 
   return (
     <>
+      {exportError ? <span className="sl-metric-error" role="alert"><AlertCircle /> {exportError}</span> : null}
+      <Button
+        variant="outline"
+        disabled={disabled || exporting}
+        title={disabled ? disabledReason : undefined}
+        onClick={() => void exportItems()}
+      >
+        {exporting ? <LoaderCircle className="sl-spin" data-icon="inline-start" /> : <Download data-icon="inline-start" />} Xuất file
+      </Button>
       <Button
         variant="outline"
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
-        onClick={() => setOpen(true)}
+        onClick={() => { setExportError(''); setOpen(true); }}
       >
-        <FileSpreadsheet data-icon="inline-start" /> Nhập / xuất file
+        <Upload data-icon="inline-start" /> Nhập file
       </Button>
       {!open ? null : (
         <Dialog open onOpenChange={next => { if (!next) close(); }}>
           <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Nhập / xuất file {subject}</DialogTitle>
+              <DialogTitle>Nhập file {subject}</DialogTitle>
               <DialogDescription>
-                Tải file mẫu đã điền dữ liệu hiện có, sửa hoặc thêm dòng, rồi tải lên để xem trước. Chỉ khi bấm áp
-                dụng, mọi dòng mới được lưu cùng lúc; file còn dòng lỗi thì không lưu gì.
+                Điền vào file mẫu (sheet «Hướng dẫn» mô tả từng cột) hoặc sửa file đã xuất, rồi tải lên để xem trước.
+                Chỉ khi bấm áp dụng, mọi dòng mới được lưu cùng lúc; file còn dòng lỗi thì không lưu gì.
               </DialogDescription>
             </DialogHeader>
             <div className="sl-file-transfer-guide">{guide}</div>
             <div className="sl-file-transfer-actions">
-              <Button variant="outline" disabled={busy} onClick={() => void download('csv')}>
-                <Download data-icon="inline-start" /> Tải file CSV
-              </Button>
-              <Button variant="outline" disabled={busy} onClick={() => void download('xlsx')}>
-                <Download data-icon="inline-start" /> Tải file XLSX
+              <Button variant="outline" disabled={busy} onClick={() => void downloadTemplate()}>
+                <Download data-icon="inline-start" /> Tải file mẫu
               </Button>
               <Button variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>
-                <Upload data-icon="inline-start" /> Tải lên file đã sửa
+                <Upload data-icon="inline-start" /> Chọn file .xlsx
               </Button>
-              <span className="sl-file-transfer-upload">CSV hoặc XLSX, tối đa 1 MB</span>
+              <span className="sl-file-transfer-upload">File Excel (.xlsx), tối đa 1 MB</span>
               <input
                 ref={fileInput}
                 type="file"
                 hidden
-                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={event => { void preview(event.target.files?.[0]); event.target.value = ''; }}
               />
             </div>

@@ -8,26 +8,32 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, Str
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from text_to_bi.superset_semantic_layer.modules.glossary.exceptions import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import (
     GlossaryConflictError,
     GlossarySelfApprovalError,
     GlossaryTermGroupNotFoundError,
     GlossaryTermNotFoundError,
     GlossaryValidationError,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary.services import validation
-from text_to_bi.superset_semantic_layer.modules.glossary.services.validation import (
-    expected_revision_of,
-    glossary_link_fingerprint,
-    normalize_glossary_payload,
-    review_reason,
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_group as glossary_groups
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_validation as validation
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_link import (
+    link_fingerprint as glossary_link_fingerprint,
+)
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_link import (
     validated_links,
 )
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_term import GlossaryTermService
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_validation import (
+    expected_revision_of,
+    normalize_glossary_payload,
+    review_reason,
+)
 
-SERVICE_PATH = MODULES_PATH / "glossary" / "services" / "glossary.py"
-GROUP_SERVICE_PATH = MODULES_PATH / "glossary" / "services" / "group.py"
+SERVICE_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_term.py"
+GROUP_SERVICE_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_group.py"
 REPOSITORY_PATHS = [
-    MODULES_PATH / "glossary" / "repositories" / name for name in ("glossary_term.py", "glossary_term_revision.py")
+    MODULES_PATH / "glossary_management" / "repositories" / name for name in ("repo_glossary_term.py", "repo_glossary_revision.py")
 ]
 VALIDATION_HELPERS = (
     "content_hash",
@@ -48,6 +54,134 @@ def _payload(**overrides):
         "links": [{"dataset_id": 7, "kind": "dataset"}],
         **overrides,
     }
+
+
+def _current_glossary_service(monkeypatch):
+    """Use the production service with small in-memory repository doubles."""
+    from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_term
+
+    term_store = {}
+    revision_store = {}
+    events = []
+
+    class Terms:
+        def add(self, term):
+            term.id = max(term_store, default=0) + 1
+            term.group_id = term.group.id if term.group is not None else None
+            term_store[term.id] = term
+
+        def read(self, term_id):
+            return term_store.get(term_id)
+
+        def read_for_update(self, term_id):
+            return self.read(term_id)
+
+        def read_by_normalized_name(self, name):
+            return next((term for term in term_store.values() if term.normalized_name == name), None)
+
+        def read_in_group(self, group_id):
+            return [term for term in term_store.values() if term.group_id == group_id]
+
+    class Revisions:
+        def create(self, values):
+            revision_id = max(revision_store, default=0) + 1
+            revision = SimpleNamespace(id=revision_id, term=term_store[values["term_id"]], **values)
+            revision_store[revision_id] = revision
+            return revision
+
+        def read_current(self, term_id):
+            return next((revision for revision in revision_store.values() if revision.term_id == term_id and revision.is_current), None)
+
+        def read_by_term(self, term_id):
+            return [revision for revision in revision_store.values() if revision.term_id == term_id]
+
+        def read_current_for_update(self, term_id):
+            return self.read_current(term_id)
+
+        def read_serving(self, term_id):
+            return next((revision for revision in reversed(list(revision_store.values())) if revision.term_id == term_id and revision.status == "approved"), None)
+
+        def serving(self):
+            latest_decided = {}
+            for revision in revision_store.values():
+                if revision.status in {"approved", "revoked"}:
+                    latest_decided[revision.term_id] = revision
+            return [revision for revision in latest_decided.values() if revision.status == "approved"]
+
+    class Links:
+        def create(self, _values, flush=True):
+            return None
+
+    class Groups:
+        def require(self, group_id):
+            raise AssertionError(f"unexpected group {group_id}")
+
+        def place_term(self, *_):
+            return None
+
+    class Events:
+        def create(self, revision, event_type, actor_id, reason=None):
+            events.append(SimpleNamespace(
+                revision_id=revision.id, revision_number=revision.revision_number, event_type=event_type,
+                actor_id=actor_id, reason=reason,
+            ))
+
+        def read_author_id(self, revision):
+            return next((event.actor_id for event in events if event.revision_id == revision.id and event.event_type == "created"), None)
+
+        def read_history(self, term_id):
+            revision_ids = {revision.id for revision in revision_store.values() if revision.term_id == term_id}
+            return [event for event in events if event.revision_id in revision_ids]
+
+    monkeypatch.setattr(srv_glossary_term, "get_user", lambda user_id: object() if user_id in {7, 8} else None)
+    monkeypatch.setattr(srv_glossary_term, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id, columns=[], metrics=[]))
+    # This in-memory service harness does not need SQLAlchemy mapper configuration or Superset's `tables` model.
+    monkeypatch.setattr(
+        srv_glossary_term,
+        "GlossaryTerm",
+        lambda **values: SimpleNamespace(id=None, group_id=values["group"].id if values["group"] else None, **values),
+    )
+    service = GlossaryTermService.__new__(GlossaryTermService)
+    service.terms, service.revisions, service.links = Terms(), Revisions(), Links()
+    service.groups, service.events = Groups(), Events()
+    session = SimpleNamespace(commit=lambda: None)
+    return service, session
+
+
+def _current_glossary_group_service(term_service):
+    groups_by_id = {}
+
+    class Groups:
+        def create(self, values):
+            group = SimpleNamespace(id=max(groups_by_id, default=0) + 1, **values)
+            groups_by_id[group.id] = group
+            return group
+
+        def read(self, group_id):
+            return groups_by_id.get(group_id)
+
+        def read_all(self):
+            return list(groups_by_id.values())
+
+        def read_by_normalized_name(self, name):
+            return next((group for group in groups_by_id.values() if group.normalized_name == name), None)
+
+        def update(self, group, values):
+            for name, value in values.items():
+                setattr(group, name, value)
+            return group
+
+        def delete(self, group):
+            groups_by_id.pop(group.id)
+
+    from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_group import (
+        GlossaryGroupService,
+    )
+
+    groups = GlossaryGroupService.__new__(GlossaryGroupService)
+    groups.groups = Groups()
+    groups.terms, groups.revisions, groups.events = term_service.terms, term_service.revisions, term_service.events
+    return groups, groups_by_id
 
 
 def test_normalize_payload_trims_casefolds_and_deduplicates_synonyms():
@@ -155,10 +289,9 @@ def test_lifecycle_mutations_lock_the_term_and_its_current_revision():
     for path in REPOSITORY_PATHS:
         assert "with_for_update()" in path.read_text(encoding="utf-8")
     source = SERVICE_PATH.read_text(encoding="utf-8")
-    locked = next(
-        node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "_locked_current"
-    )
-    assert ".lock(" in ast.unparse(locked) and "lock_current(" in ast.unparse(locked)
+    service_class = next(node for node in ast.parse(source).body if isinstance(node, ast.ClassDef) and node.name == "GlossaryTermService")
+    locked = next(node for node in service_class.body if isinstance(node, ast.FunctionDef) and node.name == "_locked_current")
+    assert "read_for_update" in ast.unparse(locked) and "read_current_for_update" in ast.unparse(locked)
 
 
 def _sqlite_service(users=(7, 8)):
@@ -237,7 +370,10 @@ def _sqlite_service(users=(7, 8)):
         "security_manager": SimpleNamespace(get_user_by_id=lambda user_id: object() if user_id in users else None),
         "get_dataset": lambda dataset_id: dataset if dataset_id == 7 else None,
         "glossary_metric_approved": lambda _dataset, _metric: True,
-        **{name: getattr(validation, name) for name in VALIDATION_HELPERS},
+        **{
+            name: (validated_links if name == "validated_links" else getattr(validation, name))
+            for name in VALIDATION_HELPERS
+        },
     }
     service = [
         node
@@ -249,45 +385,45 @@ def _sqlite_service(users=(7, 8)):
     return SimpleNamespace(**namespace), session
 
 
-def test_an_edit_of_an_approved_term_keeps_the_approved_revision_serving_until_its_draft_is_approved():
-    service, session = _sqlite_service()
-    revisions = service.glossary_term_revision_repository()
-    first = service.create_draft(_payload(steward_id=8), 7)
+def test_an_edit_of_an_approved_term_keeps_the_approved_revision_serving_until_its_draft_is_approved(monkeypatch):
+    service, session = _current_glossary_service(monkeypatch)
+    revisions = service.revisions
+    first = service.create(_payload(steward_id=8), 7)
     session.commit()
     term_id = first.term_id
-    assert revisions.serving_for(term_id) is None
+    assert revisions.read_serving(term_id) is None
 
-    service.approve_revision(term_id, 1, 8, None, True)
+    service.approve(term_id, 1, 8, None, True)
     session.commit()
-    draft = service.update_draft(term_id, _payload(definition="Revenue net of returns."), 1, 7)
+    draft = service.update(term_id, _payload(definition="Revenue net of returns."), 1, 7)
     session.commit()
 
     assert (draft.revision_number, draft.status, draft.is_current) == (2, "draft", True)
-    assert revisions.serving_for(term_id).revision_number == 1
+    assert revisions.read_serving(term_id).revision_number == 1
     assert [revision.revision_number for revision in revisions.serving()] == [1]
 
-    service.approve_revision(term_id, 2, 8, None, True)
+    service.approve(term_id, 2, 8, None, True)
     session.commit()
-    assert revisions.serving_for(term_id).revision_number == 2
+    assert revisions.read_serving(term_id).revision_number == 2
     assert [revision.revision_number for revision in revisions.serving()] == [2]
 
 
-def test_revoking_while_an_edit_waits_stops_the_serving_revision_and_keeps_the_draft():
-    service, session = _sqlite_service()
-    revisions = service.glossary_term_revision_repository()
-    term_id = service.create_draft(_payload(), 7).term_id
-    service.approve_revision(term_id, 1, 8, None, False)
-    service.update_draft(term_id, _payload(definition="Revenue net of returns."), 1, 7)
+def test_revoking_while_an_edit_waits_stops_the_serving_revision_and_keeps_the_draft(monkeypatch):
+    service, session = _current_glossary_service(monkeypatch)
+    revisions = service.revisions
+    term_id = service.create(_payload(), 7).term_id
+    service.approve(term_id, 1, 8, None, False)
+    service.update(term_id, _payload(definition="Revenue net of returns."), 1, 7)
     session.commit()
 
     with pytest.raises(GlossaryValidationError, match="reason"):
-        service.revoke_revision(term_id, 2, 8, None)
-    current = service.revoke_revision(term_id, 2, 8, "Định nghĩa sai.")
+        service.revoke(term_id, 2, 8, None)
+    current = service.revoke(term_id, 2, 8, "Definition is incorrect.")
     session.commit()
 
     assert (current.revision_number, current.status) == (2, "draft")
-    assert revisions.serving_for(term_id) is None and revisions.serving() == []
-    events = service.glossary_term_audit_event_repository().for_term(term_id)
+    assert revisions.read_serving(term_id) is None and revisions.serving() == []
+    events = service.events.read_history(term_id)
     assert [(event.event_type, event.revision_number) for event in events] == [
         ("created", 1),
         ("approved", 1),
@@ -295,71 +431,63 @@ def test_revoking_while_an_edit_waits_stops_the_serving_revision_and_keeps_the_d
         ("revoked", 1),
     ]
     with pytest.raises(GlossaryValidationError, match="approved revision"):
-        service.revoke_revision(term_id, 2, 8, "Lần nữa.")
+        service.revoke(term_id, 2, 8, "Again.")
 
 
-def test_a_revoked_term_is_revised_by_a_new_draft_and_served_again_after_approval():
-    service, session = _sqlite_service()
-    revisions = service.glossary_term_revision_repository()
-    term_id = service.create_draft(_payload(), 7).term_id
-    service.approve_revision(term_id, 1, 8, None, False)
-    service.revoke_revision(term_id, 1, 8, "Sai.")
-    session.commit()
-
-    service.update_draft(term_id, _payload(definition="Corrected."), 1, 7)
-    service.approve_revision(term_id, 2, 8, None, False)
-    session.commit()
-    assert revisions.serving_for(term_id).definition == "Corrected."
+def test_a_revoked_term_is_revised_by_a_new_draft_and_served_again_after_approval(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    term_id = service.create(_payload(), 7).term_id
+    service.approve(term_id, 1, 8, None, False)
+    service.revoke(term_id, 1, 8, "Incorrect definition")
+    service.update(term_id, _payload(definition="Corrected."), 1, 7)
+    service.approve(term_id, 2, 8, None, False)
+    assert service.read_serving(term_id).definition == "Corrected."
 
 
-def test_stale_revisions_names_and_stewards_are_refused():
-    service, session = _sqlite_service()
-    term_id = service.create_draft(_payload(), 7).term_id
-    session.commit()
+def test_stale_revisions_names_and_stewards_are_refused(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    term_id = service.create(_payload(), 7).term_id
 
     with pytest.raises(GlossaryConflictError, match="changed"):
-        service.update_draft(term_id, _payload(), 2, 7)
+        service.update(term_id, _payload(), 2, 7)
     with pytest.raises(GlossaryConflictError, match="changed"):
-        service.approve_revision(term_id, 3, 8, None, False)
+        service.approve(term_id, 3, 8, None, False)
     with pytest.raises(GlossaryConflictError, match="already exists"):
-        service.create_draft(_payload(canonical_name=" revenue "), 7)
+        service.create(_payload(canonical_name=" revenue "), 7)
     with pytest.raises(GlossaryValidationError, match="canonical name cannot be changed"):
-        service.update_draft(term_id, _payload(canonical_name="Sales"), 1, 7)
+        service.update(term_id, _payload(canonical_name="Sales"), 1, 7)
     with pytest.raises(GlossaryValidationError, match="Unknown steward_id"):
-        service.update_draft(term_id, _payload(steward_id=99), 1, 7)
+        service.update(term_id, _payload(steward_id=99), 1, 7)
     with pytest.raises(GlossaryTermNotFoundError):
-        service.approve_revision(404, 1, 8, None, False)
+        service.approve(404, 1, 8, None, False)
 
 
-def test_the_editor_names_the_steward():
-    service, session = _sqlite_service()
-    term_id = service.create_draft(_payload(), 7).term_id
-    service.update_draft(term_id, _payload(steward_id=8), 1, 7)
-    session.commit()
-    assert service.glossary_term_repository().get(term_id).steward_id == 8
+def test_the_editor_names_the_steward(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    term_id = service.create(_payload(), 7).term_id
+    service.update(term_id, _payload(steward_id=8), 1, 7)
+    assert service.terms.read(term_id).steward_id == 8
 
 
 @pytest.mark.parametrize("require_second_reviewer", [False, True])
-def test_the_author_may_approve_their_own_draft_unless_a_second_reviewer_is_required(require_second_reviewer):
-    service, session = _sqlite_service()
-    term_id = service.create_draft(_payload(), 7).term_id
-    session.commit()
+def test_the_author_may_approve_their_own_draft_unless_a_second_reviewer_is_required(require_second_reviewer, monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    term_id = service.create(_payload(), 7).term_id
 
     if require_second_reviewer:
         with pytest.raises(GlossarySelfApprovalError):
-            service.approve_revision(term_id, 1, 7, None, True)
-        assert service.glossary_term_revision_repository().current_for(term_id).status == "draft"
+            service.approve(term_id, 1, 7, None, True)
+        assert service.revisions.read_current(term_id).status == "draft"
     else:
-        assert service.approve_revision(term_id, 1, 7, None, False).approver_id == 7
+        assert service.approve(term_id, 1, 7, None, False).approver_id == 7
 
 
-def test_only_the_current_draft_can_be_approved():
-    service, session = _sqlite_service()
-    term_id = service.create_draft(_payload(), 7).term_id
-    service.approve_revision(term_id, 1, 8, None, False)
-    session.commit()
+def test_only_the_current_draft_can_be_approved(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    term_id = service.create(_payload(), 7).term_id
+    service.approve(term_id, 1, 8, None, False)
     with pytest.raises(GlossaryValidationError, match="Only the current draft"):
-        service.approve_revision(term_id, 1, 8, None, False)
+        service.approve(term_id, 1, 8, None, False)
 
 
 def test_a_group_has_a_trimmed_name_unique_without_case_and_an_optional_description():
@@ -376,87 +504,85 @@ def test_a_group_has_a_trimmed_name_unique_without_case_and_an_optional_descript
         validation.group_id_of({"group_id": True})
 
 
-def test_groups_are_created_renamed_and_refuse_a_name_another_group_has():
-    service, session = _sqlite_service()
-    heat = service.create_group({"name": "Nhiệt độ", "description": "Các cách gọi nhiệt độ"})
-    rain = service.create_group({"name": "Mưa"})
-    session.commit()
+def test_groups_are_created_renamed_and_refuse_a_name_another_group_has(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    groups, _ = _current_glossary_group_service(service)
+    service.groups = groups
+    heat = groups.create({"name": "Temperature", "description": "Ways to describe temperature"})
+    rain = groups.create({"name": "Rain"})
 
-    with pytest.raises(GlossaryConflictError, match="cùng tên"):
-        service.create_group({"name": " nhiệt  ĐỘ "})
-    with pytest.raises(GlossaryConflictError, match="cùng tên"):
-        service.update_group(rain.id, {"name": "Nhiệt độ"})
-    session.rollback()
-    renamed = service.update_group(heat.id, {"name": "Nhiệt độ không khí", "description": None})
-    session.commit()
-    assert (renamed.name, renamed.description) == ("Nhiệt độ không khí", None)
+    with pytest.raises(GlossaryConflictError):
+        groups.create({"name": " temperature "})
+    with pytest.raises(GlossaryConflictError):
+        groups.update(rain.id, {"name": "Temperature"})
+    renamed = groups.update(heat.id, {"name": "Air temperature", "description": None})
+    assert (renamed.name, renamed.description) == ("Air temperature", None)
     with pytest.raises(GlossaryTermGroupNotFoundError):
-        service.update_group(404, {"name": "Khác"})
+        groups.update(404, {"name": "Other"})
 
+def test_moving_an_approved_term_keeps_it_serving_without_a_new_revision_and_audits_the_move(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    groups, _ = _current_glossary_group_service(service)
+    service.groups = groups
+    heat = groups.create({"name": "Temperature"})
+    rain = groups.create({"name": "Rain"})
+    term_id = service.create(_payload(group_id=heat.id), 7).term_id
+    service.approve(term_id, 1, 8, None, False)
+    assert service.terms.read(term_id).group_id == heat.id
 
-def test_moving_an_approved_term_keeps_it_serving_without_a_new_revision_and_audits_the_move():
-    service, session = _sqlite_service()
-    heat = service.create_group({"name": "Nhiệt độ"})
-    rain = service.create_group({"name": "Mưa"})
-    term_id = service.create_draft(_payload(group_id=heat.id), 7).term_id
-    service.approve_revision(term_id, 1, 8, None, False)
-    session.commit()
-    assert service.glossary_term_repository().get(term_id).group_id == heat.id
+    groups.move_term(term_id, rain.id, 8)
+    groups.move_term(term_id, rain.id, 8)
+    groups.move_term(term_id, None, 8)
 
-    service.move_term(term_id, rain.id, 8)
-    service.move_term(term_id, rain.id, 8)
-    service.move_term(term_id, None, 8)
-    session.commit()
-
-    revisions = service.glossary_term_revision_repository()
-    assert [revision.revision_number for revision in revisions.for_term(term_id)] == [1]
-    assert revisions.serving_for(term_id).status == "approved"
-    events = service.glossary_term_audit_event_repository().for_term(term_id)
+    assert [revision.revision_number for revision in service.revisions.read_by_term(term_id)] == [1]
+    assert service.revisions.read_serving(term_id).status == "approved"
+    events = service.events.read_history(term_id)
+    arrow = chr(0x2192)
     assert [(event.event_type, event.reason) for event in events] == [
         ("created", None),
         ("approved", None),
-        ("moved", "Nhiệt độ → Mưa"),
-        ("moved", "Mưa → Chưa phân nhóm"),
+        ("moved", f"Temperature {arrow} Rain"),
+        ("moved", f"Rain {arrow} {glossary_groups.UNGROUPED}"),
     ]
     with pytest.raises(GlossaryTermGroupNotFoundError):
-        service.move_term(term_id, 404, 8)
+        groups.move_term(term_id, 404, 8)
     with pytest.raises(GlossaryTermNotFoundError):
-        service.move_term(404, rain.id, 8)
+        groups.move_term(404, rain.id, 8)
 
+def test_an_edit_moves_the_term_at_once_while_its_draft_waits_and_keeps_the_group_when_it_names_none(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    groups, _ = _current_glossary_group_service(service)
+    service.groups = groups
+    heat = groups.create({"name": "Temperature"})
+    term_id = service.create(_payload(), 7).term_id
+    service.approve(term_id, 1, 8, None, False)
+    service.update(term_id, _payload(definition="Revenue net of returns.", group_id=heat.id), 1, 7)
+    assert service.terms.read(term_id).group_id == heat.id
+    assert service.revisions.read_serving(term_id).revision_number == 1
 
-def test_an_edit_moves_the_term_at_once_while_its_draft_waits_and_keeps_the_group_when_it_names_none():
-    service, session = _sqlite_service()
-    heat = service.create_group({"name": "Nhiệt độ"})
-    term_id = service.create_draft(_payload(), 7).term_id
-    service.approve_revision(term_id, 1, 8, None, False)
-    service.update_draft(term_id, _payload(definition="Revenue net of returns.", group_id=heat.id), 1, 7)
-    session.commit()
-    assert service.glossary_term_repository().get(term_id).group_id == heat.id
-    assert service.glossary_term_revision_repository().serving_for(term_id).revision_number == 1
-
-    service.update_draft(term_id, _payload(definition="Revenue after returns."), 2, 7)
-    session.commit()
-    assert service.glossary_term_repository().get(term_id).group_id == heat.id
+    service.update(term_id, _payload(definition="Revenue after returns."), 2, 7)
+    assert service.terms.read(term_id).group_id == heat.id
     with pytest.raises(GlossaryTermGroupNotFoundError):
-        service.create_draft(_payload(canonical_name="Sales", group_id=404), 7)
+        service.create(_payload(canonical_name="Sales", group_id=404), 7)
 
+def test_deleting_a_group_leaves_its_terms_ungrouped_and_approved(monkeypatch):
+    service, _ = _current_glossary_service(monkeypatch)
+    groups, group_rows = _current_glossary_group_service(service)
+    service.groups = groups
+    heat = groups.create({"name": "Temperature"})
+    first = service.create(_payload(group_id=heat.id), 7).term_id
+    second = service.create(_payload(canonical_name="Sales", group_id=heat.id), 7).term_id
+    service.approve(first, 1, 8, None, False)
 
-def test_deleting_a_group_leaves_its_terms_ungrouped_and_approved():
-    service, session = _sqlite_service()
-    heat = service.create_group({"name": "Nhiệt độ"})
-    first = service.create_draft(_payload(group_id=heat.id), 7).term_id
-    second = service.create_draft(_payload(canonical_name="Sales", group_id=heat.id), 7).term_id
-    service.approve_revision(first, 1, 8, None, False)
-    session.commit()
+    assert groups.delete(heat.id, 8) == [first, second]
 
-    assert service.delete_group(heat.id, 8) == [first, second]
-    session.commit()
-
-    terms = service.glossary_term_repository()
-    assert terms.get(first).group_id is None and terms.get(second).group_id is None
-    assert service.glossary_term_group_repository().by_name() == []
-    assert service.glossary_term_revision_repository().serving_for(first).revision_number == 1
-    events = service.glossary_term_audit_event_repository().for_term(second)
-    assert (events[-1].event_type, events[-1].reason) == ("moved", "Nhiệt độ → Chưa phân nhóm")
+    assert service.terms.read(first).group_id is None and service.terms.read(second).group_id is None
+    assert groups.read_all() == [] and group_rows == {}
+    assert service.revisions.read_serving(first).revision_number == 1
+    events = service.events.read_history(second)
+    assert (events[-1].event_type, events[-1].reason) == (
+        "moved",
+        f"Temperature {chr(0x2192)} {glossary_groups.UNGROUPED}",
+    )
     with pytest.raises(GlossaryTermGroupNotFoundError):
-        service.delete_group(heat.id, 8)
+        groups.delete(heat.id, 8)

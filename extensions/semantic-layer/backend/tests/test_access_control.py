@@ -74,7 +74,7 @@ def access(monkeypatch):
     for name, module in {"superset": superset_module, "superset.exceptions": exceptions_module}.items():
         monkeypatch.setitem(sys.modules, name, module)
     monkeypatch.setitem(sys.modules, "flask_login", login_module)
-    names = ("core.security", "modules.superset.services.roles", "modules.access_control.services.roles")
+    names = ("core.security", "modules.superset.services.srv_role", "modules.access_control.services.roles")
     for name in names:
         monkeypatch.delitem(sys.modules, f"{PACKAGE}.{name}", raising=False)
     security, _, roles = (importlib.import_module(f"{PACKAGE}.{name}") for name in names)
@@ -253,9 +253,14 @@ def test_the_access_probe_answers_200_even_without_the_view_permission(can_view,
 
 def test_assignment_routes_follow_the_route_conventions():
     methods = api_methods()
-    for name, verb in (("list_role_assignments", "GET"), ("update_role_assignment", "PUT")):
+    expected_decorators = {
+        "list_role_assignments": ["expose('/role-assignments', methods=('GET',))", "protect()", "safe", "permission_name('read')", "handle_errors"],
+        "update_role_assignment": [
+            "expose('/role-assignments/<int:user_id>', methods=('PUT',))", "protect()", "safe", "permission_name('write')", "csrf_protected", "rollback_on_error", "handle_errors"
+        ],
+    }
+    for name, decorators_expected in expected_decorators.items():
         source = ast.unparse(methods[name])
         decorators = [ast.unparse(item) for item in methods[name].decorator_list]
-        assert decorators[-1] == "handle_errors" and "require_admin()" in source
-        if verb == "PUT":
-            assert "csrf_protected" in decorators and "rollback_on_error" in decorators
+        assert decorators == decorators_expected
+        assert "require_admin()" in source

@@ -8,20 +8,11 @@ from typing import Any
 
 _WORD = re.compile(r"[^\W_]+")
 
-
 def text_words(text: str) -> list[str]:
-    """The words of a text, case-folded in Unicode NFC so a Vietnamese letter typed precomposed or combined compares
-    equal."""
     return _WORD.findall(unicodedata.normalize("NFC", text).casefold())
 
 
 def tfidf_vectors(texts: Sequence[str]) -> list[dict[str, float]]:
-    """Unit-length TF-IDF vectors of the texts' words, weighed against each other: a word every text uses counts least.
-
-    The features are single Vietnamese syllables, so "mưa lớn" meets "lượng mưa" and "độ ẩm" meets "nồm ẩm". Syllable
-    bigrams and character n-grams separated similar glossary terms from unrelated ones less well. Diacritics stay:
-    without them "mưa" (rain) and "mua" (buy) would be one word.
-    """
     counts = [Counter(text_words(text)) for text in texts]
     document_frequency = Counter(feature for count in counts for feature in count)
     total = len(texts)

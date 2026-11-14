@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.time_semantics import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_grain import (
     MAX_ROW_KINDS,
     build_grain_profile_payload,
     checked_time_semantics,

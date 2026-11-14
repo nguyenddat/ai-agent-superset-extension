@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..exceptions import SemanticLayerUnavailableError
-from .client import EXPERT_RULES_API, SEMANTIC_LAYER_API, cached, get_json
+from .client import AGENT_QUERY_API, EXPERT_RULES_API, SEMANTIC_LAYER_API, cached, get_public_json
 
 # Expert rule operators and the metric query operators they become; a rule using any other one cannot be run.
 RULE_OPERATORS = {
@@ -171,7 +171,7 @@ def flatten_catalog(
 def dimension_members(dataset_id: int, cookie_header: str) -> dict[str, Any]:
     """Labelled key values help the agent filter by a name; without them it can still answer, so a failure is empty."""
     try:
-        return get_json(f"{SEMANTIC_LAYER_API}/dataset/{dataset_id}/dimension-members", cookie_header)
+        return get_public_json(f"{AGENT_QUERY_API}/dataset/{dataset_id}/dimension-members", cookie_header)
     except SemanticLayerUnavailableError:
         return {}
 
@@ -179,12 +179,12 @@ def dimension_members(dataset_id: int, cookie_header: str) -> dict[str, Any]:
 def load_semantic_catalog(cookie_header: str) -> SemanticCatalog:
     """Read the three consumer payloads at once, then the labelled values of every dataset with approved metrics."""
     paths = (
-        f"{SEMANTIC_LAYER_API}/semantic-catalog",
+        f"{AGENT_QUERY_API}/semantic-catalog",
         f"{SEMANTIC_LAYER_API}/glossary/discovery",
         f"{EXPERT_RULES_API}/discover",
     )
     with ThreadPoolExecutor(max_workers=4) as pool:
-        catalog, glossary, rules = pool.map(lambda path: get_json(path, cookie_header), paths)
+        catalog, glossary, rules = pool.map(lambda path: get_public_json(path, cookie_header), paths)
         dataset_ids = [dataset["id"] for dataset in catalog.get("datasets", []) if dataset.get("metrics")]
         found = pool.map(lambda dataset_id: dimension_members(dataset_id, cookie_header), dataset_ids)
         members = dict(zip(dataset_ids, found))

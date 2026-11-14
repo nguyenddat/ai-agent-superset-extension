@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, Check, LoaderCircle, Search, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { requestJson, semanticLayerApi } from './api';
@@ -57,11 +57,14 @@ export function RelationshipsPanel({ datasetId, dictionaryDirty, disabled, onDic
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [suggesting, setSuggesting] = useState(false);
+  const loadSequence = useRef(0);
 
   const load = async (suggest = false) => {
+    const sequence = ++loadSequence.current;
     setError('');
     try {
       const response = await requestJson<RelationshipsResponse>(semanticLayerApi.relationships(datasetId, suggest), 'GET');
+      if (sequence !== loadSequence.current) return;
       // A plain reload keeps the suggestions already found, minus the ones now declared.
       setData(current => (suggest || !current?.suggestions ? response : {
         ...response,
@@ -71,14 +74,18 @@ export function RelationshipsPanel({ datasetId, dictionaryDirty, disabled, onDic
         suggestion_note: current.suggestion_note,
       }));
     } catch (reason) {
+      if (sequence !== loadSequence.current) return;
       setError(reason instanceof Error ? reason.message : 'Không tải được quan hệ.');
     }
   };
 
   useEffect(() => {
+    const sequence = ++loadSequence.current;
     setData(null);
     setLoading(true);
-    void load().finally(() => setLoading(false));
+    void load().finally(() => {
+      if (sequence + 1 === loadSequence.current) setLoading(false);
+    });
   }, [datasetId]);
 
   const findSuggestions = async () => {

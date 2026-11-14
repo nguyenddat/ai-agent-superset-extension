@@ -3,14 +3,14 @@ from typing import Any
 from superset.connectors.sqla.models import SqlaTable
 from superset.sql.parse import SQLGLOT_DIALECTS
 
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import get_datasets
+
 from ...data_dictionary.dependencies import (
     column_dictionary_repository,
     column_transformation_repository,
     dataset_dictionary_repository,
 )
 from ...data_dictionary.models import DatasetDictionary
-from ...semantic_query.services.formula_reading import metric_pseudo_code
-from ...superset.services.datasets import get_datasets
 from ..dependencies import data_layer_repository, lineage_edge_repository
 from ..models import BusinessDomain, DataLayer, LineageEdge
 from .lineage_overrides import EdgeKey, flipped_key, match_override
@@ -39,14 +39,14 @@ def infer_dictionary_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, in
     """Derive dataset-level lineage edges from FK references declared in the column dictionary."""
     ranks = data_layer_repository().levels_for_datasets(datasets)
     column_repository = column_dictionary_repository()
-    rows = column_repository.references(datasets)
+    rows = column_repository.read_references(datasets)
     # Dictionary rows outlive columns dropped or renamed in Superset, so only live columns may produce edges.
     live_columns = {
         dataset_id: {str(column.column_name) for column in dataset.columns} for dataset_id, dataset in datasets.items()
     }
     # A PK column is only unique on its own when it is the whole key; part of a composite key repeats per row.
     pk_counts: dict[int, int] = {}
-    for dataset_id, column_name in column_repository.primary_key_columns(datasets):
+    for dataset_id, column_name in column_repository.read_primary_key_names(datasets):
         if column_name in live_columns[dataset_id]:
             pk_counts[dataset_id] = pk_counts.get(dataset_id, 0) + 1
     edges: dict[tuple[int, int, str], dict[str, Any]] = {}
@@ -93,7 +93,7 @@ def infer_dictionary_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, in
 
 def infer_transformation_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
     """Edges from the column transformations declared in the Data Dictionary (see transformation_edges)."""
-    rows = column_transformation_repository().into_datasets(datasets)
+    rows = column_transformation_repository().read_into_datasets(datasets)
     table_names = {dataset_id: str(dataset.table_name) for dataset_id, dataset in datasets.items()}
     # A column's inputs may sit on another database; they are named in its list of inputs but draw no edge.
     elsewhere = {source.dataset_id for _, _, source in rows} - table_names.keys()
@@ -162,22 +162,12 @@ def dataset_metrics(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
     """Superset metrics per dataset, without the default COUNT(*) metric every dataset gets.
 
     Each metric lists the dataset columns its expression uses and their roles (see metric_columns), or None for
-    ``columns`` when the expression cannot be parsed, and its formula as pseudo code with the data dictionary's labels.
+    ``columns`` when the expression cannot be parsed.
     """
-    labels = {
-        (dataset.id, column.column_name): column.verbose_name
-        for dataset in datasets.values()
-        for column in dataset.columns
-        if column.verbose_name
-    }
-    for entry in column_dictionary_repository().list_for_datasets(list(datasets)) if datasets else []:
-        if entry.display_name:
-            labels[(entry.dataset_id, entry.column_name)] = entry.display_name
     metrics = []
     for dataset in datasets.values():
         dialect = SQLGLOT_DIALECTS.get(dataset.database.db_engine_spec.engine)
         column_names = [column.column_name for column in dataset.columns]
-        column_labels = {name: labels[(dataset.id, name)] for name in column_names if (dataset.id, name) in labels}
         for metric in dataset.metrics:
             expression = str(metric.expression or "").replace(" ", "").upper()
             if metric.metric_name == "count" or expression == "COUNT(*)":
@@ -191,7 +181,6 @@ def dataset_metrics(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
                     "description": metric.description,
                     "expression": metric.expression,
                     "columns": metric_columns(metric.expression, column_names, dialect),
-                    "pseudo_code": metric_pseudo_code(metric.expression, column_labels, dialect),
                 }
             )
     return metrics
@@ -210,7 +199,7 @@ def serialize_layer(layer: DataLayer) -> dict[str, Any]:
 
 def dataset_classifications(dataset_ids: list[int]) -> dict[str, dict[str, Any]]:
     """Data-dictionary classification per dataset: its data layer and whether it is a base or aggregate table."""
-    rows = dataset_dictionary_repository().classifications(dataset_ids)
+    rows = dataset_dictionary_repository().read_classifications(dataset_ids)
     return {
         str(dataset_id): {"layer_id": layer_id, "dataset_type": dataset_type}
         for dataset_id, layer_id, dataset_type in rows
@@ -231,7 +220,7 @@ def serialize_domain(domain: BusinessDomain, dataset_ids: set[int] | None = None
 def ensure_dataset_dictionaries(datasets: list[SqlaTable]) -> None:
     """Domains and lineage overrides reference dictionary rows, so create any that are missing."""
     repository = dataset_dictionary_repository()
-    existing = repository.existing_ids(dataset.id for dataset in datasets)
+    existing = repository.read_existing_ids(dataset.id for dataset in datasets)
     for dataset in datasets:
         if dataset.id not in existing:
             repository.add(

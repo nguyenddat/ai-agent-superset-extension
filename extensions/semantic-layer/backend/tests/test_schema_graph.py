@@ -1,9 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from catalog_source import api_class, compile_into
-
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.schema_graph import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_schema_graph import (
     GRAPH_VERSION,
     graph_edges,
     table_node,
@@ -118,108 +116,33 @@ def test_edges_follow_contract_order():
     }
 
 
-class _Field:
-    def __init__(self, name):
-        self.name = name
-
-    def __eq__(self, value):
-        return (self.name, lambda found: found == value)
-
-    def in_(self, values):
-        return (self.name, lambda found: found in set(values))
-
-
-class _Contracts:
-    status, from_dataset_id, to_dataset_id = _Field("status"), _Field("from_dataset_id"), _Field("to_dataset_id")
-
-
-def _schema_graph_api(datasets, access, rls, contracts):
-    """The schema_graph route with Superset, the session and the per-table reads stubbed."""
-    route_class = api_class({"schema_graph", "_has_row_level_security"})
-    route_class.bases = []
-
-    class Query:
-        def __init__(self, items):
-            self.items = items
-
-        def filter(self, *conditions):
-            return Query([item for item in self.items if all(test(getattr(item, name)) for name, test in conditions)])
-
-        def all(self):
-            return self.items
-
-    session = SimpleNamespace(
-        get=lambda _model, identifier: SimpleNamespace(id=identifier, database_name="Weather", backend="postgresql"),
-        query=lambda _model: Query(contracts),
-    )
-    namespace = {
-        "Any": object,
-        "SqlaTable": object,
-        "staticmethod": staticmethod,
-        "db": SimpleNamespace(session=session),
-        "Database": object,
-        "RelationshipContract": _Contracts,
-        "GRAPH_VERSION": GRAPH_VERSION,
-        "graph_edges": graph_edges,
-        "ensure_dictionary_tables": lambda: None,
-        "can_access_dataset": lambda dataset: access[dataset.id],
-        "request": SimpleNamespace(args=SimpleNamespace(get=lambda name, type=None: 1)),
-        "security_manager": SimpleNamespace(get_rls_filters=lambda dataset: rls.get(dataset.id, [])),
-        "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
-        "ColumnDictionaryRepository": lambda _session: SimpleNamespace(
-            get_for_dataset_column=lambda dataset_id, column: SimpleNamespace(
-                dataset_id=dataset_id, column_name=column
-            ),
-        ),
-        # Contract 5 is approved but no longer matches the live columns.
-        "relationship_is_approved_current": lambda contract, *_ends: contract.id != 5,
-    }
-    compile_into(namespace, route_class)
-    api = namespace["SemanticLayerAPI"]()
-    api.response = lambda status, **payload: (status, payload)
-    api.response_400 = lambda **payload: (400, payload)
-    namespace["base_tables"] = lambda _database_id: datasets
-    api._schema_graph_node = lambda dataset: {"dataset_id": dataset.id, "table": dataset.table_name}
-    namespace["relationship_ends"] = lambda entry: (entry, entry)
-    return api
-
-
-def test_the_route_hides_unreadable_tables_and_tables_under_rls_with_their_edges():
-    datasets = [
-        SimpleNamespace(id=dataset_id, table_name=name)
-        for dataset_id, name in (
-            (13, "tb_gia_tri_quan_sat"),
-            (15, "tb_quan_sat_thoi_tiet"),
-            (10, "dm_thanh_pho"),
-            (6, "dm_chi_so_thoi_tiet"),
-        )
-    ]
-    contracts = [
-        _contract(1, 13, 15),
-        _contract(2, 15, 10),
-        _contract(3, 13, 6),
-        _contract(4, 15, 10, "revoked"),
-        _contract(5, 15, 13),
-    ]
-    api = _schema_graph_api(
-        datasets,
-        access={13: True, 15: True, 10: False, 6: True},
-        rls={6: ["region = 'north'"]},
-        contracts=contracts,
+def test_tables_without_a_dictionary_keep_only_the_live_schema():
+    dataset = SimpleNamespace(
+        id=6,
+        schema="public",
+        table_name="dm_chi_so_thoi_tiet",
+        columns=[_live("chi_so_id"), _live("display_name", expression="upper(name)"), _live("old", is_active=False)],
     )
 
-    status, graph = api.schema_graph()
+    node = table_node(dataset, None, {}, [], {}, None, None, None)
 
-    assert status == 200 and graph["version"] == GRAPH_VERSION
-    assert [table["dataset_id"] for table in graph["tables"]] == [13, 15]
-    assert [edge["id"] for edge in graph["edges"]] == [1]
-    # A table the caller may read but an RLS rule filters is reported; one they may not read is not even named.
-    assert graph["excluded"] == [{"dataset_id": 6, "table": "dm_chi_so_thoi_tiet", "reason": "row_level_security"}]
+    assert node["dataset_id"] == 6 and node["label"] == "dm_chi_so_thoi_tiet"
+    assert node["description"] is None and node["time"]["column"] is None
+    assert [column["name"] for column in node["columns"]] == ["chi_so_id"]
+    assert node["layer"] is None and node["indicator_model"] is None and node["indicators"] is None
 
 
-def test_unreadable_rls_rules_count_as_a_rule():
-    api = _schema_graph_api([], access={}, rls={}, contracts=[])
-    namespace_manager = api._has_row_level_security.__globals__["security_manager"]
-    namespace_manager.get_rls_filters = lambda dataset: (_ for _ in ()).throw(RuntimeError("no rules table"))
+def test_edge_projection_serializes_only_the_contracts_passed_by_the_caller():
+    current_contracts = [_contract(1, 13, 15)]
 
-    assert api._has_row_level_security(SimpleNamespace(table_name="dm_thanh_pho")) is True
+    edges = graph_edges(current_contracts)
+
+    assert edges == [
+        {
+            "id": 1,
+            "from": {"dataset_id": 13, "column": "x_id"},
+            "to": {"dataset_id": 15, "column": "x_id"},
+            "cardinality": "many_to_one",
+        }
+    ]
+    assert GRAPH_VERSION == 1

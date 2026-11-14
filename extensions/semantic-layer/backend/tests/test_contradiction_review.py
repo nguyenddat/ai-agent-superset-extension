@@ -10,14 +10,14 @@ from catalog_source import api_class, api_methods, compile_into
 from sqlalchemy.exc import IntegrityError
 
 from text_to_bi.superset_semantic_layer.core.exceptions import AdminRequiredError
-from text_to_bi.superset_semantic_layer.modules.consistency.exceptions import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import (
     ContradictionCheckConflictError,
     ContradictionNotFoundError,
     ContradictionValidationError,
 )
-from text_to_bi.superset_semantic_layer.modules.consistency.services import judgement
-from text_to_bi.superset_semantic_layer.modules.consistency.services.detection import Candidate, ItemReference
-from text_to_bi.superset_semantic_layer.modules.consistency.services.judgement import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_contradiction_judgement as judgement
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_detection import Candidate, ItemReference
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_judgement import (
     PairVerdicts,
     SemanticOutcome,
     Verdict,
@@ -25,11 +25,12 @@ from text_to_bi.superset_semantic_layer.modules.consistency.services.judgement i
     parse_verdicts,
     semantic_findings,
 )
-from text_to_bi.superset_semantic_layer.modules.consistency.services.lifecycle import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_lifecycle import (
     dismissal_reason,
     found_by,
     reconcile,
 )
+from text_to_bi.superset_semantic_layer.modules.glossary_management.utils.util_serializer import serialize_contradiction
 
 PACKAGE = "text_to_bi.superset_semantic_layer"
 NOW = datetime(2026, 11, 11, tzinfo=timezone.utc)
@@ -120,14 +121,14 @@ def test_a_deferred_check_asks_nothing_and_leaves_the_pairs_for_the_ai_step():
 
 
 def test_the_judgement_model_gives_up_before_the_worker_timeout(monkeypatch):
-    chat_models = importlib.import_module(f"{PACKAGE}.modules.data_dictionary.autofill.chat_models")
+    chat_models = importlib.import_module(f"{PACKAGE}.core.llm")
     monkeypatch.setattr(chat_models.settings, "OPENROUTER_API_KEY", "khóa-thử")
     chat_models.get_judgement_chat_model.cache_clear()
     try:
         model = chat_models.get_judgement_chat_model()
     finally:
         chat_models.get_judgement_chat_model.cache_clear()
-    assert model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS and model.max_retries == 1
+    assert model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS and model.max_retries == chat_models.JUDGEMENT_MAX_RETRIES
     assert chat_models.JUDGEMENT_TIMEOUT_SECONDS * (1 + model.max_retries) < 120
 
 
@@ -223,6 +224,10 @@ class _Store:
     def delete_except(self, fingerprints):
         self.rows = [row for row in self.rows if row.fingerprint in fingerprints]
 
+    read = get
+    read_all = by_id
+    read_by_fingerprints = for_fingerprints
+
 
 def _condition(column_id, operator, value):
     return {"field_ref": {"column_dictionary_id": column_id}, "operator": operator, "value_type": "number",
@@ -266,32 +271,29 @@ def world(monkeypatch):
         monkeypatch.setitem(sys.modules, fake.__name__, fake)
 
     module(
-        "modules.glossary.dependencies",
-        glossary_term_repository=lambda: SimpleNamespace(by_canonical_name=lambda: list(terms.values())),
-        glossary_term_revision_repository=lambda: SimpleNamespace(current_for=term_revisions.get),
-        glossary_term_link_repository=lambda: SimpleNamespace(for_revision=lambda revision_id: term_links[revision_id]),
+        "modules.glossary_management.dependencies",
+        glossary_term_repository=lambda: SimpleNamespace(read_all=lambda: list(terms.values())),
+        glossary_revision_repository=lambda: SimpleNamespace(read_current=term_revisions.get),
+        glossary_link_repository=lambda: SimpleNamespace(read_by_revision=lambda revision_id: term_links[revision_id]),
+        contradiction_repository=lambda: contradictions,
+        contradiction_judgement_repository=lambda: judgements,
     )
     module(
-        "modules.expert_rules.dependencies",
-        expert_rule_repository=lambda: SimpleNamespace(get=lambda rule_id: SimpleNamespace(id=rule_id, dataset_id=12)),
-        expert_rule_revision_repository=lambda: SimpleNamespace(current=lambda: [rule_revision]),
-        expert_rule_link_repository=lambda: SimpleNamespace(for_revision=lambda revision_id: rule_links[revision_id]),
+        "modules.expert_rule_management.dependencies",
+        expert_rule_repository=lambda: SimpleNamespace(read=lambda rule_id: SimpleNamespace(id=rule_id, dataset_id=12)),
+        expert_rule_revision_repository=lambda: SimpleNamespace(read_all_current=lambda: [rule_revision]),
+        expert_rule_link_repository=lambda: SimpleNamespace(read_by_revision=lambda revision_id: rule_links[revision_id]),
     )
     module(
         "modules.data_dictionary.dependencies",
         column_dictionary_repository=lambda: SimpleNamespace(
-            get=lambda column_id: column if column_id == 96 else None, list_for_dataset=lambda dataset_id: [column]
+            read=lambda column_id: column if column_id == 96 else None, list_for_dataset=lambda dataset_id: [column]
         ),
     )
-    module("modules.superset.services.datasets", get_dataset=lambda dataset_id: SimpleNamespace(metrics=[metric]))
-    module(
-        "modules.consistency.dependencies",
-        contradiction_repository=lambda: contradictions,
-        contradiction_judgement_repository=lambda: judgements,
-    )
-    module("modules.consistency.models", Contradiction=_Row, ContradictionJudgement=_Row)
-    monkeypatch.delitem(sys.modules, f"{PACKAGE}.modules.consistency.services.review", raising=False)
-    review = importlib.import_module(f"{PACKAGE}.modules.consistency.services.review")
+    module("modules.superset.services.srv_dataset", get_dataset=lambda dataset_id: SimpleNamespace(metrics=[metric]))
+    module("modules.glossary_management.models", Contradiction=_Row, ContradictionJudgement=_Row)
+    monkeypatch.delitem(sys.modules, f"{PACKAGE}.modules.glossary_management.services.srv_contradiction_review", raising=False)
+    review = importlib.import_module(f"{PACKAGE}.modules.glossary_management.services.srv_contradiction_review")
     return SimpleNamespace(
         review=review, term_revisions=term_revisions, contradictions=contradictions, judgements=judgements,
     )
@@ -415,7 +417,7 @@ def test_contradiction_routes_are_admin_writes_in_the_handbook_order():
         assert _decorator_names(method) == [
             "expose", "protect", "safe", "permission_name", "csrf_protected", "rollback_on_error", "handle_errors"
         ]
-        assert ast.unparse(method.decorator_list[0]) == f"expose('{route}', methods=('POST',))"
+        assert ast.unparse(method.decorator_list[0]) == f"expose(f'{{prefix}}{route.removeprefix('/contradictions')}', methods=('POST',))"
         assert ast.unparse(method.body[1].value) == "require_admin()"
         assert ast.unparse(method).count("db.session.commit()") == 1
 
@@ -450,8 +452,9 @@ def _api(*, admin=True, body=None, refresh=None, dismiss=None):
         "dismissal_reason": dismissal_reason,
         "found_by": found_by,
         "user_names": lambda: lambda user_id: {3: "Bao Reviewer"}.get(user_id),
+        "serialize_contradiction": serialize_contradiction,
     }
-    compile_into(namespace, api_class({"check_contradictions", "dismiss_contradiction", "_contradiction"}))
+    compile_into(namespace, api_class({"check_contradictions", "dismiss_contradiction"}))
     return namespace["SemanticLayerAPI"](), commits
 
 

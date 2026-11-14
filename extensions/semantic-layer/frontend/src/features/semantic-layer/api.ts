@@ -41,10 +41,6 @@ export const semanticLayerApi = {
     });
     return `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/grain-profile?${query}`;
   },
-  indicators: (datasetId: number, model: unknown) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/indicators`
-    + `?model=${encodeURIComponent(JSON.stringify(model))}`
-  ),
   relationships: (datasetId: number, suggest = false) => (
     `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships${suggest ? '?suggest=1' : ''}`
   ),
@@ -103,13 +99,13 @@ export const semanticLayerApi = {
     `${SEMANTIC_LAYER_API}/contradictions/${encodeURIComponent(contradictionId)}/dismiss`
   ),
   dictionaryFile: `${SEMANTIC_LAYER_API}/dictionary/file`,
-  datasetProposals: `${SEMANTIC_LAYER_API}/dataset-proposals`,
-  datasetProposal: (proposalId: number) => `${SEMANTIC_LAYER_API}/dataset-proposals/${encodeURIComponent(proposalId)}`,
+  datasetProposals: `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals`,
+  datasetProposal: (proposalId: number) => `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}`,
   datasetProposalCreate: (proposalId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset-proposals/${encodeURIComponent(proposalId)}/create`
+    `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}/create`
   ),
   datasetProposalReject: (proposalId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset-proposals/${encodeURIComponent(proposalId)}/reject`
+    `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}/reject`
   ),
 } as const;
 
@@ -149,5 +145,13 @@ export async function requestJson<T>(url: string, method: 'GET' | 'POST' | 'PUT'
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await errorMessage(response, `Yêu cầu thất bại (${response.status}).`));
-  return await response.json() as T;
+  const payload: unknown = await response.json();
+  if (payload !== null && typeof payload === 'object' && 'schema_version' in payload) {
+    const publicResponse = payload as { schema_version: unknown; result?: unknown };
+    if (publicResponse.schema_version !== 1 || publicResponse.result === null || typeof publicResponse.result !== 'object' || Array.isArray(publicResponse.result)) {
+      throw new Error('Response public không đúng schema được hỗ trợ.');
+    }
+    return publicResponse.result as T;
+  }
+  return payload as T;
 }

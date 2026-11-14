@@ -329,7 +329,8 @@ export type DashboardDataset = {
 };
 
 export type ColumnDictionary = {
-  id: number;
+  /** Missing dictionary rows are projected without persistence until an administrator saves them. */
+  id: number | null;
   column_name: string;
   display_name: string;
   data_type: string;
@@ -368,38 +369,6 @@ export type ColumnTransformation = {
 export type TemporalKind = 'date' | 'timestamp';
 export type SemanticRole = 'key' | 'measure' | 'dimension' | 'label' | 'time' | 'row_kind' | 'attribute';
 export type Aggregation = 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'COUNT' | 'COUNT_DISTINCT';
-export type IndicatorAggregation = 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'COUNT' | 'NONE';
-
-/** A table that keeps one value per indicator, or the table naming the indicators. */
-export type IndicatorModel =
-  | { kind: 'values'; indicator_column: string; value_columns: Record<string, string> }
-  | {
-    kind: 'catalog';
-    key_column: string;
-    code_column: string;
-    name_column: string;
-    unit_column: string | null;
-    value_kind_column: string | null;
-    aggregation_column: string | null;
-    aggregation_map: Record<string, IndicatorAggregation>;
-  };
-
-export type Indicator = {
-  key: string | number;
-  code: string | null;
-  name: string | null;
-  unit: string | null;
-  value_kind: string | null;
-  aggregation_code: string | null;
-  aggregation: IndicatorAggregation | null;
-};
-
-export type IndicatorsResponse = {
-  indicators: Indicator[];
-  aggregation_codes: string[];
-  too_many: boolean;
-};
-
 /** From finest to coarsest; `instant` rows are taken at irregular moments. */
 export type Grain = 'instant' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 
@@ -523,7 +492,6 @@ export type DatasetDictionary = {
   /** The column that tells kinds of rows of different grains apart, such as `loai_quan_sat`. */
   row_kind_column: string | null;
   grains: DatasetGrain[];
-  indicator_model: IndicatorModel | null;
   columns: ColumnDictionary[];
   read_only?: boolean;
   /** Whether the table holds personal data (PII). */
@@ -777,7 +745,7 @@ export type ExpertRulePayload = {
   group_id?: number | null;
 };
 
-/** A CSV or XLSX file sent by the API, its bytes in base64. */
+/** An Excel (.xlsx) file sent by the API, its bytes in base64. */
 export type TableFile = { filename: string; media_type: string; content: string };
 
 export type ImportAction = 'create' | 'update' | 'unchanged' | 'error';

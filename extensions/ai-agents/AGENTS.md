@@ -56,9 +56,9 @@ numbers, and logs the question so administrators can fill the gaps:
 
 1. The browser sends the question and its conversation; the server reads the
    conversation's last three answered turns from the log.
-2. `load_semantic_catalog` reads the Semantic Layer's consumer endpoints
-   (`/semantic-catalog`, `/glossary/discovery`, `/expert-rules/discover`, then
-   `/dataset/<id>/dimension-members` for each dataset with approved metrics) in
+2. `load_semantic_catalog` reads the AI Agent's own `/semantic-query/semantic-catalog` and
+   `/semantic-query/dataset/<id>/dimension-members`, plus Semantic Layer's `/glossary/discovery` and
+   `/expert-rules/discover`, in
    parallel over HTTP inside the container, forwarding the user's session
    cookie, so the agent only sees approved content on datasets that user may
    access. The catalog is cached per user for 60 seconds.
@@ -84,7 +84,7 @@ numbers, and logs the question so administrators can fill the gaps:
 4. When only a metric is missing, the agent climbs from approved content to the
    data model (`run_agent(..., builder=MetricBuilder(...))`). A missing term or
    rule is always asked back first.
-   - `load_data_model` reads the Semantic Layer's `/agent-sources`: aggregate
+   - `load_data_model` reads the AI Agent's `/semantic-query/data-model/sources`: aggregate
      datasets (`dataset_type='aggregate'`, the fact/dim tables) with their
      columns, data dictionary text and saved formulas, and base datasets
      (`'base'`, the dm/tb tables) with foreign keys. Short text code columns
@@ -92,7 +92,7 @@ numbers, and logs the question so administrators can fill the gaps:
      filters on a real value rather than a guess.
    - `draft_metric` writes one metric on an aggregate column, following the
      formulas already there (for example `loai_quan_sat = 'DU_BAO_NGAY'` for daily
-     figures), plus the query. `create_metric` posts it to `/agent-metrics`,
+     figures), plus the query. `create_metric` posts it to `/metric-candidates`,
      which checks the formula, reuses a metric with the same formula, or saves a
      new one as an `ai_agent` candidate. The question is answered at once with a
      `provisional` result ("Tạm tính · chờ duyệt"), and still logged as
@@ -107,7 +107,7 @@ numbers, and logs the question so administrators can fill the gaps:
      asker that the formula may be wrong instead of stating the figure.
    - If no aggregate column fits, `draft_dataset` writes one read-only SELECT
      over base datasets plus the metric to put on it, and `propose_dataset`
-     posts it to `/agent-dataset-proposals`. Nothing runs: an administrator
+     posts it to the AI Agent's `/agent-ladder/dataset-proposals`. Nothing runs: an administrator
      reviews it in "Xử lý câu hỏi" → "Đề xuất dataset", where creating it makes
      a Superset virtual dataset, classes it as aggregate, and adds the metric as
      an AI Agent candidate, so the next such question takes the previous step.
@@ -199,7 +199,9 @@ extensions/ai-agents/
 │   │       ├── questions/                # the question log, /questions/review, /questions/<id>/handling
 │   │       ├── definitions/              # users' definitions: their own, their conditions, the admin review
 │   │       ├── schema_link/              # join paths and SQL over base tables, the analysis lab
+│   │       ├── agent_ladder/             # dataset proposal storage and review; metadata operations go through HTTP
 │   │       ├── semantic_layer/           # the Semantic Layer read and called over HTTP as the user, no tables
+│   │       ├── semantic_query/           # assemble catalog/schema graph/sources; read members through Superset with caller RLS
 │   │       └── superset/                 # Superset's dashboards and users: read only, no tables
 │   └── tests/
 └── frontend/
@@ -254,6 +256,13 @@ apart from the services that use a repository.
 
 The Semantic Layer's "Xử lý câu hỏi" module uses the question and definition review endpoints.
 
+It also uses `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals`: GET lists proposals (admin),
+POST submits a proposal (Semantic Layer Query); PUT `/<id>` edits it, POST `/<id>/reject` rejects it and POST
+`/<id>/create` creates its dataset (admin, CSRF). The AI Agent owns the existing `text_to_bi_dataset_proposal` table;
+`ensure_agent_tables()` creates it when absent and preserves existing rows. Semantic Layer no longer migrates it.
+Draft validation and creation call Semantic Layer's `/dataset-drafts/validate` and `/dataset-drafts/create` over HTTP
+with the user's cookie and CSRF token. Creation uses a stable proposal key so a lost HTTP response can be retried.
+
 ## Question log and the overview dashboard
 
 `text_to_bi_agent_question`, `text_to_bi_agent_question_handling`,
@@ -287,11 +296,11 @@ into the Superset containers. Keep that file out of commits and bundles.
 
 `modules/schema_link/` answers over base tables when no metric can
 (`docs/specs/schema-link.md`). Its `services/graph.py` holds the Semantic Layer's
-`/schema-graph`, read as the user through the `semantic_layer` module and cached
+`/semantic-query/schema-graph`, assembled in this extension from public metadata and cached
 60 seconds; `goal.py` checks a goal
-(measures, group by, filters, kinds of rows) against it, turning an indicator
-code such as `nhiet_do_c` into the values table's column, the catalog's code
-filter and its aggregation; `paths.py` finds the join tree, Dijkstra from the
+(measures, group by, filters, kinds of rows) against it; a key-value value
+such as temperature is a measure column (`tb_gia_tri_quan_sat.gia_tri_so`) with
+a filter on the catalog's code column; `paths.py` finds the join tree, Dijkstra from the
 root along many-to-one edges first and a directed Steiner tree otherwise;
 `sql.py` builds the SQL as a sqlglot tree; `analysis.py` tells the run as the
 four stages the page draws (goal, nodes, graph, chosen path). Administrators

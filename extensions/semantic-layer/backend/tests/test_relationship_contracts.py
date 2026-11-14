@@ -1,9 +1,10 @@
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.relationships import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_relationship_contract import (
     RelationshipEnd,
     relationship_cardinality,
     relationship_contract_hash,
@@ -58,8 +59,15 @@ def test_relationship_contract_is_many_to_one_and_hash_has_no_connection_secret(
         to_column=target.entry.column_name,
         cardinality=cardinality,
         contract_hash=contract_hash,
+        verified_hash=contract_hash,
+        verification=json.dumps({"passed": True}),
     )
     assert relationship_is_approved_current(contract, source, target)
+    contract.verification = None
+    assert not relationship_is_approved_current(contract, source, target)
+    contract.verification = json.dumps({"passed": True})
+    contract.verified_hash = "stale-hash"
+    assert not relationship_is_approved_current(contract, source, target)
 
 
 @pytest.mark.parametrize("change", ["target_type", "target_key", "source_fk", "target_live"])
@@ -74,6 +82,8 @@ def test_relationship_contract_becomes_stale_when_live_safety_properties_change(
         to_column=target.entry.column_name,
         cardinality=cardinality,
         contract_hash=relationship_contract_hash(source, target, cardinality),
+        verified_hash=relationship_contract_hash(source, target, cardinality),
+        verification=json.dumps({"passed": True}),
     )
     if change == "target_type":
         target.dataset.columns[0].type = "BIGINT"

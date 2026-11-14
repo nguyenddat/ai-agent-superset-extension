@@ -6,15 +6,16 @@ import { SchemaGraphView } from './SchemaGraphView';
 
 /**
  * Goals written by hand for the sample warehouse, until linking from a question exists. Tables are named by dataset
- * ID, as the schema graph lists them: 13 values, 15 observations, 10 cities, 14 data loads.
+ * ID, as the schema graph lists them: 13 values, 15 observations, 10 cities, 6 indicator catalog, 14 data loads.
  */
 const PRESETS: Array<{ label: string; goal: unknown }> = [
   {
     label: 'Nhiệt độ trung bình theo giờ ở Hà Nội ngày 25/10',
     goal: {
-      measures: [{ indicator: 'nhiet_do_c' }],
+      measures: [{ dataset_id: 13, column: 'gia_tri_so', aggregation: 'AVG', label: 'Nhiệt độ' }],
       group_by: [{ dataset_id: 15, column: 'thoi_diem_quan_sat', time_grain: 'hour' }],
       filters: [
+        { dataset_id: 6, column: 'ma_chi_so', operator: '==', value: 'nhiet_do_c' },
         { dataset_id: 10, column: 'ten_thanh_pho', operator: '==', value: 'Ha Noi' },
         { dataset_id: 15, column: 'thoi_diem_quan_sat', operator: '==', value: '2026-10-25' },
       ],
@@ -39,7 +40,8 @@ const PRESETS: Array<{ label: string; goal: unknown }> = [
   {
     label: 'Lượng mưa theo giờ (phải dừng: dữ liệu mưa theo ngày)',
     goal: {
-      measures: [{ indicator: 'tong_luong_mua_mm' }],
+      measures: [{ dataset_id: 13, column: 'gia_tri_so', aggregation: 'SUM', label: 'Lượng mưa' }],
+      filters: [{ dataset_id: 6, column: 'ma_chi_so', operator: '==', value: 'tong_luong_mua_mm' }],
       group_by: [{ dataset_id: 15, column: 'thoi_diem_quan_sat', time_grain: 'hour' }],
       row_kinds: [{ dataset_id: 15, value: 'DU_BAO_NGAY' }],
     },
@@ -47,8 +49,11 @@ const PRESETS: Array<{ label: string; goal: unknown }> = [
   {
     label: 'Nhiệt độ không chọn loại dòng (phải dừng: bảng trộn grain)',
     goal: {
-      measures: [{ indicator: 'nhiet_do_c' }],
-      filters: [{ dataset_id: 10, column: 'ten_thanh_pho', operator: '==', value: 'Ha Noi' }],
+      measures: [{ dataset_id: 13, column: 'gia_tri_so', aggregation: 'AVG', label: 'Nhiệt độ' }],
+      filters: [
+        { dataset_id: 6, column: 'ma_chi_so', operator: '==', value: 'nhiet_do_c' },
+        { dataset_id: 10, column: 'ten_thanh_pho', operator: '==', value: 'Ha Noi' },
+      ],
     },
   },
 ];

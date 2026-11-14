@@ -2,16 +2,26 @@ from types import SimpleNamespace
 
 import pytest
 
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import (
-    METRIC_CONTRACT_RULE,
-    _safe_connection_identity,
+from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import (
+    MetricContractValidationError,
+    MetricSelfApprovalError,
+)
+from text_to_bi.superset_semantic_layer.modules.metric_management.services import srv_metric_contract, srv_metric_def, srv_metric_event
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import (
+    MetricContractService,
     contract_is_approved_current,
     metric_contract_hash,
-    metric_contract_ineligibility,
     metric_contract_state,
+)
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_def import MetricDefService
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import DatasetTimeContext
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_validation import (
+    METRIC_CONTRACT_RULE,
+    metric_contract_ineligibility,
     metric_is_eligible_for_contract,
     parse_contract_metric,
 )
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import connection_identity
 
 
 def _objects():
@@ -44,7 +54,7 @@ def test_metric_contract_hash_binds_dataset_metric_and_live_definition():
 
 def test_hash_never_contains_connection_secret_and_binds_metric_column_expression():
     dataset, metric = _objects()
-    assert "secret" not in str(_safe_connection_identity(dataset.database))
+    assert "secret" not in str(connection_identity(dataset.database))
     original = metric_contract_hash(dataset, metric)
     dataset.columns[0].expression = "temperature_c::numeric"
     assert metric_contract_hash(dataset, metric) != original
@@ -191,14 +201,14 @@ def test_metric_contract_state_covers_every_review_stage():
     assert metric_contract_state(None, dataset, metric) == "not_started"
     expression_hash = metric_contract_hash(dataset, metric)
     contract = SimpleNamespace(
-        dataset_id=dataset.id, metric_id=metric.id, status="candidate", expression_hash=expression_hash
+        dataset_id=dataset.id, metric_id=metric.id, status="draft", expression_hash=expression_hash
     )
-    assert metric_contract_state(contract, dataset, metric) == "candidate"
+    assert metric_contract_state(contract, dataset, metric) == "draft"
     contract.status = "approved"
     assert metric_contract_state(contract, dataset, metric) == "approved"
     metric.expression = "SUM(temperature_c)"
     assert metric_contract_state(contract, dataset, metric) == "outdated"
-    contract.status = "candidate"
+    contract.status = "draft"
     assert metric_contract_state(contract, dataset, metric) == "outdated"
     contract.status = "revoked"
     assert metric_contract_state(contract, dataset, metric) == "revoked"
@@ -241,3 +251,151 @@ def test_only_an_approved_current_contract_is_executable():
     metric.metric_name = "average_temperature"
     contract.dataset_id = 99
     assert not contract_is_approved_current(contract, dataset, metric)
+
+
+def _metric_contract_service(monkeypatch):
+    dataset, metric = _objects()
+    definition = SimpleNamespace(
+        id=31,
+        dataset_id=dataset.id,
+        metric_id=metric.id,
+        business_definition="Average temperature.",
+        unit="C",
+        steward_id=None,
+        grain=None,
+        row_kind_value=None,
+        time_column=None,
+        time_window=None,
+        time_anchor=None,
+        default_filters=None,
+    )
+    repository_state = SimpleNamespace(contract=None, events=[])
+
+    class ContractRepository:
+        def read_by_metric(self, metric_id):
+            contract = repository_state.contract
+            return contract if contract is not None and contract.metric_id == metric_id else None
+
+        def create(self, values):
+            repository_state.contract = SimpleNamespace(
+                id=41,
+                dataset_id=definition.dataset_id,
+                metric_id=definition.metric_id,
+                definition=definition,
+                **values,
+            )
+            return repository_state.contract
+
+        def update(self, contract, values):
+            vars(contract).update(values)
+            return contract
+
+    class DefinitionRepository:
+        def read_by_metric(self, metric_id):
+            return definition if metric_id == definition.metric_id else None
+
+        def update(self, item, values):
+            vars(item).update(values)
+            return item
+
+    class EventRepository:
+        def create(self, values, flush=False):
+            event = SimpleNamespace(id=len(repository_state.events) + 1, **values)
+            repository_state.events.append(event)
+            return event
+
+    contract_repository = ContractRepository()
+    definition_repository = DefinitionRepository()
+    user = SimpleNamespace(id=3)
+    repository_state.contract_repository = contract_repository
+    repository_state.definition_repository = definition_repository
+    monkeypatch.setattr(srv_metric_contract, "metric_contract_repository", lambda: contract_repository)
+    monkeypatch.setattr(srv_metric_contract, "metric_definition_repository", lambda: definition_repository)
+    monkeypatch.setattr(srv_metric_contract, "query_defaults_for", lambda *_: None)
+    monkeypatch.setattr(srv_metric_contract.MetricContractService, "_ineligibility", staticmethod(lambda *_: None))
+    monkeypatch.setattr(srv_metric_contract, "current_user", user)
+    monkeypatch.setattr(srv_metric_def, "metric_contract_repository", lambda: contract_repository)
+    monkeypatch.setattr(srv_metric_def, "metric_definition_repository", lambda: definition_repository)
+    monkeypatch.setattr(srv_metric_event, "metric_contract_event_repository", lambda: EventRepository())
+    monkeypatch.setattr(srv_metric_event, "current_user", user)
+    return dataset, metric, definition, repository_state, user, MetricContractService()
+
+
+def test_metric_service_requires_second_reviewer_and_records_both_actors(monkeypatch):
+    dataset, metric, _, state, user, service = _metric_contract_service(monkeypatch)
+    monkeypatch.setattr(srv_metric_contract, "second_reviewer_required", lambda: True)
+
+    contract = service.propose(dataset, metric, {"reason": "Ready for review."})
+    assert contract.status == "draft" and contract.owner_id == 3
+    with pytest.raises(MetricSelfApprovalError):
+        service.approve(dataset, metric, {})
+
+    user.id = 5
+    assert service.approve(dataset, metric, {"reason": "Checked."}).status == "approved"
+    assert [(event.action, event.actor_id) for event in state.events] == [("candidate", 3), ("approve", 5)]
+
+
+def test_metric_service_reproposal_changes_owner_and_revoke_requires_reason(monkeypatch):
+    dataset, metric, _, state, user, service = _metric_contract_service(monkeypatch)
+    monkeypatch.setattr(srv_metric_contract, "second_reviewer_required", lambda: False)
+
+    contract = service.propose(dataset, metric, {})
+    user.id = 8
+    assert service.propose(dataset, metric, {}).owner_id == 8
+    assert [event.action for event in state.events] == ["candidate", "candidate"]
+    with pytest.raises(MetricContractValidationError):
+        service.revoke(dataset, metric, {})
+    assert contract.status == "draft"
+
+    assert service.revoke(dataset, metric, {"reason": "Formula was wrong."}).status == "revoked"
+    with pytest.raises(MetricContractValidationError):
+        service.revoke(dataset, metric, {"reason": "Duplicate revoke."})
+    assert [event.action for event in state.events] == ["candidate", "candidate", "revoke"]
+
+
+def test_metric_service_requires_a_business_definition_before_proposal(monkeypatch):
+    dataset, metric, _, state, _, service = _metric_contract_service(monkeypatch)
+    state.definition_repository.read_by_metric = lambda _metric_id: None
+
+    with pytest.raises(MetricContractValidationError):
+        service.propose(dataset, metric, {})
+    assert state.contract is None and state.events == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [None, {}, {"business_definition": "   "}, {"business_definition": "meaning", "unit": 17}],
+)
+def test_metric_definition_service_rejects_invalid_business_fields(body):
+    with pytest.raises(MetricContractValidationError):
+        MetricDefService._checked_definition(body)
+
+
+def test_metric_definition_and_query_defaults_updates_persist_and_create_audit_events(monkeypatch):
+    dataset, metric, definition, state, _, _ = _metric_contract_service(monkeypatch)
+    service = MetricDefService()
+
+    saved = service.update(dataset, metric, {"business_definition": "  Average temperature.  ", "unit": " C "})
+    assert saved is definition and saved.business_definition == "Average temperature." and saved.unit == "C"
+    assert state.events[-1].action == "definition"
+
+    dataset.columns = [
+        SimpleNamespace(column_name="date", is_active=True, expression=None, type="DATE", groupby=True, filterable=True),
+        SimpleNamespace(column_name="temperature_c", is_active=True, expression=None, type="FLOAT", groupby=True, filterable=True),
+    ]
+    time_context = DatasetTimeContext("date", None, {None: "day"}, {"date"})
+    monkeypatch.setattr(srv_metric_def, "dataset_time_context", lambda _: time_context)
+    defaults = service.update_query_defaults(
+        dataset,
+        metric,
+        {
+            "grain": "week",
+            "time_column": "date",
+            "time_window": "last_7_day",
+            "time_anchor": "latest_data",
+            "default_filters": [{"column": "temperature_c", "operator": ">", "value": 0}],
+        },
+    )
+    assert defaults.grain == "week" and defaults.time_anchor == "latest_data"
+    assert definition.grain == "week" and definition.time_column == "date"
+    assert state.events[-1].action == "definition" and "grain" in state.events[-1].reason

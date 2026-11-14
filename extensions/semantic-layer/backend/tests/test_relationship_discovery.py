@@ -3,7 +3,7 @@ import json
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects import postgresql
 
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.relationship_discovery import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_relationship_discovery import (
     MAX_ORPHAN_SAMPLES,
     TableKeys,
     database_suggestions,

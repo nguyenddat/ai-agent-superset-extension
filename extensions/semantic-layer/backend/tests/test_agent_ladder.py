@@ -1,19 +1,22 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "ai-agents" / "backend" / "src"))
 from types import SimpleNamespace
 
 import pytest
+from text_to_bi.superset_ai_agent.modules.semantic_query.services.sources import source_columns, source_metric
 
-from text_to_bi.superset_semantic_layer.modules.agent_ladder.services.agent_ladder import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_dataset_draft import (
     DerivedColumnKeys,
     checked_dataset_proposal,
     checked_dataset_sql,
     checked_metric_draft,
     derived_column_keys,
     matching_metric,
-    source_columns,
-    source_metric,
     unique_metric_name,
 )
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.members import (
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_data import (
     MAX_CODED_VALUES,
     build_values_payload,
     coded_value_columns,

@@ -5,8 +5,8 @@ import time
 from sqlalchemy import inspect, text
 from superset import db
 
+from .common.schemas.status_enum import ReviewStatus
 from .modules.access_control.services.roles import ensure_semantic_layer_roles
-from .modules.agent_ladder.models import DatasetProposal
 from .modules.business_model.models import (
     BusinessCanvas,
     BusinessDomain,
@@ -15,24 +15,26 @@ from .modules.business_model.models import (
     LineageEdge,
     business_domain_dataset,
 )
-from .modules.consistency.models import Contradiction, ContradictionJudgement
 from .modules.data_dictionary.models import (
     ColumnDictionary,
     ColumnTransformation,
     ColumnTransformationSource,
     DatasetDictionary,
     DatasetGrain,
+    RelationshipContract,
 )
-from .modules.data_dictionary.services.column_semantics import default_semantic_role
-from .modules.expert_rules.models import (
+from .modules.data_dictionary.services.srv_column_semantics import default_semantic_role
+from .modules.expert_rule_management.models import (
     ExpertRule,
     ExpertRuleAuditEvent,
     ExpertRuleGroup,
     ExpertRuleLink,
     ExpertRuleRevision,
 )
-from .modules.expert_rules.models.expert_rule import AUDIT_EVENT_TYPES as EXPERT_RULE_AUDIT_EVENT_TYPES
-from .modules.glossary.models import (
+from .modules.expert_rule_management.models.model_expert_rule import AUDIT_EVENT_TYPES as EXPERT_RULE_AUDIT_EVENT_TYPES
+from .modules.glossary_management.models import (
+    Contradiction,
+    ContradictionJudgement,
     GlossaryTerm,
     GlossaryTermAuditEvent,
     GlossaryTermGroup,
@@ -41,8 +43,8 @@ from .modules.glossary.models import (
     GroupSuggestionDismissal,
     TextEmbedding,
 )
-from .modules.glossary.models.glossary_term import AUDIT_EVENT_TYPES as GLOSSARY_AUDIT_EVENT_TYPES
-from .modules.semantic_query.models import MetricContract, MetricContractEvent, MetricDefinition, RelationshipContract
+from .modules.glossary_management.models.model_glossary import AUDIT_EVENT_TYPES as GLOSSARY_AUDIT_EVENT_TYPES
+from .modules.metric_management.models import MetricContract, MetricContractEvent, MetricDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +142,10 @@ def _migrate_dictionary_tables():
     LineageEdge.__table__.create(bind=db.engine, checkfirst=True)
     BusinessCanvas.__table__.create(bind=db.engine, checkfirst=True)
     LineageCanvas.__table__.create(bind=db.engine, checkfirst=True)
+    # A metric's definition is its root: the contract and the review history reference it.
+    MetricDefinition.__table__.create(bind=db.engine, checkfirst=True)
     MetricContract.__table__.create(bind=db.engine, checkfirst=True)
     MetricContractEvent.__table__.create(bind=db.engine, checkfirst=True)
-    MetricDefinition.__table__.create(bind=db.engine, checkfirst=True)
     RelationshipContract.__table__.create(bind=db.engine, checkfirst=True)
     # Glossary parent tables must exist before immutable revisions, links, and audit evidence.
     GlossaryTermGroup.__table__.create(bind=db.engine, checkfirst=True)
@@ -159,11 +162,15 @@ def _migrate_dictionary_tables():
     # Grouping suggestions for terms and rules: cached embeddings and the suggestions administrators dismissed.
     TextEmbedding.__table__.create(bind=db.engine, checkfirst=True)
     GroupSuggestionDismissal.__table__.create(bind=db.engine, checkfirst=True)
-    DatasetProposal.__table__.create(bind=db.engine, checkfirst=True)
     Contradiction.__table__.create(bind=db.engine, checkfirst=True)
     ContradictionJudgement.__table__.create(bind=db.engine, checkfirst=True)
 
     with db.engine.begin() as connection:
+        relationship_columns = {
+            column["name"] for column in inspect(connection).get_columns(RelationshipContract.__tablename__)
+        }
+        if "version" not in relationship_columns:
+            connection.execute(text("ALTER TABLE text_to_bi_relationship_contract ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
         contract_columns = {column["name"] for column in inspect(connection).get_columns(MetricContract.__tablename__)}
         if "revoker_id" not in contract_columns:
             revoker_column = "INTEGER REFERENCES ab_user (id) ON DELETE SET NULL" if postgres else "INTEGER"
@@ -226,6 +233,8 @@ def _migrate_dictionary_tables():
                     text(f"ALTER TABLE text_to_bi_metric_definition ADD COLUMN {column_name} {column_type}")
                 )
 
+    _root_metrics_on_definition(postgres)
+
     with db.engine.begin() as connection:
         relationship_columns = {
             column["name"] for column in inspect(connection).get_columns(RelationshipContract.__tablename__)
@@ -274,6 +283,7 @@ def _migrate_dictionary_tables():
             ("layer_id", "INTEGER REFERENCES text_to_bi_data_layer (id) ON DELETE SET NULL"),
             ("time_column", "VARCHAR(255)"),
             ("row_kind_column", "VARCHAR(255)"),
+            # No longer mapped since the indicator feature was removed; still added so every database has the same columns.
             ("indicator_model", "TEXT"),
         )
         for column_name, column_type in dataset_columns_to_add:
@@ -437,6 +447,104 @@ def _migrate_dictionary_tables():
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN contains_pii BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
+def _root_metrics_on_definition(postgres: bool) -> None:
+    """Move an install from contracts keyed by (dataset, metric) to contracts and events hanging from a definition.
+
+    Old contracts and events keep their dataset_id and metric_id columns, made nullable, because dropping a column
+    drops its foreign key, which waits on the Superset tables the calling request has read. A contract proposed
+    before definitions were required gets a placeholder definition, so no approval is lost.
+    """
+    with db.engine.begin() as connection:
+        inspector = inspect(connection)
+        contract_columns = {column["name"] for column in inspector.get_columns(MetricContract.__tablename__)}
+        event_columns = {column["name"] for column in inspector.get_columns(MetricContractEvent.__tablename__)}
+        if "definition_id" not in contract_columns:
+            connection.execute(text("ALTER TABLE text_to_bi_metric_contract ADD COLUMN definition_id INTEGER"))
+            connection.execute(
+                text(
+                    "INSERT INTO text_to_bi_metric_definition (dataset_id, metric_id, business_definition) "
+                    "SELECT contract.dataset_id, contract.metric_id, 'Chưa có định nghĩa nghiệp vụ.' "
+                    "FROM text_to_bi_metric_contract contract "
+                    "WHERE NOT EXISTS (SELECT 1 FROM text_to_bi_metric_definition definition "
+                    "WHERE definition.metric_id = contract.metric_id)"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE text_to_bi_metric_contract SET definition_id = ("
+                    "SELECT definition.id FROM text_to_bi_metric_definition definition "
+                    "WHERE definition.metric_id = text_to_bi_metric_contract.metric_id)"
+                )
+            )
+            connection.execute(
+                text("UPDATE text_to_bi_metric_contract SET status = :draft WHERE status = 'candidate'"),
+                {"draft": ReviewStatus.DRAFT.value},
+            )
+            if postgres:
+                connection.execute(
+                    text(
+                        "ALTER TABLE text_to_bi_metric_contract "
+                        "ALTER COLUMN definition_id SET NOT NULL, "
+                        "ALTER COLUMN dataset_id DROP NOT NULL, "
+                        "ALTER COLUMN metric_id DROP NOT NULL, "
+                        f"ALTER COLUMN status SET DEFAULT '{ReviewStatus.DRAFT.value}', "
+                        "DROP CONSTRAINT IF EXISTS uq_text_to_bi_metric_contract_dataset_metric, "
+                        "ADD CONSTRAINT uq_text_to_bi_metric_contract_definition UNIQUE (definition_id), "
+                        "ADD CONSTRAINT fk_text_to_bi_metric_contract_definition FOREIGN KEY (definition_id) "
+                        "REFERENCES text_to_bi_metric_definition (id) ON DELETE CASCADE, "
+                        f"ADD CONSTRAINT ck_text_to_bi_metric_contract_status CHECK ({ReviewStatus.check()})"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "ALTER TABLE text_to_bi_metric_definition "
+                        "ADD CONSTRAINT uq_text_to_bi_metric_definition_metric UNIQUE (metric_id)"
+                    )
+                )
+
+        if "metric_name" not in event_columns:
+            snapshot_type = "JSON" if postgres else "TEXT"
+            connection.execute(
+                text(
+                    "ALTER TABLE text_to_bi_metric_contract_event "
+                    "ADD COLUMN definition_id INTEGER REFERENCES text_to_bi_metric_definition (id) ON DELETE SET NULL"
+                )
+            )
+            connection.execute(text("ALTER TABLE text_to_bi_metric_contract_event ADD COLUMN metric_name VARCHAR(255)"))
+            connection.execute(
+                text(f"ALTER TABLE text_to_bi_metric_contract_event ADD COLUMN definition_snapshot {snapshot_type}")
+            )
+            connection.execute(
+                text(
+                    "UPDATE text_to_bi_metric_contract_event SET "
+                    "definition_id = (SELECT definition.id FROM text_to_bi_metric_definition definition "
+                    "WHERE definition.metric_id = text_to_bi_metric_contract_event.metric_id), "
+                    "metric_name = COALESCE((SELECT metric.metric_name FROM sql_metrics metric "
+                    "WHERE metric.id = text_to_bi_metric_contract_event.metric_id), '')"
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX ix_text_to_bi_metric_contract_event_definition_id "
+                     "ON text_to_bi_metric_contract_event (definition_id)")
+            )
+            if postgres:
+                connection.execute(
+                    text("ALTER TABLE text_to_bi_metric_contract_event ALTER COLUMN metric_name SET NOT NULL")
+                )
+
+        if postgres:
+            # Legacy events cascaded with their Superset metric or dataset. The review snapshot must survive both.
+            event_table = MetricContractEvent.__tablename__
+            for foreign_key in inspect(connection).get_foreign_keys(event_table):
+                if foreign_key.get("constrained_columns") not in (["dataset_id"], ["metric_id"]):
+                    continue
+                connection.execute(text(f"ALTER TABLE {event_table} DROP CONSTRAINT {connection.dialect.identifier_preparer.quote(foreign_key['name'])}"))
+            event_columns = {column["name"]: column for column in inspect(connection).get_columns(event_table)}
+            for column_name in ("dataset_id", "metric_id"):
+                if not event_columns[column_name]["nullable"]:
+                    connection.execute(text(f"ALTER TABLE {event_table} ALTER COLUMN {column_name} DROP NOT NULL"))
+
+
 def _sync_rule_name_keys() -> None:
     """Give a rule renamed before renames moved its unique name key the key of its current name, unless it is taken."""
     rule_table, revision_table = ExpertRule.__tablename__, ExpertRuleRevision.__tablename__
@@ -486,6 +594,21 @@ def _add_group_columns(postgres: bool) -> None:
                 connection.execute(text(f"CREATE INDEX ix_{table}_group_id ON {table} (group_id)"))
             if not postgres:
                 continue
+            if audit_event is ExpertRuleAuditEvent:
+                for foreign_key in inspect(connection).get_foreign_keys(audit_event.__tablename__):
+                    if foreign_key["constrained_columns"] not in (["rule_id"], ["revision_id"]):
+                        continue
+                    if foreign_key.get("options", {}).get("ondelete", "").upper() == "CASCADE":
+                        continue
+                    quote = connection.dialect.identifier_preparer.quote
+                    table_name = quote(audit_event.__tablename__)
+                    constraint_name = quote(foreign_key["name"])
+                    column_name = quote(foreign_key["constrained_columns"][0])
+                    target_table = quote(foreign_key["referred_table"])
+                    connection.execute(text(f"ALTER TABLE {table_name} DROP CONSTRAINT {constraint_name}"))
+                    connection.execute(text(
+                        f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} FOREIGN KEY ({column_name}) REFERENCES {target_table} (id) ON DELETE CASCADE"
+                    ))
             # Tables created before moves were audited only accept the four lifecycle events.
             audit_table = audit_event.__tablename__
             preparer = connection.dialect.identifier_preparer

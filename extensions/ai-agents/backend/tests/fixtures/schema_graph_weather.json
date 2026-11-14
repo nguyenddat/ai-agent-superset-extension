@@ -214,8 +214,6 @@
    "dataset_id": 15,
    "description": "Lưu thông tin quan sát thời tiết theo thành phố, nguồn dữ liệu, điều kiện và loại quan sát, kèm thời điểm quan sát.",
    "grain_description": "Mỗi dòng là một quan sát thời tiết.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Metadata quan sát thời tiết",
    "layer": {
     "id": 2,
@@ -350,8 +348,6 @@
    "dataset_id": 9,
    "description": "Danh mục nguồn dữ liệu, gồm mã và tên nguồn, địa chỉ API, loại nguồn và thời điểm tạo.",
    "grain_description": "Một dòng đại diện cho một nguồn dữ liệu.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Danh mục nguồn dữ liệu",
    "layer": {
     "id": 1,
@@ -563,8 +559,6 @@
    "dataset_id": 10,
    "description": "Thông tin thành phố gồm mã, tên, vùng, tọa độ địa lý, vùng khí hậu, trạng thái hoạt động và thời điểm tạo, cập nhật.",
    "grain_description": "Một bản ghi đại diện cho một thành phố.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Danh mục thành phố",
    "layer": {
     "id": 1,
@@ -691,8 +685,6 @@
    "dataset_id": 7,
    "description": "Danh mục điều kiện thời tiết, gồm mã, tên, mô tả và nhóm mức độ.",
    "grain_description": "Một dòng đại diện cho một điều kiện thời tiết.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Danh mục điều kiện thời tiết",
    "layer": {
     "id": 1,
@@ -862,8 +854,6 @@
    "dataset_id": 14,
    "description": "Thông tin về các lần nạp dữ liệu, gồm thời điểm bắt đầu và kết thúc, trạng thái, số thành phố, số quan sát, số giá trị và thông tin lỗi.",
    "grain_description": "Một dòng đại diện cho một lần nạp dữ liệu.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Lần nạp dữ liệu",
    "layer": {
     "id": 3,
@@ -1073,8 +1063,6 @@
    "dataset_id": 8,
    "description": "Bảng ngày với các thuộc tính lịch như năm, quý, tháng, tuần, ngày trong tháng, thứ trong tuần và trạng thái cuối tuần.",
    "grain_description": "Mỗi dòng đại diện cho một ngày lịch.",
-   "indicator_model": null,
-   "indicators": null,
    "label": "Danh mục ngày",
    "layer": {
     "id": 1,
@@ -1311,265 +1299,6 @@
    "dataset_id": 6,
    "description": "Danh mục chỉ số thời tiết, gồm mã, tên, nhóm chỉ số, đơn vị đo, kiểu dữ liệu, cách tổng hợp, mô tả và trạng thái hoạt động.",
    "grain_description": "Một dòng đại diện cho một chỉ số thời tiết.",
-   "indicator_model": {
-    "aggregation_column": "cach_tong_hop",
-    "aggregation_map": {
-     "BAT_KY": "NONE",
-     "CUOI_CUNG": "NONE",
-     "LON_NHAT": "MAX",
-     "NHO_NHAT": "MIN",
-     "TONG": "SUM",
-     "TRUNG_BINH": "AVG"
-    },
-    "code_column": "ma_chi_so",
-    "key_column": "chi_so_id",
-    "kind": "catalog",
-    "name_column": "ten_chi_so",
-    "unit_column": "ten_don_vi",
-    "value_kind_column": "kieu_du_lieu"
-   },
-   "indicators": {
-    "aggregation_codes": [
-     "BAT_KY",
-     "LON_NHAT",
-     "NHO_NHAT",
-     "TONG",
-     "TRUNG_BINH"
-    ],
-    "indicators": [
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "ap_suat_hpa",
-      "key": 7,
-      "name": "Ap suat",
-      "unit": "Hectopascal",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "cam_nhan_c",
-      "key": 2,
-      "name": "Nhiet do cam nhan",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MAX",
-      "aggregation_code": "LON_NHAT",
-      "code": "cam_nhan_cao_nhat_c",
-      "key": 15,
-      "name": "Cam nhan cao nhat",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MIN",
-      "aggregation_code": "NHO_NHAT",
-      "code": "cam_nhan_thap_nhat_c",
-      "key": 14,
-      "name": "Cam nhan thap nhat",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "do_am_pct",
-      "key": 3,
-      "name": "Do am tuong doi",
-      "unit": "Phan tram",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MAX",
-      "aggregation_code": "LON_NHAT",
-      "code": "gio_giat_kmh",
-      "key": 10,
-      "name": "Gio giat",
-      "unit": "Kilomet/gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MAX",
-      "aggregation_code": "LON_NHAT",
-      "code": "gio_giat_toi_da_kmh",
-      "key": 22,
-      "name": "Gio giat toi da",
-      "unit": "Kilomet/gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "NONE",
-      "aggregation_code": "BAT_KY",
-      "code": "la_ban_ngay",
-      "key": 25,
-      "name": "Ban ngay",
-      "unit": "Dung/Sai",
-      "value_kind": "DUNG_SAI"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "luong_mua_mm",
-      "key": 4,
-      "name": "Luong mua",
-      "unit": "Milimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "may_phu_pct",
-      "key": 8,
-      "name": "Do che phu may",
-      "unit": "Phan tram",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "mua_mm",
-      "key": 5,
-      "name": "Mua",
-      "unit": "Milimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "nhiet_do_c",
-      "key": 1,
-      "name": "Nhiet do",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MAX",
-      "aggregation_code": "LON_NHAT",
-      "code": "nhiet_do_cao_nhat_c",
-      "key": 13,
-      "name": "Nhiet do cao nhat",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MIN",
-      "aggregation_code": "NHO_NHAT",
-      "code": "nhiet_do_thap_nhat_c",
-      "key": 12,
-      "name": "Nhiet do thap nhat",
-      "unit": "Do C",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "so_gio_co_mua",
-      "key": 20,
-      "name": "So gio co mua",
-      "unit": "Gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "tam_nhin_m",
-      "key": 11,
-      "name": "Tam nhin",
-      "unit": "Met",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "thoi_luong_ban_ngay_gio",
-      "key": 24,
-      "name": "Thoi luong ban ngay",
-      "unit": "Gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "thoi_luong_nang_gio",
-      "key": 23,
-      "name": "Thoi luong nang",
-      "unit": "Gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "toc_do_gio_kmh",
-      "key": 9,
-      "name": "Toc do gio",
-      "unit": "Kilomet/gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "MAX",
-      "aggregation_code": "LON_NHAT",
-      "code": "toc_do_gio_toi_da_kmh",
-      "key": 21,
-      "name": "Toc do gio toi da",
-      "unit": "Kilomet/gio",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "tong_luong_mua_mm",
-      "key": 16,
-      "name": "Tong luong mua ngay",
-      "unit": "Milimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "tong_mua_mm",
-      "key": 17,
-      "name": "Tong mua ngay",
-      "unit": "Milimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "tong_mua_rao_mm",
-      "key": 18,
-      "name": "Tong mua rao ngay",
-      "unit": "Milimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "SUM",
-      "aggregation_code": "TONG",
-      "code": "tuyet_roi_cm",
-      "key": 19,
-      "name": "Tuyet roi",
-      "unit": "Centimet",
-      "value_kind": "SO"
-     },
-     {
-      "aggregation": "AVG",
-      "aggregation_code": "TRUNG_BINH",
-      "code": "xac_suat_mua_pct",
-      "key": 6,
-      "name": "Xac suat mua",
-      "unit": "Phan tram",
-      "value_kind": "SO"
-     }
-    ],
-    "too_many": false,
-    "unmapped_aggregation_codes": [],
-    "value_kinds": [
-     "DUNG_SAI",
-     "SO"
-    ]
-   },
    "label": "Danh mục chỉ số thời tiết",
    "layer": {
     "id": 1,
@@ -1667,16 +1396,6 @@
    "dataset_id": 13,
    "description": "Lưu các giá trị quan sát theo chỉ số, gồm giá trị dạng số, đúng/sai hoặc văn bản.",
    "grain_description": "Một bản ghi cho một giá trị quan sát của một chỉ số.",
-   "indicator_model": {
-    "indicator_column": "chi_so_id",
-    "kind": "values",
-    "value_columns": {
-     "CHU": "gia_tri_chu",
-     "DUNG_SAI": "gia_tri_dung_sai",
-     "SO": "gia_tri_so"
-    }
-   },
-   "indicators": null,
    "label": "Giá trị quan sát",
    "layer": {
     "id": 2,

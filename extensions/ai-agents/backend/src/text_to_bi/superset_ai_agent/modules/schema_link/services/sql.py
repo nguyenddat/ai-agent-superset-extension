@@ -68,7 +68,7 @@ def build_sql(goal: Goal, tree: JoinTree, graph: SchemaGraph) -> str:
             aggregated = exp.Count(this=exp.Distinct(expressions=[column(measure.table, measure.column)]))
         else:
             aggregated = _AGGREGATES[measure.aggregation](this=column(measure.table, measure.column))
-        name = (measure.indicator or {}).get("code") or f"{measure.aggregation.lower()}_{measure.column or 'dong'}"
+        name = f"{measure.aggregation.lower()}_{measure.column or 'dong'}"
         query = query.select(exp.alias_(aggregated, _alias(name, taken), quoted=True))
 
     conditions = []

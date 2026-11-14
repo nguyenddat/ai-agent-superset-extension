@@ -83,7 +83,6 @@ export function AnalysisTrace({ trace, fallbackGraph }: { trace: Trace; fallback
         {goal.measures?.map(item => (
           <dd key={`${item.dataset_id}.${item.column}`}>
             <strong>{item.aggregation} {item.label}</strong>
-            {item.indicator?.unit ? <span> · {item.indicator.unit}</span> : null}
             <code>{item.table}.{item.column ?? '*'}</code><em>{item.source}</em>
           </dd>
         ))}

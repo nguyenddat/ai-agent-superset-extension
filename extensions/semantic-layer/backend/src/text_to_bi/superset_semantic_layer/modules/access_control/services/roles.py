@@ -1,13 +1,14 @@
 from typing import Any
 
-from ....core.security import QUERY_PERMISSION, SEMANTIC_LAYER_VIEW_MENU, VIEW_PERMISSION
-from ...superset.services.roles import (
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_role import (
     declare_admin_only_view_menu,
     ensure_role,
     replace_user_roles,
     require_role,
     revoke_permissions,
 )
+
+from ....core.security import QUERY_PERMISSION, SEMANTIC_LAYER_VIEW_MENU, VIEW_PERMISSION
 from ..exceptions import RoleAssignmentError
 
 SEMANTIC_LAYER_API = "text_to_bi_semantic_layer_api"

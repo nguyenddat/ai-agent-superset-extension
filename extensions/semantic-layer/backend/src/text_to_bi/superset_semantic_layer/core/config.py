@@ -6,8 +6,12 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "openai/gpt-6-luna"
-    # Model that embeds glossary terms and expert rules to suggest groups; empty compares their words instead.
     OPENROUTER_EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
+
+    # Metric review limits. The unit limit must not exceed the width of MetricDefinition.unit (64).
+    METRIC_REVIEW_REASON_MAX_LENGTH: int = 2_000
+    METRIC_DEFINITION_MAX_LENGTH: int = 4_000
+    METRIC_UNIT_MAX_LENGTH: int = 64
 
     model_config = SettingsConfigDict(case_sensitive=True, extra="ignore")
 

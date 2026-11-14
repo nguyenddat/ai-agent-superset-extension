@@ -6,13 +6,18 @@ from flask import request
 from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset import db
 
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import (
+    datasets_on_database,
+    get_datasets,
+    require_database,
+)
+
 from ....common.utils.type_formatter import compact_json
 from ....core.database import handle_errors, rollback_on_error
 from ....core.exceptions import DatabaseIdRequiredError
 from ....core.security import csrf_protected, require_admin, require_semantic_layer_view
 from ....migrations import ensure_dictionary_tables
 from ...data_dictionary.dependencies import dataset_dictionary_repository
-from ...superset.services.datasets import datasets_on_database, get_datasets, require_database
 from ..dependencies import (
     business_canvas_repository,
     business_domain_repository,
@@ -71,7 +76,7 @@ class BusinessModelRoutes:
         ensure_dictionary_tables()
         datasets = {
             dataset.id: dataset
-            for dataset in datasets_on_database(database_id).all()
+            for dataset in datasets_on_database(database_id)
         }
         try:
             domains = business_domain_repository().by_name_order()
@@ -329,7 +334,7 @@ class BusinessModelRoutes:
         layer = layer_repository.get(layer_id)
         if layer is None:
             raise DataLayerNotFoundError()
-        dataset_dictionary_repository().unclassify_layer(layer_id)
+        dataset_dictionary_repository().update_clear_layer(layer_id)
         layer_repository.delete(layer)
         db.session.commit()
         return self.response(200, id=layer_id)
@@ -383,7 +388,7 @@ class BusinessModelRoutes:
         if len(datasets) != len(set(dataset_ids)):
             raise BusinessModelValidationError("dataset_ids contains unknown datasets.")
         ensure_dataset_dictionaries(datasets)
-        dictionaries = dataset_dictionary_repository().list_by_ids(dataset_ids)
+        dictionaries = dataset_dictionary_repository().read_by_ids(dataset_ids)
         return {
             "name": name.strip(),
             "description": (description or "").strip() or None,

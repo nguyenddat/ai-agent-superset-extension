@@ -27,9 +27,7 @@ type StageBase = { status: StageStatus; ms: number | null; error?: string };
 type Located = { dataset_id: number; table: string; column: string | null; label: string };
 
 export type GoalStage = StageBase & {
-  measures?: Array<Located & {
-    aggregation: string; source: string; indicator: { code: string; name: string | null; unit: string | null } | null;
-  }>;
+  measures?: Array<Located & { aggregation: string; source: string }>;
   group_by?: Array<Located & { time_grain: string | null }>;
   filters?: Array<Located & { operator: string; value: unknown; source: string }>;
   row_kinds?: Array<Located & { value: string; grain: string }>;

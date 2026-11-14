@@ -11,28 +11,32 @@ from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
 
+from text_to_bi.superset_semantic_layer.common.schemas.status_enum import ReviewStatus
 from text_to_bi.superset_semantic_layer.common.utils import type_formatter
 
 PACKAGE_PATH = Path(__file__).parents[1] / "src" / "text_to_bi" / "superset_semantic_layer"
 MODULES_PATH = PACKAGE_PATH / "modules"
-ROUTE_PATH = MODULES_PATH / "catalog" / "routes" / "semantic_layer.py"
+ROUTE_PATH = PACKAGE_PATH / "registry.py"
 # SemanticLayerAPI's route mixins live in each module's routes/; ExpertRuleAPI is a separate API.
-ROUTE_PATHS = sorted(path for path in MODULES_PATH.glob("*/routes/*.py") if path.parts[-3] != "expert_rules")
+ROUTE_PATHS = sorted(path for path in MODULES_PATH.glob("*/routes/*.py") if path.parts[-3] != "expert_rule_management")
 # Superset's own datasets, databases and users, read through the superset module's repositories.
-SUPERSET_SERVICE_PATHS = [MODULES_PATH / "superset" / "services" / name for name in ("datasets.py", "users.py")]
+SUPERSET_SERVICE_PATHS = [MODULES_PATH / "superset" / "services" / name for name in ("srv_dataset.py", "srv_user.py")]
+DATA_DICTIONARY_UTILITY_PATHS = [MODULES_PATH / "data_dictionary" / "utils" / "util_serializer.py"]
 # The helpers those routes share, split out of the former catalog support module.
 SHARED_SERVICE_PATHS = [
-    MODULES_PATH / "data_dictionary" / "services" / "dictionary.py",
+    MODULES_PATH / "data_dictionary" / "services" / "srv_dictionary.py",
     MODULES_PATH / "business_model" / "services" / "layout.py",
-    MODULES_PATH / "semantic_query" / "services" / "limits.py",
-    MODULES_PATH / "semantic_query" / "services" / "dimension_labels.py",
-    MODULES_PATH / "semantic_query" / "services" / "metric_review.py",
-    MODULES_PATH / "semantic_query" / "services" / "relationship_lookup.py",
-    MODULES_PATH / "semantic_query" / "services" / "chart_data.py",
-    MODULES_PATH / "glossary" / "services" / "discovery.py",
-    MODULES_PATH / "data_dictionary" / "services" / "seeding.py",
-    MODULES_PATH / "data_dictionary" / "services" / "transformations.py",
+    MODULES_PATH / "metric_management" / "services" / "srv_metric_limits.py",
+    MODULES_PATH / "metric_management" / "services" / "srv_metric_data.py",
+    MODULES_PATH / "metric_management" / "services" / "srv_metric_contract.py",
+    MODULES_PATH / "data_dictionary" / "services" / "srv_relationship_lookup.py",
+    MODULES_PATH / "metric_management" / "services" / "srv_metric_execute.py",
+    MODULES_PATH / "glossary_management" / "services" / "srv_glossary_link.py",
+    MODULES_PATH / "glossary_management" / "repositories" / "repo_glossary_revision.py",
+    MODULES_PATH / "data_dictionary" / "services" / "srv_seeding.py",
+    MODULES_PATH / "data_dictionary" / "services" / "srv_transformation.py",
     *SUPERSET_SERVICE_PATHS,
+    *DATA_DICTIONARY_UTILITY_PATHS,
 ]
 CORE_PATHS = [PACKAGE_PATH / "core" / "security.py", PACKAGE_PATH / "core" / "database.py"]
 FORMATTERS = [
@@ -40,7 +44,7 @@ FORMATTERS = [
     for name, value in vars(type_formatter).items()
     if inspect.isfunction(value) and value.__module__ == type_formatter.__name__
 ]
-SOURCE_PATHS = [PACKAGE_PATH / "migrations.py", *CORE_PATHS, *SHARED_SERVICE_PATHS, *ROUTE_PATHS]
+SOURCE_PATHS = [PACKAGE_PATH / "migrations.py", ROUTE_PATH, *CORE_PATHS, *SHARED_SERVICE_PATHS, *ROUTE_PATHS]
 DATASET_LOOKUPS = [
     "get_dataset", "get_datasets", "datasets_by_name", "datasets_on_database", "get_database",
     "active_users", "require_dataset", "require_database",
@@ -141,6 +145,7 @@ def _compile_data_access(namespace: dict) -> None:
     namespace.setdefault("Generic", Generic)
     namespace.setdefault("TypeVar", TypeVar)
     namespace.setdefault("select", select)
+    namespace.setdefault("ReviewStatus", ReviewStatus)
     for name in ["Model", "Query", "Session", "SqlaTable", "Database", *MODEL_NAMES]:
         namespace.setdefault(name, type(name, (), {}))
     database_functions = {

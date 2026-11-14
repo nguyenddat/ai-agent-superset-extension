@@ -104,6 +104,7 @@ def _migration_namespace():
         calls=calls,
         _add_group_columns=lambda postgres: calls.append(("_add_group_columns", postgres)),
         _sync_rule_name_keys=lambda: calls.append(("_sync_rule_name_keys", None)),
+        _root_metrics_on_definition=lambda postgres: calls.append(("_root_metrics_on_definition", postgres)),
     )
     return namespace
 
@@ -126,6 +127,7 @@ def _group_column_namespace(columns, check_constraints):
     inspector = SimpleNamespace(
         get_columns=lambda table: [{"name": name} for name in columns.get(table, [])],
         get_check_constraints=lambda table: check_constraints.get(table, []),
+        get_foreign_keys=lambda _table: [],
     )
     namespace = {
         name: SimpleNamespace(__tablename__=table)

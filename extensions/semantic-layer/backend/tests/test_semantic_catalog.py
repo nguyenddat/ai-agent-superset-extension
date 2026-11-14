@@ -1,12 +1,13 @@
+import json
 from types import SimpleNamespace
 
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.catalog import build_semantic_catalog
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import metric_contract_hash
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.query_defaults import MetricQueryDefaults
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.relationships import (
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_relationship_contract import (
     RelationshipEnd,
     relationship_contract_hash,
 )
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import metric_contract_hash
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import MetricQueryDefaults
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_public_metadata import build_semantic_catalog
 
 
 def _dataset(dataset_id, name, columns, metrics):
@@ -103,6 +104,8 @@ def test_catalog_returns_only_current_relationships_accessible_on_both_ends():
         cardinality="many_to_one",
         status="approved",
         contract_hash=relationship_contract_hash(source_end, target_end, "many_to_one"),
+        verified_hash=relationship_contract_hash(source_end, target_end, "many_to_one"),
+        verification=json.dumps({"passed": True}),
     )
 
     visible = build_semantic_catalog(

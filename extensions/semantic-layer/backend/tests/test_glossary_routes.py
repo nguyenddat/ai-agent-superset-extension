@@ -4,21 +4,21 @@ from types import SimpleNamespace
 from catalog_source import api_methods, compile_into, module_function
 
 from text_to_bi.superset_semantic_layer.core.exceptions import AdminRequiredError
-from text_to_bi.superset_semantic_layer.modules.glossary.exceptions import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import (
     GlossaryConflictError,
     GlossarySelfApprovalError,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary.services.validation import expected_revision_of
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_validation import expected_revision_of
 
 ADMIN_ENDPOINTS = {
-    "list_glossary": ("/glossary", "GET"),
-    "glossary_options": ("/glossary/options", "GET"),
-    "create_glossary": ("/glossary", "POST"),
-    "update_glossary_draft": ("/glossary/<int:term_id>/draft", "PUT"),
-    "approve_glossary": ("/glossary/<int:term_id>/approve", "POST"),
-    "revoke_glossary": ("/glossary/<int:term_id>/revoke", "POST"),
-    "glossary_audit": ("/glossary/<int:term_id>/audit", "GET"),
-    "move_glossary_term": ("/glossary/<int:term_id>/group", "PUT"),
+    "read_glossary_terms": ("/glossary", "GET"),
+    "read_glossary_options": ("/glossary/options", "GET"),
+    "create_glossary_term": ("/glossary", "POST"),
+    "update_glossary_term": ("/glossary/<int:term_id>/draft", "PUT"),
+    "approve_glossary_term": ("/glossary/<int:term_id>/approve", "POST"),
+    "revoke_glossary_term": ("/glossary/<int:term_id>/revoke", "POST"),
+    "read_glossary_events": ("/glossary/<int:term_id>/audit", "GET"),
+    "update_glossary_term_group": ("/glossary/<int:term_id>/group", "PUT"),
     "create_glossary_group": ("/glossary/groups", "POST"),
     "update_glossary_group": ("/glossary/groups/<int:group_id>", "PUT"),
     "delete_glossary_group": ("/glossary/groups/<int:group_id>", "DELETE"),
@@ -41,7 +41,18 @@ def _decorator_calls(method):
 
 def _route(method):
     expose = next(decorator for decorator in method.decorator_list if _call_name(decorator) == "expose")
-    return expose.args[0].value, next(
+    expression = expose.args[0]
+    if isinstance(expression, ast.Name):
+        route_path = "/glossary/groups" if "glossary_group" in method.name else "/glossary"
+    else:
+        prefix = "/glossary/group-suggestions" if "suggestion" in method.name else (
+            "/glossary/groups" if "glossary_group" in method.name else "/glossary"
+        )
+        route_path = "".join(
+            value.value if isinstance(value, ast.Constant) else prefix
+            for value in expression.values
+        )
+    return route_path, next(
         keyword.value.elts[0].value for keyword in expose.keywords if keyword.arg == "methods"
     )
 
@@ -57,7 +68,7 @@ class _GlossaryResponseAPI:
 def _update_handler(payload, update_draft):
     """Compile the real handler with Superset's request/session boundary faked."""
     methods = api_methods()
-    handler = methods["update_glossary_draft"]
+    handler = methods["update_glossary_term"]
     # Keep only @handle_errors, which turns the module's errors into responses.
     handler.decorator_list = [item for item in handler.decorator_list if _call_name(item) == "handle_errors"]
     api = ast.ClassDef(
@@ -74,13 +85,13 @@ def _update_handler(payload, update_draft):
         "request": SimpleNamespace(get_json=lambda silent=True: payload),
         "current_user": SimpleNamespace(id=42),
         "ensure_dictionary_tables": lambda: None,
-        "update_draft": update_draft,
+        "GlossaryTermService": lambda: SimpleNamespace(update=update_draft),
         "expected_revision_of": expected_revision_of,
         "require_admin": lambda: None,
+        "serialize_glossary_term": lambda term, revisions: {"id": term.id, "revisions": len(revisions)},
     }
     compile_into(namespace, api)
     instance = namespace["HarnessAPI"]()
-    instance._glossary_term = lambda term, revisions: {"id": term.id, "revisions": len(revisions)}
     return instance, commits
 
 
@@ -111,21 +122,21 @@ def test_admin_glossary_management_routes_are_explicitly_guarded_and_csrf_protec
         guard = "require_semantic_layer_view()" if expected_route[1] == "GET" else "require_admin()"
         assert guard in ast.unparse(method)
     assert (AdminRequiredError.status, AdminRequiredError.message) == (403, "Admin access required.")
-    assert "require_semantic_layer_query()" in ast.unparse(api_methods()["glossary_discovery"])
+    assert "require_semantic_layer_query()" in ast.unparse(api_methods()["read_glossary_discovery"])
 
 
 def test_management_routes_delegate_to_governed_service_with_expected_revision_and_actor():
     methods = api_methods()
-    for name in ("create_glossary", "update_glossary_draft", "approve_glossary", "revoke_glossary"):
+    for name in ("create_glossary_term", "update_glossary_term", "approve_glossary_term", "revoke_glossary_term"):
         source = ast.unparse(methods[name])
         assert "current_user.id" in source
-    for name in ("update_glossary_draft", "approve_glossary", "revoke_glossary"):
+    for name in ("update_glossary_term", "approve_glossary_term", "revoke_glossary_term"):
         source = ast.unparse(methods[name])
         assert "expected_revision" in source
-    assert "create_draft" in ast.unparse(methods["create_glossary"])
-    assert "update_draft" in ast.unparse(methods["update_glossary_draft"])
-    assert "approve" in ast.unparse(methods["approve_glossary"])
-    assert "revoke" in ast.unparse(methods["revoke_glossary"])
+    assert ".create(" in ast.unparse(methods["create_glossary_term"])
+    assert ".update(" in ast.unparse(methods["update_glossary_term"])
+    assert ".approve(" in ast.unparse(methods["approve_glossary_term"])
+    assert ".revoke(" in ast.unparse(methods["revoke_glossary_term"])
 
 
 def test_update_draft_passes_the_frontend_payload_its_revision_token_and_the_actor_then_commits():
@@ -136,7 +147,7 @@ def test_update_draft_passes_the_frontend_payload_its_revision_token_and_the_act
         return SimpleNamespace(term=SimpleNamespace(id=7))
 
     api, commits = _update_handler(_frontend_draft_payload(), update_draft)
-    status, body = api.update_glossary_draft(7)
+    status, body = api.update_glossary_term(7)
 
     assert status == 200 and commits == [True]
     assert body["term"] == {"id": 7, "revisions": 1}
@@ -148,14 +159,14 @@ def test_update_draft_maps_service_conflict_to_409_without_committing():
         raise GlossaryConflictError("stale revision")
 
     api, commits = _update_handler(_frontend_draft_payload(), update_draft)
-    status, body = api.update_glossary_draft(7)
+    status, body = api.update_glossary_term(7)
     assert (status, body, commits) == (409, {"message": "stale revision"}, [])
 
 
 def test_update_draft_rejects_non_object_or_missing_revision_before_service_call():
     called = []
     api, _ = _update_handler(None, lambda *_args: called.append(True))
-    status, body = api.update_glossary_draft(7)
+    status, body = api.update_glossary_term(7)
     assert (status, body) == (400, {"message": "expected_revision is required."})
     assert called == []
 
@@ -178,7 +189,7 @@ def test_admin_routes_keep_service_errors_generic_and_rollback_unexpected_failur
 
 
 def test_audit_is_admin_only_read_only_and_cannot_be_used_for_cross_term_id_lookup():
-    method = api_methods()["glossary_audit"]
+    method = api_methods()["read_glossary_events"]
     source = ast.unparse(method)
     assert "term_id" in source and "audit" in source.lower()
     assert "current_user.id" not in source  # audit visibility is role-based, not caller-supplied identity.
@@ -186,13 +197,22 @@ def test_audit_is_admin_only_read_only_and_cannot_be_used_for_cross_term_id_look
 
 
 def test_approval_passes_the_second_reviewer_setting_and_answers_self_approval_with_403():
-    source = ast.unparse(api_methods()["approve_glossary"])
+    source = ast.unparse(api_methods()["approve_glossary_term"])
     assert "second_reviewer_required()" in source and "review_reason(payload)" in source
     assert GlossarySelfApprovalError.status == 403 and "không thể tự duyệt" in GlossarySelfApprovalError.message
 
 
 def test_list_reports_review_state_reviewers_and_the_second_reviewer_setting():
-    source = ast.unparse(api_methods()["list_glossary"]) + ast.unparse(api_methods()["_glossary_review_entry"])
+    source = ast.unparse(api_methods()["read_glossary_terms"])
+    from pathlib import Path
+
+    serializer_path = (
+        Path(__file__).parents[1]
+        / "src/text_to_bi/superset_semantic_layer/modules/glossary_management/utils/util_serializer.py"
+    )
+    serializer_tree = ast.parse(serializer_path.read_text(encoding="utf-8"))
+    serializer = next(node for node in serializer_tree.body if isinstance(node, ast.FunctionDef) and node.name == "serialize_glossary_review_entry")
+    source += ast.unparse(serializer)
     for field in (
         "state",
         "author_name",

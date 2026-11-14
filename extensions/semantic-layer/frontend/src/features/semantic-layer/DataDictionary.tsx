@@ -21,7 +21,6 @@ import { requestJson, semanticLayerApi, supersetApi } from './api';
 import { layerLevels } from './datasets';
 import { OptionSelect } from './ExpertRuleEditor';
 import { FileTransfer } from './FileTransfer';
-import { IndicatorsPanel } from './IndicatorsPanel';
 import { ReferenceFields } from './ReferenceFields';
 import { RelationshipsPanel } from './RelationshipsPanel';
 import { TimeSemanticsFields, type TimeSemantics } from './TimeSemanticsFields';
@@ -107,14 +106,14 @@ const editableFields: Array<keyof Omit<ColumnDictionary, 'id' | 'column_name'>> 
   'transformation',
 ];
 
-type DictionaryTab = 'columns' | 'general' | 'time' | 'relationships' | 'indicators';
+type DictionaryTab = 'columns' | 'general' | 'time' | 'relationships';
 const TAB_STORAGE_KEY = 'sl-dictionary-tab';
 
 /** The tab last opened in this browser, so switching datasets keeps the administrator where they work. */
 function rememberedTab(): DictionaryTab {
   try {
     const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
-    const tabs: DictionaryTab[] = ['general', 'time', 'relationships', 'indicators'];
+    const tabs: DictionaryTab[] = ['general', 'time', 'relationships'];
     return tabs.includes(stored as DictionaryTab) ? stored as DictionaryTab : 'columns';
   } catch {
     return 'columns';
@@ -170,7 +169,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
     dataset_type: null as DatasetDictionary['dataset_type'],
     layer_id: null as number | null,
     timeSemantics: JSON.stringify({ time_column: null, row_kind_column: null, grains: [] }),
-    indicatorModel: 'null',
     contains_pii: false,
   });
   const [loading, setLoading] = useState(true);
@@ -200,10 +198,8 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
     || (dictionary.contains_pii ?? false) !== datasetBaseline.contains_pii
   );
   const timeDirty = dictionary !== null && JSON.stringify(timeSemanticsOf(dictionary)) !== datasetBaseline.timeSemantics;
-  const indicatorDirty = dictionary !== null
-    && JSON.stringify(dictionary.indicator_model ?? null) !== datasetBaseline.indicatorModel;
   const columnsDirty = useMemo(() => comparableColumns(columns) !== comparableColumns(baseline), [baseline, columns]);
-  const dirty = generalDirty || timeDirty || indicatorDirty || columnsDirty;
+  const dirty = generalDirty || timeDirty || columnsDirty;
   const selectTab = (next: DictionaryTab) => {
     setTab(next);
     try {
@@ -253,7 +249,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         dataset_type: payload.dataset_type,
         layer_id: payload.layer_id ?? null,
         timeSemantics: JSON.stringify(timeSemanticsOf(payload)),
-        indicatorModel: JSON.stringify(payload.indicator_model ?? null),
         contains_pii: payload.contains_pii ?? false,
       });
     } catch (reason) {
@@ -494,7 +489,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
             time_column: dictionary.time_column,
             row_kind_column: dictionary.row_kind_column,
             grains: dictionary.grains.map(item => ({ ...item, label: normalizeNullableText(item.label?.trim() ?? '') })),
-            indicator_model: dictionary.indicator_model ?? null,
             contains_pii: dictionary.contains_pii ?? false,
           },
           columns: columns.map(({ column_name, ...column }) => ({
@@ -519,7 +513,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         dataset_type: payload.dataset_type,
         layer_id: payload.layer_id ?? null,
         timeSemantics: JSON.stringify(timeSemanticsOf(payload)),
-        indicatorModel: JSON.stringify(payload.indicator_model ?? null),
         contains_pii: payload.contains_pii ?? false,
       });
       setSaved(true);
@@ -605,7 +598,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           ['columns', `Cột (${columns.length})`, columnsDirty],
           ['time', 'Thời gian và grain', timeDirty],
           ['relationships', 'Quan hệ', false],
-          ['indicators', 'Chỉ số', indicatorDirty],
         ] as const).map(([id, label, tabDirty]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => selectTab(id)}>
             {label}
@@ -699,19 +691,6 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
             onDictionaryChanged={() => void loadDictionary(undefined, true)}
           />
         ) : null}
-        {tab === 'indicators' ? (
-          <IndicatorsPanel
-            datasetId={dataset.id}
-            columns={columns}
-            value={dictionary.indicator_model ?? null}
-            disabled={readOnly || saving}
-            onChange={indicatorModel => {
-              setSaved(false);
-              setSaveError('');
-              setDictionary(current => current ? { ...current, indicator_model: indicatorModel } : current);
-            }}
-          />
-        ) : null}
         {tab === 'columns' ? (
           <table className="sl-dictionary-table">
             <thead>
@@ -729,7 +708,7 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
               {columns.map(column => {
                 const expanded = expandedColumns.has(column.column_name);
                 const disabled = readOnly || saving;
-                const detailsId = `sl-column-details-${column.id}`;
+                const detailsId = `sl-column-details-${encodeURIComponent(column.column_name)}`;
                 const reference = column.referenced_column_name
                   ? `${referenceDatasets.find(item => item.id === column.referenced_dataset_id)?.dataset_name ?? column.referenced_dataset_label ?? ''}.${column.referenced_column_name}`
                   : null;

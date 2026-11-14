@@ -20,7 +20,6 @@ class Measure:
     aggregation: str
     label: str
     source: str
-    indicator: dict[str, Any] | None = None
 
 
 @dataclass
@@ -83,54 +82,6 @@ def _column(graph: SchemaGraph, table: int, name: Any, what: str) -> dict[str, A
     return column
 
 
-def _values_table(graph: SchemaGraph, catalog_id: int, key_column: str) -> tuple[int, dict[str, Any]] | None:
-    """The table keeping one value per indicator whose indicator column has an approved relationship to the catalog."""
-    for edge in graph.edges:
-        if edge.to_table != catalog_id or edge.to_column != key_column:
-            continue
-        model = graph.tables[edge.from_table].get("indicator_model") or {}
-        if model.get("kind") == "values" and model.get("indicator_column") == edge.from_column:
-            return edge.from_table, model
-    return None
-
-
-def _indicator_measure(graph: SchemaGraph, raw: dict[str, Any]) -> tuple[Measure, Filter]:
-    code = raw["indicator"]
-    for catalog_id, catalog in graph.tables.items():
-        model = catalog.get("indicator_model") or {}
-        if model.get("kind") != "catalog":
-            continue
-        listed = (catalog.get("indicators") or {}).get("indicators", [])
-        indicator = next((item for item in listed if item.get("code") == code), None)
-        if indicator is None:
-            continue
-        values_table = _values_table(graph, catalog_id, model["key_column"])
-        if values_table is None:
-            raise GoalError(
-                f"Chỉ số {code}: chưa có bảng giá trị nào nối tới {catalog['table']} bằng quan hệ đã duyệt."
-            )
-        values_id, values_model = values_table
-        value_column = values_model["value_columns"].get(str(indicator.get("value_kind")))
-        if value_column is None:
-            raise GoalError(f"Chỉ số {code}: bảng giá trị chưa khai báo cột cho kiểu {indicator.get('value_kind')}.")
-        aggregation = raw.get("aggregation") or indicator.get("aggregation")
-        if aggregation in (None, "NONE"):
-            raise GoalError(f"Chỉ số {code} ({indicator.get('name')}) không gộp được; chọn phép gộp cụ thể.")
-        if aggregation not in AGGREGATIONS:
-            raise GoalError(f"Chỉ số {code}: phép gộp {aggregation!r} không hợp lệ.")
-        label = raw.get("label") or indicator.get("name") or code
-        if raw.get("aggregation"):
-            source = "chỉ số (phép gộp chọn tay)"
-        else:
-            source = f"chỉ số (phép gộp theo danh mục: {indicator.get('aggregation_code')})"
-        details = {"code": code, "name": indicator.get("name"), "unit": indicator.get("unit"), "catalog": catalog_id}
-        measure = Measure(values_id, value_column, aggregation, label, source, details)
-        code_label = f"Chỉ số = {indicator.get('name') or code}"
-        code_filter = Filter(catalog_id, model["code_column"], "==", code, code_label, "chỉ số")
-        return measure, code_filter
-    raise GoalError(f"Chỉ số {code!r} không có trong danh mục chỉ số nào.")
-
-
 def _measure(graph: SchemaGraph, raw: dict[str, Any]) -> Measure:
     table = _table(graph, raw, "Đo")
     aggregation = raw.get("aggregation")
@@ -158,12 +109,7 @@ def resolve_goal(raw: dict[str, Any], graph: SchemaGraph) -> Goal:
     for item in raw["measures"]:
         if not isinstance(item, dict):
             raise GoalError("Mỗi phép đo phải là một object.")
-        if item.get("indicator"):
-            measure, code_filter = _indicator_measure(graph, item)
-            measures.append(measure)
-            filters.append(code_filter)
-        else:
-            measures.append(_measure(graph, item))
+        measures.append(_measure(graph, item))
     if len({measure.table for measure in measures}) > 1:
         raise GoalError("Các phép đo phải nằm trên cùng một bảng gốc; tách thành nhiều câu hỏi.")
 

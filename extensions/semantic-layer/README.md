@@ -71,9 +71,12 @@ each group as a collapsible section, with the ungrouped members last under "Chư
 
 ### Bulk create and update from a file
 
-"Nhập / xuất file" on the Glossary, Expert Rules and Data Dictionary pages downloads the current rows as CSV or XLSX
-and takes the edited file back. `GET .../glossary/file?format=csv|xlsx` (and `.../expert-rules/file`,
-`.../dictionary/file`) exports; `POST .../file/preview` with `{"filename", "content": <base64>}` validates every row
+The Glossary, Expert Rules and Data Dictionary pages have "Xuất file", which downloads the current rows as Excel
+(.xlsx), and "Nhập file", which offers a sample file and takes a filled or edited file back. Every file uses one
+layout: a "Dữ liệu" sheet with a bold, frozen header row and a "Hướng dẫn" sheet that lists each column, whether it is
+required, its allowed values or format, and an example. Only .xlsx is accepted. `GET .../glossary/file` (and
+`.../expert-rules/file`, `.../dictionary/file`) exports; `GET .../file/template` returns the sample with example rows;
+`POST .../file/preview` with `{"filename", "content": <base64>}` validates every row
 as the editors do and saves nothing; `POST .../file/import` re-runs that check and applies the whole file in one
 transaction, or nothing when any row fails. Files are limited to 1 MB and 1000 rows (400 otherwise). Lists in a cell
 are separated by `;`; a column left out of the file keeps the stored value.
@@ -113,12 +116,18 @@ tables not classified yet stay out of the view with a note. The domain dialog li
 
 ## Consumer API
 
-Approved content reaches any consumer, such as a Text to BI agent, through read-only endpoints. Each returns only
-approved, current content on datasets the caller may access in Superset, and never returns SQL expressions.
+Semantic Layer exposes governed metadata from its business modules. AI Agent assembles its catalog, schema graph
+and source selection from those public APIs. The assembled catalog contains approved, current content; metadata
+projections also include draft metric formulas for the AI Agent's drafting flow. Dataset permissions apply to both.
+Public successes use `{"schema_version": 1, "result": {...}}`; see
+[`public-api-v1.md`](../../docs/specs/public-api-v1.md) for the contract and migration paths.
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /extensions/text-to-bi/superset-semantic-layer/semantic-layer/semantic-catalog` | Approved metrics per dataset, groupable and filterable dimensions, approved relationships, row and filter limits |
+| `GET /extensions/text-to-bi/superset-semantic-layer/semantic-layer/datasets/query-metadata` | Accessible dataset dictionaries, live columns, grains and classification |
+| `GET /extensions/text-to-bi/superset-semantic-layer/semantic-layer/metrics/query-metadata` | Accessible metric metadata, contract states and query defaults |
+| `GET /extensions/text-to-bi/superset-semantic-layer/semantic-layer/relationships/approved` | Approved, current relationships accessible on both ends |
+| `GET /extensions/text-to-bi/superset-ai-agent/semantic-query/semantic-catalog` | AI Agent's assembled approved metrics, dimensions, relationships and limits |
 | `GET /extensions/text-to-bi/superset-semantic-layer/semantic-layer/glossary/discovery` | Approved terms with definitions, synonyms and their fresh links to datasets, columns and metrics |
 | `GET /extensions/text-to-bi/superset-semantic-layer/expert-rules/expert-rules/discover` | Approved rules: conditions, exceptions, example questions, and the dataset, metrics and terms they link to |
 | `POST /extensions/text-to-bi/superset-semantic-layer/semantic-layer/dataset/<id>/metrics/<id>/semantic-query/execute` | Runs an approved metric through Superset's chart data API, with RLS |
@@ -175,22 +184,24 @@ semantic-layer/
 │       ├── core/security.py            # admin role, dataset permission, CSRF, second reviewer rule
 │       ├── core/database.py            # handle_errors and rollback_on_error: errors to responses, rollback
 │       ├── core/exceptions.py          # errors of the shared checks (admin, access, CSRF, request body)
+│       ├── core/llm.py                 # the OpenRouter chat models of AI AutoFill and the contradiction judge
 │       ├── common/base_model.py        # BaseModel / AuditedModel: Superset's declarative base, table names from class
 │       ├── common/base_repo.py         # BaseRepository: get, list, add, update, delete
 │       ├── common/exceptions/          # abstract app errors carrying a status and a default message
 │       ├── common/utils/type_formatter.py  # ISO dates and moments, JSON texts, SSE events
-│       ├── modules/<module>/           # one business area each: data_dictionary, business_model, glossary,
-│       │   │                           # expert_rules, consistency, semantic_query, agent_ladder, superset; each holds:
+│       ├── modules/<module>/           # one business area each: data_dictionary, business_model, metric_management,
+│       │   │                           # glossary_management, expert_rule_management,
+│       │   │                           # access_control, superset; each holds:
 │       │   ├── models/                 # its tables in Superset's metadata database
 │       │   ├── repositories/           # one repository per model: every query on those tables
 │       │   ├── dependencies.py         # repository factories bound to the request's session
 │       │   ├── exceptions.py           # its errors, derived from common/exceptions
 │       │   ├── services/               # business rules and the helpers other modules call
-│       │   └── routes/                 # route mixins (ExpertRuleAPI for expert_rules), one per business area
+│       │   ├── utils/util_serializer.py  # every model-to-JSON function of the module
+│       │   └── routes/                 # route mixins (ExpertRuleAPI for expert_rule_management), one per business area
 │       ├── modules/superset/           # Superset's own datasets, databases and users: lookups, no tables of its own
-│       ├── modules/data_dictionary/autofill/  # the AI AutoFill agent, its chat model and prompts
-│       └── modules/catalog/routes/     # semantic_layer.py: SemanticLayerAPI assembled from the module
-│                                       # mixins; view.py: the Semantic Layer page
+│       ├── modules/data_dictionary/prompts/  # the AI AutoFill prompts
+│       └── registry.py                 # SemanticLayerAPI assembled from module route mixins; SemanticLayerView
 └── frontend/
     ├── src/integration/installSemanticLayer.tsx
     ├── src/features/semantic-layer/
@@ -285,7 +296,7 @@ follow there.
   `FILTER (WHERE …)` clause or a window's `PARTITION BY`/`ORDER BY` is a `filter`; any other is a `measure`. A
   templated expression is read again without its Jinja tags (each `{{ … }}` taken as NULL), so the columns of every
   branch count; one that still cannot be parsed gives `null`, and the lineage falls back to the whole dataset.
-- **Pseudo code** (`semantic_query/services/formula_reading.py`, `pseudo_code` in `/metric-contracts` and in the
+- **Pseudo code** (`metric_management/services/srv_metric_formula.py`, `pseudo_code` in `/metric-contracts` and in the
   business model's metrics) writes the expression with the Data Dictionary's column labels in brackets, aggregates and
   logic in Vietnamese words, and any other function as written in SQL. A ratio puts its divisor on a line of its own:
 

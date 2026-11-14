@@ -35,7 +35,7 @@ def _constants(file_name: str) -> list[ast.Assign]:
 
 def _checked_transformation():
     namespace = {"DataDictionaryValidationError": DataDictionaryValidationError}
-    nodes = [*_constants("transformations.py"), module_function("checked_transformation")]
+    nodes = [*_constants("srv_transformation.py"), module_function("checked_transformation")]
     return compile_into(namespace, *nodes)["checked_transformation"]
 
 
@@ -85,7 +85,7 @@ def test_a_transformation_that_breaks_a_rule_is_refused_in_vietnamese(value, mes
 
 
 def test_the_dictionary_save_checks_a_column_transformation_against_other_datasets():
-    constants = [*_constants("dictionary.py"), *_constants("transformations.py")]
+    constants = [*_constants("srv_dictionary.py"), *_constants("srv_transformation.py")]
     lookups = []
 
     def get_dataset(dataset_id):
@@ -101,7 +101,7 @@ def test_the_dictionary_save_checks_a_column_transformation_against_other_datase
         "DataDictionaryValidationError": DataDictionaryValidationError,
     }
     validate = compile_into(
-        namespace, *constants, module_function("checked_transformation"), module_function("validate_dictionary_payload")
+        namespace, *constants, module_function("checked_transformation"), module_function("_checked_reference"), module_function("validate_dictionary_payload")
     )["validate_dictionary_payload"]
     source = {"dataset_id": 9, "column_name": "nhiet_do"}
     payload = {
@@ -140,12 +140,19 @@ class Repository:
         self.stored = entity
         return entity
 
+    read = get
+    read_sources = sources_of
+    update_sources = replace_sources
+
+    def create(self, column_id):
+        return self.add(SimpleNamespace(column_id=column_id, expression=None))
+
 
 def _save(repository, column_rows):
     namespace = {
         "column_transformation_repository": lambda: repository,
         "column_dictionary_repository": lambda: SimpleNamespace(
-            get_for_dataset_column=lambda dataset_id, name: column_rows.get((dataset_id, name))
+            read_by_column_name=lambda dataset_id, name: column_rows.get((dataset_id, name))
         ),
         "ColumnTransformation": lambda column_id: SimpleNamespace(column_id=column_id, expression=None),
     }

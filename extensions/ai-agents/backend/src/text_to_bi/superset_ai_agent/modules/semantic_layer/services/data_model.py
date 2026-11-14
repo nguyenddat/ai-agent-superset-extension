@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .catalog import dataset_entry, dimension_members
-from .client import SEMANTIC_LAYER_API, cached, get_json, post_json
+from .client import AGENT_QUERY_API, cached, get_public_json, post_public_json
 
 
 @dataclass
@@ -35,7 +35,7 @@ def _source_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str,
 
 def load_data_model_sources(cookie_header: str) -> DataModelSources:
     """The aggregate and base datasets the user may query, with the labelled values and date ranges of aggregates."""
-    payload = get_json(f"{SEMANTIC_LAYER_API}/agent-sources", cookie_header)
+    payload = get_public_json(f"{AGENT_QUERY_API}/data-model/sources", cookie_header)
     datasets = payload.get("datasets", [])
     aggregates = [dataset for dataset in datasets if dataset.get("dataset_type") == "aggregate"]
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -58,11 +58,11 @@ _cached_schema_graphs: dict[tuple[int, int], tuple[float, dict[str, Any]]] = {}
 
 def cached_schema_graph(user_id: int, database_id: int, cookie_header: str) -> dict[str, Any]:
     """The base tables of one database the user may read in full, and the approved relationships between them."""
-    path = f"{SEMANTIC_LAYER_API}/schema-graph?database_id={database_id}"
-    return cached(_cached_schema_graphs, (user_id, database_id), lambda: get_json(path, cookie_header))
+    path = f"{AGENT_QUERY_API}/schema-graph?database_id={database_id}"
+    return cached(_cached_schema_graphs, (user_id, database_id), lambda: get_public_json(path, cookie_header))
 
 
 def propose_agent_dataset(draft: dict[str, Any], cookie_header: str, csrf_token: str) -> dict[str, Any]:
     """Keep the dataset the agent drafted over base datasets for an administrator; returns the proposal."""
-    path = f"{SEMANTIC_LAYER_API}/agent-dataset-proposals"
-    return post_json(path, draft, cookie_header, csrf_token, "gửi đề xuất dataset")["proposal"]
+    path = "/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals"
+    return post_public_json(path, draft, cookie_header, csrf_token, "gửi đề xuất dataset")["proposal"]

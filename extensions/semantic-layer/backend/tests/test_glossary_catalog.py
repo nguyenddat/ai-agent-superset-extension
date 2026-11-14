@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from catalog_source import MODULES_PATH, api_methods, compile_into, module_function
 
-REVISION_REPOSITORY_PATH = MODULES_PATH / "glossary" / "repositories" / "glossary_term_revision.py"
+REVISION_REPOSITORY_PATH = MODULES_PATH / "glossary_management" / "repositories" / "repo_glossary_revision.py"
 
 
 def _route_method(name):
@@ -11,14 +11,14 @@ def _route_method(name):
 
 
 def _discovery_method():
-    return _route_method("glossary_discovery")
+    return _route_method("read_glossary_discovery")
 
 
 def _discovery_source():
     """The endpoint, the helper it shares with the semantic catalog, and the repository query that filters rows."""
     repository = ast.parse(REVISION_REPOSITORY_PATH.read_text(encoding="utf-8"))
     functions = (node for node in ast.walk(repository) if isinstance(node, ast.FunctionDef))
-    serving = next(node for node in functions if node.name == "serving")
+    serving = next(node for node in functions if node.name == "read_all_serving")
     nodes = (_discovery_method(), module_function("discoverable_glossary_terms"), serving)
     return "\n".join(ast.unparse(node) for node in nodes)
 
@@ -52,13 +52,17 @@ def _discovery_handler(revisions, datasets, links_by_revision, allowed_dataset_i
         "Any": object,
         "SqlaTable": object,
         "db": SimpleNamespace(session=SimpleNamespace(get=lambda _model, key: datasets.get(key))),
-        # Which revision serves each term is the repository's choice, tested on SQLite in test_glossary_service.
-        "glossary_term_revision_repository": lambda: SimpleNamespace(serving=lambda: revisions),
+        "get_dataset": lambda dataset_id: datasets.get(dataset_id),
+        # Which revision serves each term is the repository's choice, tested in the service suite.
+        "glossary_revision_repository": lambda: SimpleNamespace(read_all_serving=lambda: revisions),
         "ensure_dictionary_tables": lambda: None,
+        "require_semantic_layer_query": lambda: None,
+        "public_payload": lambda payload: payload,
         "can_access_dataset": lambda dataset: dataset.id in allowed_dataset_ids,
-        "glossary_link_fingerprint": lambda dataset, kind, target: f"{dataset.id}:{kind}:{getattr(target, 'id', '')}",
-        "glossary_links": lambda revision_id: links_by_revision.get(revision_id, []),
-        "glossary_link_target": lambda link, _dataset: link.target,
+        "link_fingerprint": lambda dataset, kind, target=None: f"{dataset.id}:{kind}:{getattr(target, 'id', '')}",
+        "read_links": lambda revision_id: links_by_revision.get(revision_id, []),
+        "link_target": lambda link, _dataset: link.target,
+        "metric_approved": lambda _dataset, _metric: True,
     }
     compile_into(namespace, helper, api)
     return namespace["HarnessAPI"]()
@@ -68,7 +72,7 @@ def test_discovery_is_authenticated_read_only_and_not_admin_gated():
     method = _discovery_method()
     decorators = [_call_name(item) for item in method.decorator_list]
     expose = next(item for item in method.decorator_list if _call_name(item) == "expose")
-    assert expose.args[0].value == "/glossary/discovery"
+    assert ast.unparse(expose.args[0]) == "f'{prefix}/discovery'"
     assert next(keyword.value.elts[0].value for keyword in expose.keywords if keyword.arg == "methods") == "GET"
     assert "protect" in decorators and "safe" in decorators and "permission_name" in decorators
     assert "is_admin" not in ast.unparse(method)
@@ -76,7 +80,7 @@ def test_discovery_is_authenticated_read_only_and_not_admin_gated():
 
 def test_discovery_filters_to_serving_live_links_before_serialization():
     source = _discovery_source()
-    assert "'approved'" in source and "serving()" in source
+    assert "ReviewStatus.APPROVED" in source and "read_all_serving()" in source
     assert "fingerprint" in source.lower()
     assert "can_access_dataset" in source
     assert "links" in source
@@ -117,7 +121,7 @@ def test_discovery_executes_link_level_redaction_and_omits_terms_without_visible
     )
     api = _discovery_handler([first, second], {7: allowed, 8: denied}, {101: [allowed_link], 102: [denied_link]}, {7})
 
-    status, body = api.glossary_discovery()
+    status, body = api.read_glossary_discovery()
 
     assert status == 200
     assert body == {
@@ -141,4 +145,4 @@ def test_drafts_ai_candidates_revoked_and_stale_objects_are_not_consumer_knowled
     assert "draft" not in source or "!= 'draft'" in source or '!= "draft"' in source
     assert "revoked" not in source or "!= 'revoked'" in source or '!= "revoked"' in source
     # Only an approved serving revision reaches consumers.
-    assert "'approved'" in source and "serving()" in source
+    assert "ReviewStatus.APPROVED" in source and "read_all_serving()" in source

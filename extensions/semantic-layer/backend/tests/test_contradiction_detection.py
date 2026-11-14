@@ -1,6 +1,6 @@
 import pytest
 
-from text_to_bi.superset_semantic_layer.modules.consistency.services.conditions import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_conditions import (
     Bound,
     ColumnDomain,
     Interval,
@@ -9,14 +9,14 @@ from text_to_bi.superset_semantic_layer.modules.consistency.services.conditions 
     regions_overlap,
     rule_domains,
 )
-from text_to_bi.superset_semantic_layer.modules.consistency.services.detection import (
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_detection import (
     MetricItem,
     RuleItem,
     TermItem,
     detect,
     semantic_candidates,
 )
-from text_to_bi.superset_semantic_layer.modules.consistency.services.thresholds import main_clause, stated_interval
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_thresholds import main_clause, stated_interval
 
 RAIN = 96
 TEMPERATURE = 92

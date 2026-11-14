@@ -1,11 +1,26 @@
 import ast
+from pathlib import Path
 
 from catalog_source import SOURCE_PATHS
 
 
-def test_catalog_route_uses_python_310_compatible_utc_timezone():
+def test_relationship_service_uses_python_310_compatible_utc_timezone():
+    relationship_service = (
+        Path(__file__).parents[1]
+        / "src"
+        / "text_to_bi"
+        / "superset_semantic_layer"
+        / "modules"
+        / "data_dictionary"
+        / "services"
+        / "srv_relationship.py"
+    )
     tree = ast.Module(
-        body=[node for path in SOURCE_PATHS for node in ast.parse(path.read_text(encoding="utf-8")).body],
+        body=[
+            node
+            for path in [*SOURCE_PATHS, relationship_service]
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
+        ],
         type_ignores=[],
     )
 

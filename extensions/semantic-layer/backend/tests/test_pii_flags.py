@@ -7,7 +7,7 @@ from catalog_source import MODULES_PATH, compile_into, module_function
 from test_glossary_bootstrap import _migration_namespace
 
 from text_to_bi.superset_semantic_layer.modules.data_dictionary.exceptions import DataDictionaryValidationError
-from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.pii import checked_pii_flag, mark_catalog_pii
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_pii import checked_pii_flag, mark_catalog_pii
 
 
 def test_a_pii_mark_is_true_or_false():
@@ -20,7 +20,7 @@ def test_a_pii_mark_is_true_or_false():
 
 def _dictionary_constants() -> list[ast.Assign]:
     """The module-level field lists of services/dictionary.py, which imports Superset and so cannot be imported here."""
-    tree = ast.parse((MODULES_PATH / "data_dictionary" / "services" / "dictionary.py").read_text(encoding="utf-8"))
+    tree = ast.parse((MODULES_PATH / "data_dictionary" / "services" / "srv_dictionary.py").read_text(encoding="utf-8"))
     return [node for node in tree.body if isinstance(node, ast.Assign) and node.targets[0].id.isupper()]
 
 
@@ -32,7 +32,10 @@ def test_a_column_save_carries_its_pii_mark_and_refuses_anything_but_a_boolean()
         "get_dataset": lambda dataset_id: None,
         "threading": threading,
     }
-    validate = compile_into(namespace, *_dictionary_constants(), module_function("validate_dictionary_payload"))[
+    validate = compile_into(
+        namespace, *_dictionary_constants(), module_function("_checked_reference"),
+        module_function("validate_dictionary_payload"),
+    )[
         "validate_dictionary_payload"
     ]
     columns = {"owner_phone", "station"}
@@ -60,11 +63,12 @@ def test_the_dictionary_returns_the_pii_marks_of_the_dataset_and_its_columns():
         "SqlaTable": object,
         "DatasetDictionary": object,
         "ColumnDictionary": object,
-        "column_dictionary_repository": lambda: SimpleNamespace(by_ids=lambda ids: []),
-        "dataset_grain_repository": lambda: SimpleNamespace(by_row_kind=lambda dataset_id: []),
+        "column_dictionary_repository": lambda: SimpleNamespace(read_by_ids=lambda ids: []),
+        "dataset_grain_repository": lambda: SimpleNamespace(read_by_row_kind=lambda dataset_id: []),
         "get_datasets": lambda dataset_ids: [],
         "stored_indicator_model": lambda value: None,
         "stored_transformations": lambda column_ids: {},
+        "is_admin": lambda: True,
     }
     serialize = compile_into(namespace, module_function("serialize_dictionary"))["serialize_dictionary"]
     payload = serialize(dataset, dictionary, [record])
@@ -84,6 +88,8 @@ def test_the_catalog_says_which_datasets_and_dimensions_hold_pii():
 
 def test_the_migration_adds_a_pii_column_to_both_dictionaries_when_missing():
     namespace = _migration_namespace()
+    # This migration covers legacy metric definitions and is outside the PII columns asserted here.
+    namespace["_root_metrics_on_definition"] = lambda _postgres: None
     statements = []
     existing_columns = {}
 

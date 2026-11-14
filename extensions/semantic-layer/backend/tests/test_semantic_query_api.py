@@ -2,11 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from text_to_bi.superset_semantic_layer.modules.semantic_query.exceptions import ApprovedMetricContractRequiredError
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import (
+from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import ApprovedMetricContractRequiredError
+from text_to_bi.superset_semantic_layer.modules.metric_management.services import srv_metric_execute
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import metric_contract_hash
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_execute import (
     build_metric_chart_payload,
     execute_approved_chart_query,
-    metric_contract_hash,
 )
 
 
@@ -115,7 +116,7 @@ def test_chart_payload_bounds_filter_and_dimension_input(body):
         build_metric_chart_payload(_dataset(), SimpleNamespace(metric_name="average_temperature"), body, 1000)
 
 
-@pytest.mark.parametrize("status, stale", [("candidate", False), ("revoked", False), ("approved", True)])
+@pytest.mark.parametrize("status, stale", [("draft", False), ("revoked", False), ("approved", True)])
 def test_unapproved_or_stale_contract_never_calls_chartdata_runner(status, stale):
     dataset = _dataset()
     dataset.catalog = dataset.schema = dataset.table_name = dataset.sql = None
@@ -155,9 +156,11 @@ def test_only_the_supplied_chartdata_runner_validates_and_runs_after_approval():
 
 
 @pytest.mark.parametrize(
-    "status, stale, allowed", [("candidate", False, True), ("candidate", True, False), ("revoked", False, False)]
+    "status, stale, origin, admin, allowed",
+    [("draft", False, "manual", True, True), ("draft", False, "manual", False, False), ("draft", False, "ai_agent", False, True),
+     ("draft", True, "ai_agent", False, False), ("revoked", False, "ai_agent", True, False)],
 )
-def test_candidate_preview_runs_only_when_granted_and_unchanged(status, stale, allowed):
+def test_draft_preview_runs_only_for_admin_or_agent_origin_and_unchanged_contract(monkeypatch, status, stale, origin, admin, allowed):
     dataset = _dataset()
     dataset.catalog = dataset.schema = dataset.table_name = dataset.sql = None
     dataset.database = SimpleNamespace(database_name="warehouse")
@@ -166,20 +169,24 @@ def test_candidate_preview_runs_only_when_granted_and_unchanged(status, stale, a
         dataset_id=dataset.id,
         metric_id=metric.id,
         status=status,
+        origin=origin,
         expression_hash="stale" if stale else metric_contract_hash(dataset, metric),
     )
-
-    def run(payload):
-        return "ran"
-
-    with pytest.raises(ApprovedMetricContractRequiredError):
-        execute_approved_chart_query(contract, dataset, metric, {"dimensions": []}, 1000, run)
-    query = {"dimensions": []}
+    service = srv_metric_execute.MetricExecuteService()
+    service.contracts = SimpleNamespace(read=lambda *_: contract, query_defaults=lambda *_: None)
+    monkeypatch.setattr(srv_metric_execute, "is_admin", lambda: admin)
+    monkeypatch.setattr(srv_metric_execute, "semantic_query_row_cap", lambda: 1000)
+    calls = []
+    run = lambda payload: calls.append(payload) or {"data": [{"average_temperature": 28}], "colnames": ["average_temperature"]}
     if allowed:
-        assert execute_approved_chart_query(contract, dataset, metric, query, 1000, run, allow_candidate=True) == "ran"
+        result = service.execute(dataset, metric, {"dimensions": []}, run)
+        assert result["preview"] is True
+        assert result["rows"] == [{"average_temperature": 28}]
+        assert len(calls) == 1
     else:
         with pytest.raises(ApprovedMetricContractRequiredError):
-            execute_approved_chart_query(contract, dataset, metric, query, 1000, run, allow_candidate=True)
+            service.execute(dataset, metric, {"dimensions": []}, run)
+        assert calls == []
 
 
 def _typed_dataset():

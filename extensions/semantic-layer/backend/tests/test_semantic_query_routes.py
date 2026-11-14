@@ -1,73 +1,26 @@
-import importlib
-import json
-import sys
-import types
-from datetime import UTC, datetime, timezone
 from types import SimpleNamespace
-from typing import Any
+from unittest.mock import Mock
 
 import pytest
-from catalog_source import SOURCE_PATHS, api_class, compile_into, module_function
+from wtforms import ValidationError
 
 from text_to_bi.superset_semantic_layer.core.exceptions import (
+    AdminRequiredError,
     DatasetAccessError,
     SemanticLayerQueryRequiredError,
     SemanticLayerViewRequiredError,
 )
-from text_to_bi.superset_semantic_layer.modules.semantic_query.exceptions import (
-    MetricNotFoundError,
-    RelationshipValidationError,
-)
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.contracts import (
-    METRIC_CONTRACT_RULE,
-    build_metric_chart_payload,
-    contract_is_approved_current,
-    metric_contract_hash,
-    metric_contract_ineligibility,
-    metric_contract_state,
-    metric_is_eligible_for_contract,
-    parse_contract_metric,
-)
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.formula_reading import (
-    formula_row_kinds,
-    metric_pseudo_code,
-)
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.query_defaults import (
-    MetricQueryDefaults,
-    checked_query_defaults,
-    stored_filters,
-)
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.relationship_discovery import (
-    SOURCES,
-    stored_verification,
-)
-from text_to_bi.superset_semantic_layer.modules.semantic_query.services.relationships import (
-    RelationshipEnd,
-    relationship_cardinality,
-    relationship_contract_hash,
-)
-
-
-class _ResponseAPI:
-    def response(self, status, **payload):
-        return status, payload
-
-    def response_400(self, **payload):
-        return self.response(400, **payload)
-
-    def response_500(self, **payload):
-        return self.response(500, **payload)
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.exceptions import RelationshipValidationError
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.routes import route_relationship
+from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import MetricContractValidationError
+from text_to_bi.superset_semantic_layer.modules.metric_management.routes import route_crud_metric_def, route_metric_contract
 
 
 class _Session:
-    def __init__(self, datasets):
-        self.datasets, self.commits, self.rollbacks, self.added = datasets, 0, 0, []
-
-    def get(self, model, identifier):
-        return self.datasets.get(identifier)
-
-    def add(self, item):
-        self.added.append(item)
+    def __init__(self):
+        self.commits = 0
+        self.rollbacks = 0
+        self.flushes = 0
 
     def commit(self):
         self.commits += 1
@@ -75,878 +28,537 @@ class _Session:
     def rollback(self):
         self.rollbacks += 1
 
-
-class _ModelField:
-    def __eq__(self, value):
-        return value
-
-    def in_(self, values):
-        return values
-
-    def desc(self):
-        return self
+    def flush(self):
+        self.flushes += 1
 
 
-class _MetricContract:
-    status = dataset_id = origin = _ModelField()
+class _RouteAPI(
+    route_metric_contract.MetricContractRoutes,
+    route_crud_metric_def.MetricDefinitionRoutes,
+    route_relationship.RelationshipRoutes,
+):
+    def response(self, status, **payload):
+        return status, payload
 
-    def __init__(self, dataset_id, metric_id, owner_id=None, **fields):
-        self.id, self.dataset_id, self.metric_id, self.owner_id = 91, dataset_id, metric_id, owner_id
-        self.approver_id = self.revoker_id = self.approved_at = self.revoked_at = None
-        self.origin = "manual"
-        self.__dict__.update(fields)
-
-
-class _RelationshipContract:
-    status = _ModelField()
-    next_id = 101
-
-    def __init__(self, **values):
-        self.id = self.next_id
-        type(self).next_id += 1
-        self.owner_id = self.approver_id = self.revoker_id = self.approved_at = self.revoked_at = None
-        for key, value in values.items():
-            setattr(self, key, value)
+    def response_500(self, **payload):
+        return self.response(500, **payload)
 
 
-class _MetricContractEvent:
-    dataset_id = metric_id = created_at = id = _ModelField()
-
-    def __init__(self, **fields):
-        self.__dict__.update(fields)
-
-
-class _MetricDefinition:
-    dataset_id = metric_id = _ModelField()
-
-    def __init__(self, dataset_id, metric_id, **fields):
-        self.dataset_id, self.metric_id = dataset_id, metric_id
-        self.business_definition = self.unit = self.steward_id = None
-        self.__dict__.update(fields)
-
-
-class _CatalogDataset:
-    id = database_id = table_name = _ModelField()
+def _invoke_route(api, route_name, *arguments, csrf_valid=True, **keywords):
+    """Skip FAB's permission/login wrappers while retaining CSRF, transaction, error, and resolver wrappers."""
+    handler = getattr(type(api), route_name)
+    handler = handler.__wrapped__.__wrapped__
+    csrf_globals = handler.__globals__
+    prior_request = csrf_globals.get("request")
+    prior_validator = csrf_globals.get("validate_csrf")
+    csrf_globals["request"] = SimpleNamespace(headers={"X-CSRFToken": "test-token"})
+    csrf_globals["validate_csrf"] = lambda _token: None
+    if not csrf_valid:
+        csrf_globals["validate_csrf"] = lambda _token: (_ for _ in ()).throw(ValidationError())
+    try:
+        return handler(api, *arguments, **keywords)
+    finally:
+        csrf_globals["request"] = prior_request
+        csrf_globals["validate_csrf"] = prior_validator
 
 
-def _dataset():
-    column = SimpleNamespace(column_name="temperature", is_active=True, groupby=True, filterable=True, expression=None)
-    metric = SimpleNamespace(id=4, metric_name="average_temperature", expression='AVG("temperature")')
+def _contract(contract_id=11):
     return SimpleNamespace(
-        id=7, columns=[column], metrics=[metric], sql=None, catalog=None, schema=None, table_name="weather",
-        database=SimpleNamespace(id=1, database_name="warehouse"),
+        id=contract_id,
+        dataset_id=7,
+        metric_id=4,
+        status="draft",
+        origin="manual",
+        owner_id=3,
+        approver_id=None,
+        approved_at=None,
+        revoker_id=None,
+        revoked_at=None,
     )
 
 
-def _route_api(datasets):
-    wanted = {
-        "_dataset_metric", "_serialize_metric_contract",
-        "_serialize_relationship_contract", "create_metric_contract_candidate", "approve_metric_contract",
-        "revoke_metric_contract", "execute_metric_contract", "create_relationship_contract_candidate",
-        "approve_relationship_contract", "revoke_relationship_contract", "semantic_catalog", "_query_dataset",
-        "list_metric_contracts", "_active_users", "_serialize_metric_definition", "_column_labels",
-        "save_metric_definition", "list_metric_contract_events", "save_metric_query_defaults", "_metric_time_context",
-        "create_agent_metric", "_agent_metric", "_relationship_contract_fields", "_snapshot_relationship_candidate",
-    }
-    shared = [
-        module_function(name)
-        for name in (
-            "is_admin",
-            "user_names",
-            "second_reviewer_required",
-            "can_access_dataset",
-            "semantic_query_row_cap",
-            "metric_contract_for",
-            "metric_definition_for",
-            "review_reason",
-            "record_metric_event",
-        )
-    ]
-    namespace = {
-        "RestApi": _ResponseAPI,
-        "staticmethod": staticmethod,
-        "SqlaTable": _CatalogDataset,
-        "ColumnDictionary": object,
-        "Any": Any,
-        "datetime": datetime,
-        "timezone": timezone,
-        "current_user": SimpleNamespace(is_authenticated=True, id=3, roles=[SimpleNamespace(name="Admin")]),
-        "security_manager": SimpleNamespace(raise_for_access=lambda **_: None),
-        "SupersetSecurityException": type("SupersetSecurityException", (Exception,), {}),
-        "MetricContract": _MetricContract,
-        "RelationshipContract": _RelationshipContract,
-        "db": SimpleNamespace(session=_Session(datasets)),
-        "request": SimpleNamespace(
-            get_json=lambda silent=True: {"dimensions": [], "filters": []},
-            args=SimpleNamespace(get=lambda *_args, **_kwargs: None),
-        ),
-        "current_app": SimpleNamespace(config={}),
-        "ensure_dictionary_tables": lambda: None,
-        "label_dimensions": len,
-        "label_catalog_pii": len,
-        "AGENT_ORIGIN": "ai_agent",
-        "metric_is_eligible_for_contract": metric_is_eligible_for_contract,
-        "metric_contract_hash": metric_contract_hash,
-        "metric_contract_ineligibility": metric_contract_ineligibility,
-        "metric_contract_state": metric_contract_state,
-        "parse_contract_metric": parse_contract_metric,
-        "metric_pseudo_code": metric_pseudo_code,
-        "contract_is_approved_current": contract_is_approved_current,
-        "execute_approved_chart_query": None,
-        "relationship_cardinality": relationship_cardinality,
-        "relationship_contract_hash": relationship_contract_hash,
-        "relationship_is_approved_current": lambda contract, *_: contract.status == "approved",
-        "RelationshipEnd": RelationshipEnd,
-        "build_semantic_catalog": None,
-        "is_superset_access_error": lambda error: "access" in type(error).__name__.lower(),
-        "logger": SimpleNamespace(exception=lambda *args, **kwargs: None),
-        "SEMANTIC_QUERY_MAX_ROWS": 1000,
-        "MetricContractEvent": _MetricContractEvent,
-        "MetricDefinition": _MetricDefinition,
-        "SOURCES": SOURCES,
-        "stored_verification": stored_verification,
-        "METRIC_REVIEW_REASON_MAX_LENGTH": 2000,
-        "METRIC_DEFINITION_MAX_LENGTH": 4000,
-        "METRIC_UNIT_MAX_LENGTH": 64,
-        "metric_query_defaults_for": lambda *_: None,
-        "metric_query_defaults_on": lambda *_: {},
-        "latest_moment": lambda *_: None,
-        "checked_query_defaults": checked_query_defaults,
-        "stored_filters": stored_filters,
-        "formula_row_kinds": formula_row_kinds,
-    }
-    compile_into(namespace, *shared, api_class(wanted))
-    # A relationship contract's static serializer names the mixin it lives in.
-    namespace["RelationshipRoutes"] = namespace["SemanticLayerAPI"]
-    api = namespace["SemanticLayerAPI"]()
-    # Proposing needs a business definition; tests about other rules start from a metric that has one.
-    namespace["metric_definition_for"] = lambda *_: SimpleNamespace(business_definition="Average air temperature.")
-    return api, namespace
+@pytest.fixture
+def route_context(monkeypatch):
+    import superset
+
+    from text_to_bi.superset_semantic_layer import core
+
+    session = _Session()
+    monkeypatch.setattr(superset.db, "session", session)
+    monkeypatch.setattr(core.database.db, "session", session)
+    dataset = SimpleNamespace(id=7, table_name="weather")
+    metric = SimpleNamespace(id=4, metric_name="average_temperature")
+    dataset.metrics = [metric]
+    user = SimpleNamespace(id=3, roles=[SimpleNamespace(name="Admin")])
+    body = {"reason": "Reviewed"}
+    access_state = {"dataset_access": True}
+
+    def require_admin():
+        if not any(role.name == "Admin" for role in user.roles):
+            raise AdminRequiredError()
+
+    def require_query():
+        if not any(role.name == "Admin" for role in user.roles):
+            raise SemanticLayerQueryRequiredError()
+
+    def require_dataset_access(_dataset):
+        if not access_state["dataset_access"]:
+            raise DatasetAccessError()
+
+    monkeypatch.setattr(route_metric_contract, "request", SimpleNamespace(get_json=lambda silent=True: body))
+    monkeypatch.setattr(route_metric_contract, "current_user", user)
+    monkeypatch.setattr(route_metric_contract, "require_admin", require_admin)
+    monkeypatch.setattr(route_metric_contract, "require_semantic_layer_query", require_query)
+    monkeypatch.setattr(route_metric_contract, "require_dataset_access", require_dataset_access)
+    monkeypatch.setattr(route_metric_contract, "ensure_dictionary_tables", lambda: None)
+    monkeypatch.setattr(route_metric_contract, "metric_contract_state", lambda *_: "draft")
+    from text_to_bi.superset_semantic_layer.modules.metric_management.utils import util_serializer
+
+    monkeypatch.setattr(util_serializer, "user_names", lambda: lambda _user_id: None)
+    monkeypatch.setattr(route_crud_metric_def, "request", SimpleNamespace(get_json=lambda silent=True: body))
+    monkeypatch.setattr(route_crud_metric_def, "require_admin", require_admin)
+    monkeypatch.setattr(route_crud_metric_def, "ensure_dictionary_tables", lambda: None)
+    monkeypatch.setattr(route_crud_metric_def, "serialize_metric_definition", lambda definition: definition)
+    monkeypatch.setattr(route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: body, args=SimpleNamespace(get=lambda *_args, **_kwargs: None)))
+    monkeypatch.setattr(route_relationship, "current_user", user)
+    monkeypatch.setattr(route_relationship, "require_admin", require_admin)
+    monkeypatch.setattr(route_relationship, "ensure_dictionary_tables", lambda: None)
+    from text_to_bi.superset_semantic_layer.modules.superset import dependencies as superset_dependencies
+
+    monkeypatch.setattr(superset_dependencies, "require_dataset", lambda dataset_id: dataset if dataset_id == dataset.id else None)
+
+    return SimpleNamespace(
+        api=_RouteAPI(), dataset=dataset, metric=metric, user=user, body=body, session=session,
+        access_state=access_state, monkeypatch=monkeypatch
+    )
 
 
-def _use_request_body(namespace, body):
-    namespace["request"] = SimpleNamespace(get_json=lambda silent=True: body, args=namespace["request"].args)
+def test_metric_candidate_route_enforces_admin_and_commits_service_result(route_context, monkeypatch):
+    context = route_context
+    contract = _contract()
+    service = Mock()
+    service.propose.return_value = contract
+    monkeypatch.setattr(route_metric_contract, "MetricContractService", lambda: service)
 
+    context.user.roles = []
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+    assert _invoke_route(context.api, "create_metric_contract", **route_arguments)[0] == 403
+    service.propose.assert_not_called()
+    assert context.session.commits == 0
 
-def _as_user(namespace, user_id):
-    admin_role = SimpleNamespace(name="Admin")
-    namespace["current_user"] = SimpleNamespace(is_authenticated=True, id=user_id, roles=[admin_role])
-
-
-def _install_chartdata_stubs(monkeypatch):
-    schemas = types.ModuleType("superset.charts.schemas")
-    schemas.ChartDataQueryContextSchema = lambda: SimpleNamespace(load=lambda payload: payload)
-    command = types.ModuleType("superset.commands.chart.data.get_data_command")
-    command.ChartDataCommand = lambda payload: SimpleNamespace(validate=lambda: None, run=lambda: {"queries": [{}]})
-    monkeypatch.setitem(sys.modules, "superset.charts.schemas", schemas)
-    monkeypatch.setitem(sys.modules, "superset.commands.chart.data.get_data_command", command)
-
-
-def test_candidate_requires_admin_and_redacts_contract_details():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    namespace["metric_contract_for"] = lambda *_: None
-    status, payload = api.create_metric_contract_candidate(dataset.id, 4)
-    assert status == 201 and payload["contract"]["status"] == "candidate"
+    context.user.roles = [SimpleNamespace(name="Admin")]
+    status, payload = _invoke_route(context.api, "create_metric_contract", **route_arguments)
+    assert status == 201 and payload["contract"]["state"] == "draft"
     assert "expression" not in payload["contract"] and "expression_hash" not in payload["contract"]
-    namespace["current_user"].roles = []
-    assert api.create_metric_contract_candidate(dataset.id, 4)[0] == 403
-
-
-def test_new_candidates_carry_their_hash_before_joining_the_session():
-    """Hashing lazy-loads the dataset's database and autoflushes, so a contract must be complete when added."""
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    session = namespace["db"].session
-    snapshots = []
-    session.add = lambda item: None if isinstance(item, _MetricContractEvent) else snapshots.append(dict(vars(item)))
-    namespace["metric_contract_for"] = lambda *_: None
-    assert api.create_metric_contract_candidate(dataset.id, 4)[0] == 201
-    assert snapshots[0]["expression_hash"] == metric_contract_hash(dataset, dataset.metrics[0])
-    assert snapshots[0]["owner_id"] == 3
-
-    source, target = _relationship_context()
-    api._relationship_contract_context = lambda *_: (source, target)
-    api._relationship_contract_for = lambda *_: None
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 201
-    assert snapshots[1]["contract_hash"] and snapshots[1]["to_dataset_id"] == target.dataset.id
-    assert snapshots[1]["owner_id"] == 3
-
-
-def test_metric_contract_approve_and_revoke_lifecycle():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    holder = {}
-    namespace["metric_contract_for"] = lambda *_: holder.get("contract")
-    assert api.create_metric_contract_candidate(dataset.id, 4)[0] == 201
-    holder["contract"] = namespace["db"].session.added[0]
-    _as_user(namespace, 5)
-    assert api.approve_metric_contract(dataset.id, 4)[0] == 200
-    assert holder["contract"].status == "approved" and holder["contract"].approver_id == 5
-    _use_request_body(namespace, {"reason": "Formula double counts hourly rows."})
-    assert api.revoke_metric_contract(dataset.id, 4)[0] == 200
-    assert holder["contract"].status == "revoked"
-    events = [item for item in namespace["db"].session.added if isinstance(item, _MetricContractEvent)]
-    assert [(event.action, event.actor_id) for event in events] == [("candidate", 3), ("approve", 5), ("revoke", 5)]
-    assert events[2].reason == "Formula double counts hourly rows." and events[0].expression == 'AVG("temperature")'
-
-
-def test_csrf_wrapper_rejects_before_the_handler():
-    node = module_function("csrf_protected")
-    namespace = {
-        "wraps": lambda method: lambda wrapper: wrapper,
-        "request": SimpleNamespace(headers={}),
-        "ValidationError": ValueError,
-    }
-    compile_into(namespace, node)
-    namespace["validate_csrf"] = lambda _: (_ for _ in ()).throw(ValueError())
-    called = []
-    wrapped = namespace["csrf_protected"](lambda self: called.append(True))
-    assert wrapped(SimpleNamespace(response=lambda status, **payload: (status, payload)))[0] == 403
-    assert called == []
-
-
-def test_execute_denial_security_error_and_truncation_are_mapped(monkeypatch):
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    metric, contract = dataset.metrics[0], _MetricContract(dataset.id, 4)
-    contract.status, contract.expression_hash = "approved", metric_contract_hash(dataset, metric)
-    namespace["metric_contract_for"] = lambda *_: contract
-    namespace["can_access_dataset"] = lambda _: False
-    assert api.execute_metric_contract(dataset.id, metric.id)[0] == 403
-    namespace["can_access_dataset"] = lambda _: True
-    _install_chartdata_stubs(monkeypatch)
-    access_denied = type("AccessDenied", (Exception,), {})
-    namespace["execute_approved_chart_query"] = lambda *args, **kwargs: (_ for _ in ()).throw(access_denied())
-    assert api.execute_metric_contract(dataset.id, metric.id)[0] == 403
-    namespace["current_app"].config["SEMANTIC_QUERY_MAX_ROWS"] = 10_000
-    many_rows = {"colnames": ["city"], "data": [{"city": "A"}] * 1001}
-    namespace["execute_approved_chart_query"] = lambda *args, **kwargs: many_rows
-    status, payload = api.execute_metric_contract(dataset.id, metric.id)
-    assert status == 200 and payload["row_count"] == 1000 and payload["truncated"] is True
-
-
-def test_execute_returns_the_superset_sql_to_administrators_only(monkeypatch):
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    metric, contract = dataset.metrics[0], _MetricContract(dataset.id, 4)
-    contract.status, contract.expression_hash = "approved", metric_contract_hash(dataset, metric)
-    namespace["metric_contract_for"] = lambda *_: contract
-    namespace["can_access_dataset"] = lambda _: True
-    _install_chartdata_stubs(monkeypatch)
-    executed_sql = "SELECT city, AVG(temperature) FROM weather WHERE tenant_id = 7 GROUP BY city"
-    chart_result = {"colnames": ["city"], "data": [], "query": executed_sql}
-    namespace["execute_approved_chart_query"] = lambda *args, **kwargs: chart_result
-    assert api.execute_metric_contract(dataset.id, metric.id)[1]["sql"] == executed_sql
-    namespace["current_user"].roles = []
-    assert api.execute_metric_contract(dataset.id, metric.id)[1]["sql"] is None
-
-
-def test_execute_payload_rejects_joins():
-    with pytest.raises(ValueError, match="không nối nhiều dataset"):
-        build_metric_chart_payload(_dataset(), SimpleNamespace(metric_name="m"), {"joins": []}, 1000)
-
-
-def _relationship_context():
-    source_dataset = _dataset()
-    target_column = SimpleNamespace(column_name="id", is_active=True, expression=None, type="INT")
-    target_dataset = SimpleNamespace(
-        id=8,
-        columns=[target_column],
-        sql=None,
-        catalog=None,
-        schema=None,
-        table_name="stations",
-        database=source_dataset.database,
-    )
-    source_entry = SimpleNamespace(column_name="station_id", is_fk=True, is_pk=False, is_unique=False, data_type="INT")
-    target_entry = SimpleNamespace(column_name="id", is_fk=False, is_pk=True, is_unique=True, data_type="INT")
-    source_dataset.columns.append(
-        SimpleNamespace(column_name="station_id", is_active=True, expression=None, type="INT")
-    )
-    return RelationshipEnd(source_dataset, source_entry, 0), RelationshipEnd(target_dataset, target_entry, 1)
-
-
-def test_relationship_handlers_cover_candidate_approval_and_audit_reset():
-    source, target = _relationship_context()
-    api, namespace = _route_api({source.dataset.id: source.dataset})
-    holder = {}
-    api._relationship_contract_context = lambda *_: (source, target)
-    api._relationship_contract_for = lambda *_: holder.get("contract")
-    namespace["RelationshipContract"] = _RelationshipContract
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 201
-    contract = holder["contract"] = namespace["db"].session.added[0]
-    assert contract.source == "dictionary"
-    # Approval waits for a passing data check made on the current snapshot.
-    assert api.approve_relationship_contract(source.dataset.id, 23)[0] == 400
-    contract.verification, contract.verified_hash = json.dumps({"passed": False}), contract.contract_hash
-    assert api.approve_relationship_contract(source.dataset.id, 23)[0] == 400
-    contract.verification = json.dumps({"passed": True})
-    assert api.approve_relationship_contract(source.dataset.id, 23)[0] == 200
-    assert contract.status == "approved" and contract.approver_id == 3
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 409
-    invalid = RelationshipValidationError("invalid relationship")
-    api._relationship_contract_context = lambda *_: (_ for _ in ()).throw(invalid)
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 400
-    api._relationship_contract_context = lambda *_: (source, target)
-    contract.revoker_id, contract.revoked_at = 9, datetime.now(UTC)
-    contract.status = "revoked"
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 201
-    assert contract.status == "candidate"
-    assert (contract.approver_id, contract.approved_at, contract.revoker_id, contract.revoked_at) == (
-        None,
-        None,
-        None,
-        None,
-    )
-    assert (contract.verification, contract.verified_hash) == (None, None)
-    contract.contract_hash = "changed"
-    assert api.approve_relationship_contract(source.dataset.id, 23)[0] == 400
-    namespace["current_user"].roles = []
-    assert api.create_relationship_contract_candidate(source.dataset.id, 23)[0] == 403
-
-
-def test_relationship_revoke_binds_explicit_contract_id_to_path_relationship():
-    source, target = _relationship_context()
-    api, namespace = _route_api({source.dataset.id: source.dataset})
-    values = {"to_dataset_id": target.dataset.id, "to_column": target.entry.column_name, "cardinality": "many_to_one"}
-    unrelated = _RelationshipContract(from_dataset_id=source.dataset.id, from_column="other", **values)
-    stale = _RelationshipContract(from_dataset_id=source.dataset.id, from_column="station_id", **values)
-    wrong_dataset = _RelationshipContract(from_dataset_id=target.dataset.id, from_column="station_id", **values)
-    stale.status = unrelated.status = wrong_dataset.status = "approved"
-    entry = SimpleNamespace(column_name="station_id")
-    api._fk_entry = lambda dataset_id, column_id: entry if (dataset_id, column_id) == (source.dataset.id, 23) else None
-    # Simulate a stale contract lookup: the caller supplies the immutable contract ID.
-    api._relationship_contract_for = lambda *_: None
-    namespace["relationship_ends"] = lambda *_: None
-    contracts = {stale.id: stale, unrelated.id: unrelated, wrong_dataset.id: wrong_dataset}
-    namespace["db"].session.get = lambda model, identifier: contracts.get(identifier)
-
-    def revoke_with(contract_id):
-        namespace["request"].args = SimpleNamespace(get=lambda *_args, **_kwargs: contract_id)
-        return api.revoke_relationship_contract(source.dataset.id, 23)
-
-    session = namespace["db"].session
-    assert revoke_with(None)[0] == 404
-    assert revoke_with(99999)[0] == 404
-    assert revoke_with(unrelated.id)[0] == 404
-    assert revoke_with(wrong_dataset.id)[0] == 404
-    assert (unrelated.status, wrong_dataset.status, stale.status) == ("approved", "approved", "approved")
-    assert session.commits == 0
-
-    assert revoke_with(stale.id)[0] == 200
-    assert stale.status == "revoked" and unrelated.status == wrong_dataset.status == "approved"
-    assert session.commits == 1
-
-
-def test_relationship_revoke_rejects_contract_id_when_path_entry_is_missing():
-    source, target = _relationship_context()
-    api, namespace = _route_api({source.dataset.id: source.dataset})
-    contract = _RelationshipContract(
-        from_dataset_id=source.dataset.id,
-        from_column="station_id",
-        to_dataset_id=target.dataset.id,
-        to_column=target.entry.column_name,
-        cardinality="many_to_one",
-    )
-    contract.status = "approved"
-    api._fk_entry = lambda *_: None
-    api._relationship_contract_for = lambda *_: None
-    namespace["db"].session.get = lambda model, identifier: contract if identifier == contract.id else None
-    namespace["request"].args = SimpleNamespace(get=lambda *_args, **_kwargs: contract.id)
-
-    assert api.revoke_relationship_contract(source.dataset.id, 999)[0] == 404
-    assert contract.status == "approved"
-    assert namespace["db"].session.commits == 0
-
-
-def test_semantic_catalog_hides_denied_dataset():
-    dataset = _dataset()
-    contract = _MetricContract(dataset.id, dataset.metrics[0].id)
-    contract.status, contract.expression_hash = "approved", metric_contract_hash(dataset, dataset.metrics[0])
-    api, namespace = _route_api({dataset.id: dataset})
-
-    class Query:
-        def __init__(self, model):
-            self.model = model
-
-        def filter(self, *_):
-            return self
-
-        def all(self):
-            if self.model is _MetricContract:
-                return [contract]
-            if self.model is _CatalogDataset:
-                return [dataset]
-            return []
-
-    namespace["db"].session.query = lambda model: Query(model)
-    namespace["build_semantic_catalog"] = importlib.import_module(
-        "text_to_bi.superset_semantic_layer.modules.semantic_query.services.catalog"
-    ).build_semantic_catalog
-    namespace["can_access_dataset"] = lambda _: False
-    api._catalog_metric_details = lambda _dataset_ids: None
-    status, payload = api.semantic_catalog()
-    assert status == 200 and payload["datasets"] == [] and payload["relationships"] == []
-
-
-def _metric_list_api(dataset, contracts):
-    api, namespace = _route_api({dataset.id: dataset})
-
-    class Query:
-        def __init__(self, model):
-            self.model = model
-
-        def filter(self, *_):
-            return self
-
-        def order_by(self, *_):
-            return self
-
-        def all(self):
-            return {_CatalogDataset: [dataset], _MetricContract: contracts}.get(self.model, [])
-
-    namespace["db"].session.query = Query
-    namespace["column_dictionary_repository"] = lambda: SimpleNamespace(list_for_datasets=lambda dataset_ids: [])
-    namespace["dataset_dictionary_repository"] = lambda: SimpleNamespace(list_by_ids=lambda dataset_ids: [])
-    namespace["dataset_grain_repository"] = lambda: SimpleNamespace(list_for_datasets=lambda dataset_ids: [])
-    namespace["request"] = SimpleNamespace(args=SimpleNamespace(get=lambda key, type=None: 1))
-    namespace["security_manager"] = SimpleNamespace(
-        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: "Ada Admin", username="admin"),
-        raise_for_access=lambda **_: None,
-    )
-    api._active_users = lambda: [{"id": 3, "name": "Ada Admin"}]
-    return api, namespace
-
-
-def test_metric_list_reports_state_formula_and_reason_and_skips_the_default_count():
-    dataset = _dataset()
-    dataset.columns[0].__dict__.update(verbose_name="Temperature", type="FLOAT", is_dttm=False)
-    note_column = SimpleNamespace(
-        column_name="note", verbose_name=None, is_active=True, groupby=False, filterable=False, expression=None
-    )
-    dataset.columns.append(note_column)
-    metric_fields = {"verbose_name": None, "description": None, "d3format": ",.1f"}
-    dataset.metrics[0].__dict__.update(metric_fields)
-    dataset.metrics += [
-        SimpleNamespace(id=5, metric_name="count", expression="COUNT(*)", **metric_fields),
-        SimpleNamespace(id=6, metric_name="spread", expression="MAX(temperature) - MIN(temperature)", **metric_fields),
-    ]
-    contract = _MetricContract(dataset.id, 4, owner_id=3)
-    contract.status, contract.approver_id = "approved", 3
-    contract.expression_hash = metric_contract_hash(dataset, dataset.metrics[0])
-    api, _ = _metric_list_api(dataset, [contract])
-
-    status, payload = api.list_metric_contracts()
-
-    assert status == 200
-    approved, spread = payload["metrics"]
-    assert (approved["metric_name"], spread["metric_name"]) == ("average_temperature", "spread")
-    assert approved["state"] == "approved" and approved["ineligibility"] is None
-    assert approved["formula"]["aggregation"] == "AVG" and approved["formula"]["measure_column"] == "temperature"
-    assert approved["pseudo_code"] == "TRUNG_BÌNH([Temperature])"
-    assert spread["pseudo_code"] == "LỚN_NHẤT([Temperature]) - NHỎ_NHẤT([Temperature])"
-    assert approved["contract"]["approver_name"] == "Ada Admin" and "expression_hash" not in approved["contract"]
-    assert spread["state"] == "ineligible" and spread["contract"] is None
-    assert spread["ineligibility"] == METRIC_CONTRACT_RULE
-    assert [column["column_name"] for column in payload["datasets"][0]["columns"]] == ["temperature"]
-
-
-def test_metric_list_requires_the_view_permission_and_a_database():
-    dataset = _dataset()
-    api, namespace = _metric_list_api(dataset, [])
-    namespace["request"] = SimpleNamespace(args=SimpleNamespace(get=lambda key, type=None: None))
-    assert api.list_metric_contracts()[0] == 400
-
-    def refuse():
-        raise SemanticLayerViewRequiredError()
-
-    namespace["require_semantic_layer_view"] = refuse
-    assert api.list_metric_contracts() == (403, {"message": SemanticLayerViewRequiredError.message})
-
-
-def test_metric_list_leaves_out_datasets_the_caller_may_not_access():
-    dataset = _dataset()
-    api, namespace = _metric_list_api(dataset, [])
-    namespace["can_access_dataset"] = lambda _: False
-    status, payload = api.list_metric_contracts()
-    assert status == 200 and payload["datasets"] == [] and payload["metrics"] == []
-
-
-def test_metric_events_need_access_to_the_metric_dataset():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    namespace["can_access_dataset"] = lambda _: False
-    assert api.list_metric_contract_events(dataset.id, 4) == (403, {"message": DatasetAccessError.message})
-
-
-def test_running_a_metric_needs_the_query_permission():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-
-    def refuse():
-        raise SemanticLayerQueryRequiredError()
-
-    namespace["require_semantic_layer_query"] = refuse
-    assert api.execute_metric_contract(dataset.id, 4) == (403, {"message": SemanticLayerQueryRequiredError.message})
-    assert api.semantic_catalog() == (403, {"message": SemanticLayerQueryRequiredError.message})
-
-
-def test_running_a_metric_the_dataset_does_not_have_is_not_found():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    namespace["metric_contract_for"] = lambda *_: None
-
-    assert api.execute_metric_contract(dataset.id, 99999) == (404, {"message": MetricNotFoundError.message})
-
-
-def _proposed_contract(dataset, owner_id=3):
-    contract = _MetricContract(dataset.id, 4, owner_id=owner_id)
-    contract.status, contract.expression = "candidate", dataset.metrics[0].expression
-    contract.expression_hash = metric_contract_hash(dataset, dataset.metrics[0])
-    return contract
-
-
-def test_the_proposer_approves_alone_by_default():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    contract = _proposed_contract(dataset, owner_id=3)
-    namespace["metric_contract_for"] = lambda *_: contract
-    assert api.approve_metric_contract(dataset.id, 4)[0] == 200
-    assert contract.status == "approved" and contract.approver_id == 3
-
-
-def test_the_proposer_cannot_approve_when_a_second_reviewer_is_required():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    namespace["current_app"].config["TEXT_TO_BI_REQUIRE_SECOND_REVIEWER"] = True
-    contract = _proposed_contract(dataset, owner_id=3)
-    namespace["metric_contract_for"] = lambda *_: contract
-    status, payload = api.approve_metric_contract(dataset.id, 4)
-    assert status == 403 and "không thể tự duyệt" in payload["message"] and contract.status == "candidate"
-    _as_user(namespace, 5)
-    _use_request_body(namespace, {"reason": "  Checked against the hourly feed.  "})
-    assert api.approve_metric_contract(dataset.id, 4)[0] == 200
-    event = namespace["db"].session.added[-1]
-    assert (event.action, event.actor_id, event.reason) == ("approve", 5, "Checked against the hourly feed.")
-
-
-def test_proposing_again_makes_the_new_proposer_the_owner_and_needs_a_definition():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    contract = _proposed_contract(dataset, owner_id=3)
-    contract.status = "revoked"
-    namespace["metric_contract_for"] = lambda *_: contract
-    _as_user(namespace, 5)
-    assert api.create_metric_contract_candidate(dataset.id, 4)[0] == 201
-    assert contract.owner_id == 5 and contract.status == "candidate"
-    namespace["metric_definition_for"] = lambda *_: None
-    status, payload = api.create_metric_contract_candidate(dataset.id, 4)
-    assert status == 400 and "định nghĩa nghiệp vụ" in payload["message"]
-
-
-def test_revoking_needs_a_reason_and_a_live_contract():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    contract = _proposed_contract(dataset)
-    namespace["metric_contract_for"] = lambda *_: contract
-    _use_request_body(namespace, {"reason": "   "})
-    assert api.revoke_metric_contract(dataset.id, 4)[0] == 400 and contract.status == "candidate"
-    _use_request_body(namespace, {"reason": "x" * 2001})
-    assert api.revoke_metric_contract(dataset.id, 4)[0] == 400
-    _use_request_body(namespace, {"reason": "Superseded."})
-    assert api.revoke_metric_contract(dataset.id, 4)[0] == 200 and contract.status == "revoked"
-    assert api.revoke_metric_contract(dataset.id, 4)[0] == 400
-
-
-def test_metric_definition_is_validated_saved_and_logged():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    namespace["metric_definition_for"] = lambda *_: None
-    known_user = SimpleNamespace(get_full_name=lambda: "Bao Steward", username="bao")
-    namespace["security_manager"] = SimpleNamespace(get_user_by_id=lambda user_id: known_user if user_id == 9 else None)
-    for body in (
-        {"business_definition": "  "},
-        {"business_definition": "x" * 4001},
-        {"business_definition": "Average.", "unit": "u" * 65},
-        {"business_definition": "Average.", "steward_id": 42},
-        {"business_definition": "Average.", "steward_id": True},
-    ):
-        _use_request_body(namespace, body)
-        assert api.save_metric_definition(dataset.id, 4)[0] == 400, body
-    _use_request_body(namespace, {"business_definition": " Average air temperature. ", "unit": " °C ", "steward_id": 9})
-    status, payload = api.save_metric_definition(dataset.id, 4)
-    assert status == 200
-    assert payload["definition"] == {
-        "business_definition": "Average air temperature.",
-        "unit": "°C",
-        "steward_id": 9,
-        "steward_name": "Bao Steward",
-    }
-    assert namespace["db"].session.added[-1].action == "definition"
-    namespace["current_user"].roles = []
-    assert api.save_metric_definition(dataset.id, 4)[0] == 403
-
-
-def _time_dictionary_api(dataset):
-    api, namespace = _route_api({dataset.id: dataset})
-    dataset.columns[0].__dict__.setdefault("is_dttm", False)
-    dataset.columns.append(
-        SimpleNamespace(
-            column_name="ngay", verbose_name=None, type="DATE", is_active=True, groupby=True, filterable=True,
-            expression=None, is_dttm=True,
-        )
-    )
-    dictionary = SimpleNamespace(id=dataset.id, time_column="ngay", row_kind_column=None)
-    namespace["dataset_dictionary_repository"] = lambda: SimpleNamespace(list_by_ids=lambda _: [dictionary])
-    namespace["column_dictionary_repository"] = lambda: SimpleNamespace(list_for_datasets=lambda _: [])
-    grain = SimpleNamespace(dataset_id=dataset.id, row_kind_value=None, label=None, grain="day")
-    namespace["dataset_grain_repository"] = lambda: SimpleNamespace(list_for_datasets=lambda _: [grain])
-    return api, namespace
-
-
-def test_query_defaults_are_validated_saved_logged_and_outdate_the_approval():
-    dataset = _dataset()
-    api, namespace = _time_dictionary_api(dataset)
-    definition = _MetricDefinition(dataset.id, 4, business_definition="Average air temperature.")
-    namespace["metric_definition_for"] = lambda *_: definition
-    contract = _proposed_contract(dataset)
-    contract.status = "approved"
-    namespace["metric_contract_for"] = lambda *_: contract
-    for body in ({"grain": "hour"}, {"time_window": "yesterday"}, {"time_column": "temperature"}, []):
-        _use_request_body(namespace, body)
-        assert api.save_metric_query_defaults(dataset.id, 4)[0] == 400, body
-    body = {
-        "grain": "week",
-        "time_window": "last_30_day",
-        "time_anchor": "latest_data",
-        "default_filters": [{"column": "temperature", "operator": ">", "value": 0}],
-    }
-    _use_request_body(namespace, body)
-    status, payload = api.save_metric_query_defaults(dataset.id, 4)
-
-    assert status == 200 and payload["state"] == "outdated"
-    assert payload["query_defaults"]["time_column"] == "ngay" and payload["query_defaults"]["native_grain"] == "day"
-    assert (definition.grain, definition.time_window, definition.time_anchor) == ("week", "last_30_day", "latest_data")
-    assert json.loads(definition.default_filters) == [{"column": "temperature", "operator": ">", "value": 0}]
-    event = namespace["db"].session.added[-1]
-    assert event.action == "definition" and "grain" in event.reason
-    namespace["metric_definition_for"] = lambda *_: None
-    status, payload = api.save_metric_query_defaults(dataset.id, 4)
-    assert status == 400 and "định nghĩa nghiệp vụ" in payload["message"]
-    namespace["current_user"].roles = []
-    assert api.save_metric_query_defaults(dataset.id, 4)[0] == 403
-
-
-def test_metric_list_carries_query_defaults_and_the_dataset_time_context():
-    dataset = _dataset()
-    dataset.columns[0].__dict__.update(verbose_name="Temperature", type="FLOAT", is_dttm=False)
-    dataset.metrics[0].__dict__.update(verbose_name=None, description=None, d3format=None)
-    defaults = MetricQueryDefaults(grain="week", time_column="ngay", native_grain="day")
-    contract = _proposed_contract(dataset)
-    contract.status = "approved"
-    api, namespace = _metric_list_api(dataset, [contract])
-    _, dictionary_namespace = _time_dictionary_api(dataset)
-    for name in ("dataset_dictionary_repository", "column_dictionary_repository", "dataset_grain_repository"):
-        namespace[name] = dictionary_namespace[name]
-    namespace["metric_query_defaults_on"] = lambda _: {(dataset.id, 4): defaults}
-
-    status, payload = api.list_metric_contracts()
-
-    assert status == 200
-    assert payload["metrics"][0]["query_defaults"]["grain"] == "week"
-    # The approval was given before the defaults existed, so the metric now needs review again.
-    assert payload["metrics"][0]["state"] == "outdated"
-    listed = payload["datasets"][0]
-    assert (listed["time_column"], listed["row_kind_column"], listed["temporal_columns"]) == ("ngay", None, ["ngay"])
-    assert listed["row_kinds"] == [{"value": None, "label": None, "grain": "day"}]
-
-
-def test_execute_passes_the_metric_defaults_and_returns_what_they_applied(monkeypatch):
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    defaults = MetricQueryDefaults(grain="day", time_column="ngay", native_grain="day")
-    metric = dataset.metrics[0]
-    contract = _MetricContract(dataset.id, 4)
-    contract.status, contract.expression_hash = "approved", metric_contract_hash(dataset, metric, defaults)
-    namespace["metric_contract_for"] = lambda *_: contract
-    namespace["metric_query_defaults_for"] = lambda *_: defaults
-    namespace["can_access_dataset"] = lambda _: True
-    _install_chartdata_stubs(monkeypatch)
-    received = {}
-
-    def run(*args, **kwargs):
-        received.update(kwargs)
-        return {"colnames": [], "data": [], "applied_defaults": {"filters": [], "time_window": None}}
-
-    namespace["execute_approved_chart_query"] = run
-    status, payload = api.execute_metric_contract(dataset.id, metric.id)
-    assert status == 200 and received["defaults"] is defaults
-    assert payload["applied_defaults"] == {"filters": [], "time_window": None}
-
-
-def test_metric_events_are_listed_newest_first_with_actor_names():
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    created_at = datetime(2026, 10, 25, 9, 30, tzinfo=timezone.utc)
-    events = [
-        _MetricContractEvent(id=2, action="approve", actor_id=5, reason="Checked.", expression="AVG(t)"),
-        _MetricContractEvent(id=1, action="candidate", actor_id=3, reason=None, expression="AVG(t)"),
-    ]
-
-    class Query:
-        def __init__(self, model):
-            pass
-
-        def filter(self, *_):
-            return self
-
-        def order_by(self, *_):
-            return self
-
-        def all(self):
-            return events
-
-    for event in events:
-        event.created_at = created_at
-    namespace["db"].session.query = Query
-    names = {3: "Ada Admin", 5: "Bao Reviewer"}
-    namespace["security_manager"] = SimpleNamespace(
-        get_user_by_id=lambda user_id: SimpleNamespace(get_full_name=lambda: names[user_id], username="user"),
-        raise_for_access=lambda **_: None,
-    )
-    status, payload = api.list_metric_contract_events(dataset.id, 4)
-    assert status == 200
-    assert [(event["action"], event["actor_name"]) for event in payload["events"]] == [
-        ("approve", "Bao Reviewer"),
-        ("candidate", "Ada Admin"),
-    ]
-    assert payload["events"][0]["created_at"] == "2026-10-25T09:30:00+00:00"
-
-
-def test_only_administrators_may_preview_a_candidate(monkeypatch):
-    dataset = _dataset()
-    api, namespace = _route_api({dataset.id: dataset})
-    contract = _proposed_contract(dataset)
-    namespace["metric_contract_for"] = lambda *_: contract
-    namespace["can_access_dataset"] = lambda _: True
-    _install_chartdata_stubs(monkeypatch)
-    grants = []
-
-    def run(*args, allow_candidate=False, **_):
-        grants.append(allow_candidate)
-        return {"colnames": [], "data": []}
-
-    namespace["execute_approved_chart_query"] = run
-    status, payload = api.execute_metric_contract(dataset.id, 4)
-    assert status == 200 and payload["preview"] is True
-    namespace["current_user"].roles = []
-    api.execute_metric_contract(dataset.id, 4)
-    assert grants == [True, False]
-    # A candidate the AI Agent built answers any user who may read the dataset, as a provisional figure.
-    contract.origin = "ai_agent"
-    status, payload = api.execute_metric_contract(dataset.id, 4)
-    assert grants[-1] is True and status == 200 and payload["preview"] is True
-
-
-def test_route_source_has_no_sqllab_or_raw_execution_path():
-    source = "\n".join(path.read_text(encoding="utf-8") for path in SOURCE_PATHS).lower()
-    assert "sqllab" not in source and ".engine.execute" not in source
-
-
-class _AgentMetric:
-    next_id = 40
-
-    def __init__(self, **fields):
-        self.__dict__.update(fields)
-        self.d3format = None
-        self.id = type(self).next_id
-        type(self).next_id += 1
-
-
-def _agent_metric_api(contract=None, dataset_type="aggregate"):
-    from text_to_bi.superset_semantic_layer.modules.agent_ladder.services import agent_ladder as service
-
-    dataset = _dataset()
-    dataset.metrics[0].verbose_name = dataset.metrics[0].description = dataset.metrics[0].d3format = None
-    api, namespace = _route_api({dataset.id: dataset})
-    session = namespace["db"].session
-    dictionary = SimpleNamespace(dataset_type=dataset_type)
-    session.get = lambda model, identifier: dictionary if model == "DatasetDictionary" else dataset
-    session.flush = lambda: None
-    session.query = lambda model: SimpleNamespace(filter=lambda *_: SimpleNamespace(count=lambda: 0))
-    namespace.update(
-        {
-            "DatasetDictionary": "DatasetDictionary",
-            "SqlMetric": _AgentMetric,
-            "is_internal_dataset": lambda _: False,
-            "AGGREGATE_DATASET": "aggregate",
-            "MAX_PENDING_AGENT_METRICS": 50,
-            "checked_metric_draft": service.checked_metric_draft,
-            "asked_question": service.asked_question,
-            "matching_metric": service.matching_metric,
-            "unique_metric_name": service.unique_metric_name,
-        }
-    )
-    namespace["metric_definition_for"] = lambda *_: None
-    namespace["metric_contract_for"] = lambda *_: contract
-    namespace["can_access_dataset"] = lambda _: True
-    return api, namespace, dataset
-
-
-def test_the_agent_builds_a_provisional_candidate_on_an_aggregate_dataset():
-    api, namespace, dataset = _agent_metric_api()
-    namespace["current_user"].roles = []
-    _use_request_body(
-        namespace,
-        {
-            "dataset_id": dataset.id,
-            "metric_name": "nhiet_do_cao_nhat",
-            "label": "Nhiệt độ cao nhất",
-            "expression": "MAX(temperature)",
-            "definition": "Nhiệt độ cao nhất trong kỳ.",
-            "unit": "°C",
-            "question": "Tuần trước nóng nhất bao nhiêu độ?",
-        },
+    service.propose.assert_called_once_with(context.dataset, context.metric, context.body)
+    assert context.session.commits == 1
+
+
+def test_metric_review_routes_delegate_to_service_and_commit_each_transition(route_context, monkeypatch):
+    context = route_context
+    contract = _contract()
+    service = Mock()
+    service.approve.return_value = service.revoke.return_value = contract
+    monkeypatch.setattr(route_metric_contract, "MetricContractService", lambda: service)
+
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+    approve_status, approved_payload = _invoke_route(context.api, "approve_metric_contract", **route_arguments)
+    revoke_status, revoked_payload = _invoke_route(context.api, "revoke_metric_contract", **route_arguments)
+    assert approve_status == revoke_status == 200
+    assert approved_payload["contract"]["state"] == revoked_payload["contract"]["state"] == "draft"
+    service.approve.assert_called_once_with(context.dataset, context.metric, context.body)
+    service.revoke.assert_called_once_with(context.dataset, context.metric, context.body)
+    assert context.session.commits == 2
+
+
+def test_metric_candidate_route_rejects_invalid_csrf_before_service(route_context, monkeypatch):
+    context = route_context
+    service = Mock()
+    monkeypatch.setattr(route_metric_contract, "MetricContractService", lambda: service)
+
+    status, payload = _invoke_route(
+        context.api,
+        "create_metric_contract",
+        dataset_id=context.dataset.id,
+        metric_id=context.metric.id,
+        csrf_valid=False,
     )
 
-    status, payload = api.create_agent_metric()
-
-    assert status == 201 and payload["provisional"] is True
-    assert payload["metric"]["metric_name"] == "nhiet_do_cao_nhat" and len(dataset.metrics) == 2
-    added = namespace["db"].session.added
-    contract = next(item for item in added if isinstance(item, _MetricContract))
-    assert (contract.status, contract.origin, contract.owner_id) == ("candidate", "ai_agent", 3)
-    assert contract.expression_hash == metric_contract_hash(dataset, dataset.metrics[1])
-    event = next(item for item in added if isinstance(item, _MetricContractEvent))
-    assert event.reason == "AI Agent đề xuất khi trả lời: Tuần trước nóng nhất bao nhiêu độ?"
+    assert status == 403 and "CSRF" in payload["message"]
+    service.propose.assert_not_called()
+    assert context.session.commits == 0
 
 
-def test_the_agent_reuses_a_metric_with_the_same_formula_and_respects_its_review():
-    existing = _MetricContract(7, 4)
-    api, namespace, dataset = _agent_metric_api(existing)
-    existing.status, existing.expression_hash = "approved", metric_contract_hash(dataset, dataset.metrics[0])
-    body = {"dataset_id": 7, "metric_name": "tb", "label": "TB", "expression": "avg( temperature )", "definition": "x"}
-    _use_request_body(namespace, body)
-    assert api.create_agent_metric()[1]["provisional"] is False and len(dataset.metrics) == 1
+def test_metric_execute_route_checks_query_and_dataset_access_before_service(route_context, monkeypatch):
+    context = route_context
+    service = Mock()
+    service.execute.return_value = {"error": None, "rows": [{"value": 1}], "preview": False}
+    monkeypatch.setattr(route_metric_contract, "MetricExecuteService", lambda: service)
+    monkeypatch.setattr(route_metric_contract, "run_chart_query", Mock())
+    body = {"dimensions": ["city"]}
+    monkeypatch.setattr(route_metric_contract, "request", SimpleNamespace(get_json=lambda silent=True: body))
 
-    existing.status = "candidate"
-    assert api.create_agent_metric()[0] == 409
-    existing.origin = "ai_agent"
-    assert api.create_agent_metric()[1]["provisional"] is True
+    context.user.roles = []
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+    assert _invoke_route(context.api, "execute_metric_contract", **route_arguments)[0] == 403
+    service.execute.assert_not_called()
+
+    context.user.roles = [SimpleNamespace(name="Admin")]
+    context.access_state["dataset_access"] = False
+    assert _invoke_route(context.api, "execute_metric_contract", **route_arguments)[0] == 403
+    service.execute.assert_not_called()
+
+    context.access_state["dataset_access"] = True
+    status, payload = _invoke_route(context.api, "execute_metric_contract", **route_arguments)
+    assert status == 200 and payload["result"]["rows"] == [{"value": 1}]
+    service.execute.assert_called_once_with(context.dataset, context.metric, body, route_metric_contract.run_chart_query)
+
+
+def test_metric_execute_maps_validation_errors_and_rolls_back(route_context, monkeypatch):
+    context = route_context
+    service = Mock()
+    service.execute.side_effect = MetricContractValidationError("Invalid metric query.")
+    monkeypatch.setattr(route_metric_contract, "MetricExecuteService", lambda: service)
+    context.user.roles = [SimpleNamespace(name="Admin")]
+
+    assert _invoke_route(
+        context.api, "execute_metric_contract", dataset_id=context.dataset.id, metric_id=context.metric.id
+    ) == (
+        400,
+        {"message": "Invalid metric query."},
+    )
+    assert context.session.rollbacks == 1
+
+
+def test_metric_definition_update_requires_admin_and_commits(route_context, monkeypatch):
+    context = route_context
+    definition = {"business_definition": "Average temperature."}
+    service = Mock()
+    service.update.return_value = definition
+    monkeypatch.setattr(route_crud_metric_def, "MetricDefService", lambda: service)
+    context.user.roles = []
+
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+    assert _invoke_route(context.api, "update_metric_definition", **route_arguments)[0] == 403
+    service.update.assert_not_called()
+    assert context.session.commits == 0
+
+    context.user.roles = [SimpleNamespace(name="Admin")]
+    assert _invoke_route(context.api, "update_metric_definition", **route_arguments) == (
+        200,
+        {"definition": definition},
+    )
+    service.update.assert_called_once_with(context.dataset, context.metric, context.body)
+    assert context.session.commits == 1
+
+
+def test_metric_query_defaults_route_delegates_validation_and_commits(route_context, monkeypatch):
+    context = route_context
+    defaults_payload = {"grain": "week", "time_column": "date", "default_filters": []}
+    defaults = SimpleNamespace(is_empty=lambda: False, as_dict=lambda: defaults_payload)
+    service = Mock()
+    service.update_query_defaults.return_value = defaults
+    monkeypatch.setattr(route_crud_metric_def, "MetricDefService", lambda: service)
+    arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+
+    status, payload = _invoke_route(context.api, "update_metric_query_defaults", **arguments)
+
+    assert status == 200 and payload["query_defaults"] == defaults_payload
+    service.update_query_defaults.assert_called_once_with(context.dataset, context.metric, context.body)
+    assert context.session.commits == 1
+
+
+def test_relationship_candidate_route_delegates_identity_and_commits(route_context, monkeypatch):
+    context = route_context
+    contract, source, target = object(), object(), object()
+    service = Mock()
+    service.create_candidate.return_value = (contract, source, target)
+    monkeypatch.setattr(route_relationship, "RelationshipService", lambda: service)
+    monkeypatch.setattr(route_relationship, "serialize_relationship_contract", lambda *values: values)
+    monkeypatch.setattr(route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: {"source": "naming"}))
+
+    status, payload = _invoke_route(context.api, "create_relationship_contract_candidate", context.dataset.id, 22)
+    assert status == 201 and payload["contract"] == (contract, source, target)
+    service.create_candidate.assert_called_once_with(context.dataset.id, 22, "naming", context.user.id)
+    assert context.session.commits == 1
+
+
+def test_relationship_service_error_returns_domain_status_and_rolls_back(route_context, monkeypatch):
+    context = route_context
+    service = Mock()
+    service.create_candidate.side_effect = RelationshipValidationError("Invalid relationship.")
+    monkeypatch.setattr(route_relationship, "RelationshipService", lambda: service)
+    monkeypatch.setattr(route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: {}))
+
+    assert _invoke_route(context.api, "create_relationship_contract_candidate", context.dataset.id, 22) == (
+        400,
+        {"message": "Invalid relationship."},
+    )
+    assert context.session.rollbacks == 1
+    assert context.session.commits == 0
+
+
+def test_relationship_approve_and_revoke_routes_forward_path_and_contract_identity(route_context, monkeypatch):
+    context = route_context
+    contract, source, target, entry = object(), object(), object(), object()
+    service = Mock()
+    service.approve.return_value = (contract, source, target)
+    service.revoke.return_value = (contract, entry)
+    monkeypatch.setattr(route_relationship, "RelationshipService", lambda: service)
+    monkeypatch.setattr(route_relationship, "serialize_relationship_contract", lambda *values: values)
+    monkeypatch.setattr(route_relationship, "serialize_revoked_contract", lambda *values: values)
+    monkeypatch.setattr(
+        route_relationship,
+        "request",
+        SimpleNamespace(get_json=lambda silent=True: {}, args=SimpleNamespace(get=lambda name, **_: 53 if name == "contract_id" else None)),
+    )
+
+    status, payload = _invoke_route(context.api, "approve_relationship_contract", context.dataset.id, 22)
+    assert status == 200 and payload["contract"] == (contract, source, target)
+    service.approve.assert_called_once_with(context.dataset.id, 22, context.user.id)
+    status, payload = _invoke_route(context.api, "revoke_relationship_contract", context.dataset.id, 22)
+    assert status == 200 and payload["contract"] == (contract, entry)
+    service.revoke.assert_called_once_with(context.dataset.id, 22, 53, context.user.id)
+    assert context.session.commits == 2
+
+
+def test_metric_list_filters_denied_datasets_before_building_entries(route_context, monkeypatch):
+    context = route_context
+    allowed = context.dataset
+    denied = SimpleNamespace(id=8, table_name="private")
+    database = SimpleNamespace(id=2)
+    entries_service = Mock()
+    entries_service.read_entries.return_value = []
+    monkeypatch.setattr(route_metric_contract, "require_semantic_layer_view", lambda: None)
+    monkeypatch.setattr(route_metric_contract, "datasets_on_database", lambda _: [allowed, denied])
+    monkeypatch.setattr(route_metric_contract, "can_access_dataset", lambda dataset: dataset.id == allowed.id)
+    monkeypatch.setattr(route_metric_contract, "MetricContractService", lambda: entries_service)
+    monkeypatch.setattr(route_metric_contract, "dataset_column_labels", lambda datasets: {allowed.id: {}})
+    monkeypatch.setattr(route_metric_contract, "dataset_time_contexts", lambda datasets: {allowed.id: object()})
+    monkeypatch.setattr(route_metric_contract, "serialize_query_dataset", lambda dataset, *_: {"id": dataset.id})
+    monkeypatch.setattr(route_metric_contract, "serialize_metric_entry", lambda entry: entry)
+    monkeypatch.setattr(route_metric_contract, "active_users", list)
+    monkeypatch.setattr(route_metric_contract, "serialize_users", lambda users: users)
+    monkeypatch.setattr(route_metric_contract, "second_reviewer_required", lambda: True)
+    from text_to_bi.superset_semantic_layer.modules.superset import dependencies as superset_dependencies
+
+    monkeypatch.setattr(superset_dependencies, "require_database", lambda database_id: database if database_id == database.id else None)
+
+    monkeypatch.setattr(
+        route_metric_contract,
+        "require_semantic_layer_view",
+        lambda: (_ for _ in ()).throw(SemanticLayerViewRequiredError()),
+    )
+    assert _invoke_route(context.api, "read_metric_contracts", database_id=database.id)[0] == 403
+    entries_service.read_entries.assert_not_called()
+    monkeypatch.setattr(route_metric_contract, "require_semantic_layer_view", lambda: None)
+
+    status, payload = _invoke_route(context.api, "read_metric_contracts", database_id=database.id)
+
+    assert status == 200 and payload["datasets"] == [{"id": allowed.id}]
+    entries_service.read_entries.assert_called_once_with([allowed])
+    assert payload["require_second_reviewer"] is True
+
+
+def test_metric_contract_read_rejects_dataset_without_access_before_service(route_context, monkeypatch):
+    context = route_context
+    contract = _contract()
+    service = Mock()
+    service.read.return_value = contract
+    monkeypatch.setattr(route_metric_contract, "require_semantic_layer_view", lambda: None)
+    monkeypatch.setattr(route_metric_contract, "MetricContractService", lambda: service)
+    monkeypatch.setattr(context.api, "_serialized", lambda *_arguments: {"id": contract.id})
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+
+    context.access_state["dataset_access"] = False
+    assert _invoke_route(context.api, "read_metric_contract", **route_arguments)[0] == 403
+    service.read.assert_not_called()
+
+    context.access_state["dataset_access"] = True
+    assert _invoke_route(context.api, "read_metric_contract", **route_arguments) == (200, {"contract": {"id": contract.id}})
+    service.read.assert_called_once_with(context.dataset, context.metric)
+
+
+def test_metric_event_route_checks_dataset_access_and_preserves_service_history_order(route_context, monkeypatch):
+    context = route_context
+    events = [SimpleNamespace(action="revoke"), SimpleNamespace(action="approve"), SimpleNamespace(action="candidate")]
+    service = Mock()
+    service.read_history.return_value = events
+    monkeypatch.setattr(route_metric_contract, "require_semantic_layer_view", lambda: None)
+    monkeypatch.setattr(route_metric_contract, "MetricEventService", lambda: service)
+    monkeypatch.setattr(route_metric_contract, "serialize_metric_events", lambda history: [event.action for event in history])
+    route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
+
+    context.access_state["dataset_access"] = False
+    assert _invoke_route(context.api, "read_metric_contract_events", **route_arguments)[0] == 403
+    service.read_history.assert_not_called()
+
+    context.access_state["dataset_access"] = True
+    assert _invoke_route(context.api, "read_metric_contract_events", **route_arguments) == (
+        200,
+        {"events": ["revoke", "approve", "candidate"]},
+    )
+    service.read_history.assert_called_once_with(context.metric)
 
 
 @pytest.mark.parametrize(
-    ("dataset_type", "changes"),
+    ("state", "origin", "expected_status", "provisional"),
     [
-        ("base", {}),
-        ("aggregate", {"expression": "MAX(temperature) + 1"}),
-        ("aggregate", {"expression": "MAX(rainfall)"}),
-        ("aggregate", {"metric_name": "Nhiệt độ"}),
+        ("approved", "manual", 200, False),
+        ("draft", "ai_agent", 200, True),
+        ("draft", "manual", 409, None),
+        ("revoked", "ai_agent", 409, None),
     ],
 )
-def test_the_agent_only_builds_contract_formulas_on_aggregate_datasets(dataset_type, changes):
-    api, namespace, dataset = _agent_metric_api(dataset_type=dataset_type)
-    body = {"metric_name": "x", "label": "X", "expression": "MAX(temperature)", "definition": "x", **changes}
-    _use_request_body(namespace, {"dataset_id": dataset.id, **body})
-    assert api.create_agent_metric()[0] == 400 and len(dataset.metrics) == 1
+def test_agent_metric_route_reuses_or_rejects_existing_contracts(
+    route_context, monkeypatch, state, origin, expected_status, provisional
+):
+    import superset
+
+    monkeypatch.setattr(superset.connectors.sqla.models, "SqlMetric", type("SqlMetric", (), {}), raising=False)
+    from text_to_bi.superset_semantic_layer.modules.metric_management.routes import route_metric_candidate
+
+    class AgentRouteAPI(route_metric_candidate.MetricCandidateRoutes):
+        def response(self, status, **payload):
+            return status, payload
+
+        def response_500(self, **payload):
+            return self.response(500, **payload)
+
+    context = route_context
+    context.body.update(dataset_id=context.dataset.id, expression="AVG(temperature)")
+    metric = context.metric
+    contract = SimpleNamespace(origin=origin)
+    contracts = Mock()
+    contracts.read.return_value = contract
+    monkeypatch.setattr(route_metric_candidate, "MetricContractService", lambda: contracts)
+    monkeypatch.setattr(route_metric_candidate, "dataset_dictionary_repository", lambda: SimpleNamespace(read=lambda _: SimpleNamespace(dataset_type="aggregate")))
+    monkeypatch.setattr(route_metric_candidate, "is_internal_dataset", lambda _: False)
+    monkeypatch.setattr(route_metric_candidate, "checked_metric_draft", lambda *_: SimpleNamespace(expression="AVG(temperature)"))
+    monkeypatch.setattr(route_metric_candidate, "asked_question", lambda _: "Average temperature?")
+    monkeypatch.setattr(route_metric_candidate, "matching_metric", lambda *_: metric)
+    monkeypatch.setattr(route_metric_candidate, "metric_contract_state", lambda *_: state)
+    monkeypatch.setattr(route_metric_candidate, "request", SimpleNamespace(get_json=lambda silent=True: context.body))
+    monkeypatch.setattr(route_metric_candidate, "current_user", context.user)
+    monkeypatch.setattr(route_metric_candidate, "require_semantic_layer_query", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "require_dataset_access", lambda _: None)
+    monkeypatch.setattr(route_metric_candidate, "ensure_dictionary_tables", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "require_dataset", lambda dataset_id: context.dataset if dataset_id == context.dataset.id else None)
+    monkeypatch.setattr(
+        route_metric_candidate,
+        "metric_definition_repository",
+        lambda: SimpleNamespace(read_by_metric=lambda _: SimpleNamespace(business_definition="Average temperature.", unit="C")),
+    )
+    monkeypatch.setattr(AgentRouteAPI, "_agent_metric", lambda *_: {"metric_id": metric.id})
+    context.api = AgentRouteAPI()
+
+    status, payload = _invoke_route(context.api, "create_agent_metric")
+
+    assert status == expected_status
+    if provisional is not None:
+        assert payload["result"]["provisional"] is provisional
+    contracts.propose_for_agent.assert_not_called()
+
+
+def test_agent_metric_route_appends_flushes_and_proposes_a_unique_metric_name(route_context, monkeypatch):
+    import superset
+
+    monkeypatch.setattr(superset.connectors.sqla.models, "SqlMetric", type("SqlMetric", (), {}), raising=False)
+    from text_to_bi.superset_semantic_layer.modules.metric_management.routes import route_metric_candidate
+
+    class CandidateRouteAPI(route_metric_candidate.MetricCandidateRoutes):
+        def response(self, status, **payload):
+            return status, payload
+
+        def response_500(self, **payload):
+            return self.response(500, **payload)
+
+    context = route_context
+    context.dataset.columns = [SimpleNamespace(column_name="temperature", is_active=True, expression=None)]
+    context.body.update(
+        dataset_id=context.dataset.id,
+        metric_name="average_temperature",
+        label="Average temperature",
+        expression="MAX(temperature)",
+        definition="Maximum temperature.",
+        unit="C",
+        question="How warm?",
+    )
+    existing_metric = context.metric
+    existing_metric.expression = "AVG(temperature)"
+    contracts = Mock()
+    contracts.read.return_value = None
+    contracts.count_agent_drafts.return_value = 0
+    monkeypatch.setattr(route_metric_candidate, "MetricContractService", lambda: contracts)
+    monkeypatch.setattr(route_metric_candidate, "request", SimpleNamespace(get_json=lambda silent=True: context.body))
+    monkeypatch.setattr(route_metric_candidate, "current_user", context.user)
+    monkeypatch.setattr(route_metric_candidate, "require_semantic_layer_query", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "require_dataset_access", lambda _: None)
+    monkeypatch.setattr(route_metric_candidate, "ensure_dictionary_tables", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "require_dataset", lambda _: context.dataset)
+    monkeypatch.setattr(
+        route_metric_candidate,
+        "dataset_dictionary_repository",
+        lambda: SimpleNamespace(read=lambda _: SimpleNamespace(dataset_type="aggregate")),
+    )
+    monkeypatch.setattr(route_metric_candidate, "is_internal_dataset", lambda _: False)
+    monkeypatch.setattr(
+        CandidateRouteAPI, "_agent_metric", lambda _self, dataset, metric: {"metric_name": metric.metric_name}
+    )
+
+    class DraftMetric:
+        def __init__(self, **fields):
+            self.__dict__.update(fields)
+            self.id = 5
+            self.d3format = None
+
+    monkeypatch.setattr(route_metric_candidate, "SqlMetric", DraftMetric)
+    context.api = CandidateRouteAPI()
+
+    status, payload = _invoke_route(context.api, "create_agent_metric")
+
+    assert status == 201 and payload["result"]["provisional"] is True
+    created_metric = context.dataset.metrics[-1]
+    assert created_metric.metric_name == "average_temperature_2" and created_metric.expression == "MAX(temperature)"
+    assert context.session.flushes == 1 and context.session.commits == 1
+    contracts.propose_for_agent.assert_called_once_with(
+        context.dataset,
+        created_metric,
+        "Maximum temperature.",
+        "C",
+        "AI Agent đề xuất khi trả lời: How warm?",
+        context.user.id,
+    )
+    assert existing_metric in context.dataset.metrics
+
+
+def test_agent_metric_route_rejects_nonaggregate_datasets(route_context, monkeypatch):
+    import superset
+
+    monkeypatch.setattr(superset.connectors.sqla.models, "SqlMetric", type("SqlMetric", (), {}), raising=False)
+    from text_to_bi.superset_semantic_layer.modules.metric_management.routes import route_metric_candidate
+
+    class CandidateRouteAPI(route_metric_candidate.MetricCandidateRoutes):
+        def response(self, status, **payload):
+            return status, payload
+
+        def response_500(self, **payload):
+            return self.response(500, **payload)
+
+    context = route_context
+    context.body["dataset_id"] = context.dataset.id
+    monkeypatch.setattr(route_metric_candidate, "request", SimpleNamespace(get_json=lambda silent=True: context.body))
+    monkeypatch.setattr(route_metric_candidate, "require_semantic_layer_query", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "ensure_dictionary_tables", lambda: None)
+    monkeypatch.setattr(route_metric_candidate, "require_dataset", lambda _: context.dataset)
+    monkeypatch.setattr(
+        route_metric_candidate,
+        "dataset_dictionary_repository",
+        lambda: SimpleNamespace(read=lambda _: SimpleNamespace(dataset_type="base")),
+    )
+    contracts = Mock()
+    monkeypatch.setattr(route_metric_candidate, "MetricContractService", lambda: contracts)
+    context.api = CandidateRouteAPI()
+
+    assert _invoke_route(context.api, "create_agent_metric")[0] == 400
+    contracts.read.assert_not_called()

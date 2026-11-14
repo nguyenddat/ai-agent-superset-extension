@@ -5,6 +5,7 @@ import time
 from sqlalchemy import text
 from superset import db
 
+from .modules.agent_ladder.models import DatasetProposal
 from .modules.definitions.models import AgentUserDefinition
 from .modules.questions.models import AgentQuestion, AgentQuestionHandling
 from .modules.sessions.models import AgentChatSession
@@ -69,7 +70,7 @@ def ensure_agent_tables() -> None:
 
 
 def _migrate_agent_tables() -> None:
-    for model in (AgentQuestion, AgentQuestionHandling, AgentChatSession, AgentUserDefinition):
+    for model in (AgentQuestion, AgentQuestionHandling, AgentChatSession, AgentUserDefinition, DatasetProposal):
         model.__table__.create(bind=db.engine, checkfirst=True)
     with db.engine.begin() as connection:
         for statement in ADDED_COLUMNS_DDL:

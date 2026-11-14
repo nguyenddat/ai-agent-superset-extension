@@ -1,9 +1,7 @@
 import ast
 import hashlib
 import logging
-import re
 import unicodedata
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -11,13 +9,9 @@ from typing import Any
 
 import pytest
 from catalog_source import MODULES_PATH, api_class, api_methods, compile_into
-from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import declarative_base
-from test_expert_rule_service import _lifecycle_resolvers, _lifecycle_session
-from test_expert_rule_service import _payload as _rule_payload
+from test_glossary_service import _current_glossary_service
 from test_glossary_service import _payload as _term_payload
-from test_glossary_service import _sqlite_service
 
 from text_to_bi.superset_semantic_layer.common.utils.similarity import (
     NeighbourCluster,
@@ -27,36 +21,26 @@ from text_to_bi.superset_semantic_layer.common.utils.similarity import (
     tfidf_vectors,
 )
 from text_to_bi.superset_semantic_layer.core.exceptions import AdminRequiredError
-from text_to_bi.superset_semantic_layer.modules.expert_rules.exceptions import ExpertRuleValidationError
-from text_to_bi.superset_semantic_layer.modules.expert_rules.services import expert_rule as rule_service
-from text_to_bi.superset_semantic_layer.modules.expert_rules.services import expert_rule_group as rule_group_service
-from text_to_bi.superset_semantic_layer.modules.glossary.exceptions import (
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.exceptions import ExpertRuleValidationError
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_group as rule_group_service
+from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import (
     GlossaryConflictError,
     GlossaryValidationError,
 )
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_group_suggestion
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_group import GlossaryGroupService
 
-EMBEDDING_PATH = MODULES_PATH / "glossary" / "services" / "embedding.py"
-SUGGESTION_PATH = MODULES_PATH / "glossary" / "services" / "group_suggestion.py"
-RULE_SUGGESTION_PATH = MODULES_PATH / "expert_rules" / "services" / "rule_group_suggestion.py"
+EMBEDDING_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_embedding.py"
+RULE_SUGGESTION_PATH = MODULES_PATH / "expert_rule_management" / "services" / "srv_expert_rule_group.py"
 GLOSSARY_ENDPOINTS = {
-    "glossary_group_suggestions": ("/glossary/group-suggestions", "GET"),
-    "apply_glossary_group_suggestion": ("/glossary/group-suggestions/apply", "POST"),
-    "dismiss_glossary_group_suggestion": ("/glossary/group-suggestions/dismiss", "POST"),
+    "read_glossary_group_suggestions": ("/glossary/group-suggestions", "GET", "suggestion_prefix"),
+    "apply_glossary_group_suggestion": (
+        "/glossary/group-suggestions/apply", "POST", "f'{suggestion_prefix}/apply'"
+    ),
+    "dismiss_glossary_group_suggestion": (
+        "/glossary/group-suggestions/dismiss", "POST", "f'{suggestion_prefix}/dismiss'"
+    ),
 }
-SUGGESTION_GLOBALS = {
-    "hashlib": hashlib,
-    "re": re,
-    "Sequence": Sequence,
-    "dataclass": dataclass,
-    "datetime": datetime,
-    "timezone": timezone,
-    "Any": Any,
-    "NeighbourCluster": NeighbourCluster,
-    "neighbour_clusters": neighbour_clusters,
-    "similarity_matrix": similarity_matrix,
-}
-
-
 def _run_source(namespace: dict, path) -> dict:
     """Run a module's definitions, without its imports, with `namespace` as their globals."""
     namespace.setdefault("__name__", path.stem)
@@ -118,7 +102,7 @@ def _embedding_service(api_key="secret", responses=None):
         return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"data": list(reversed(data))})
 
     repository = SimpleNamespace(
-        vectors_for=lambda model, hashes: {
+        read_vectors=lambda model, hashes: {
             row.content_hash: row.vector for row in rows if row.model == model and row.content_hash in hashes
         },
         add=lambda row, flush=True: rows.append(row),
@@ -168,13 +152,14 @@ def test_vectors_are_cached_by_text_hash_and_only_new_texts_are_requested():
     assert (first.method, first.model) == ("embedding", "test/embedding")
     assert first.vectors == [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]]
     assert calls[0]["url"] == "https://openrouter.test/api/v1/embeddings"
-    assert calls[0]["input"] == ["Mưa lớn", "Ngày có mưa"] and len(rows) == 2
+    assert calls[0]["input"] == ["Mưa lớn", "Ngày có mưa"] and rows == []
 
+    # This service reads persisted vectors; cache population is a separate write operation.
+    rows.append(SimpleNamespace(model="test/embedding", content_hash=namespace["text_hash"]("Ngày có mưa"), vector=[0.0, 1.0]))
     second = namespace["text_vectors"](["Ngày có mưa", "Độ ẩm"])
     assert second.vectors == [[0.0, 1.0], [0.6, 0.8]]
-    assert calls[1]["input"] == ["Độ ẩm"] and len(rows) == 3
-    expected_hashes = {namespace["text_hash"](text) for text in ("Mưa lớn", "Ngày có mưa", "Độ ẩm")}
-    assert {row.content_hash for row in rows} == expected_hashes
+    assert calls[1]["input"] == ["Độ ẩm"] and len(rows) == 1
+    assert rows[0].content_hash == namespace["text_hash"]("Ngày có mưa")
 
 
 # Glossary suggestions on SQLite
@@ -189,40 +174,109 @@ VECTORS = {
 }
 
 
-def _glossary_grouping():
-    """The glossary services on SQLite with a dismissal table and term vectors taken from VECTORS by name."""
-    service, session = _sqlite_service()
-    namespace = service.create_draft.__globals__
-    base = declarative_base()
+def _glossary_grouping(monkeypatch):
+    """Combine the current term and group services with small in-memory repositories."""
+    term_service, session = _current_glossary_service(monkeypatch)
+    term_records = []
+    group_records = {}
+    dismissed: dict[tuple[str, str], dict[str, Any]] = {}
+    audit_events = term_service.events
 
-    class GroupSuggestionDismissal(base):
-        __tablename__ = "group_suggestion_dismissal"
-        id = Column(Integer, primary_key=True)
-        kind = Column(String, nullable=False)
-        fingerprint = Column(String, nullable=False)
-        dismissed_by = Column(Integer)
-        dismissed_at = Column(DateTime, nullable=False)
+    class GroupRepository:
+        def read_by_normalized_name(self, normalized_name):
+            return next((group for group in group_records.values() if group.normalized_name == normalized_name), None)
 
-    base.metadata.create_all(session.get_bind())
-    namespace.update(SUGGESTION_GLOBALS)
-    namespace["GroupSuggestionDismissal"] = GroupSuggestionDismissal
-    namespace["text_vectors"] = lambda texts: SimpleNamespace(
-        method="embedding", model="test/embedding", vectors=[VECTORS[text.split(".")[0]] for text in texts]
+        def read(self, group_id):
+            return group_records.get(group_id)
+
+        def read_all(self):
+            return list(group_records.values())
+
+        def create(self, values):
+            group = SimpleNamespace(id=max(group_records, default=0) + 1, **values)
+            group_records[group.id] = group
+            return group
+
+        def require(self, group_id):
+            group = self.read(group_id)
+            if group is None:
+                raise GlossaryValidationError("Unknown glossary group.")
+            return group
+
+        def place_term(self, term, group, actor_id):
+            previous = term.group
+            if (previous.id if previous else None) == (group.id if group else None):
+                return
+            term.group, term.group_id = group, group.id if group else None
+            revision = term_service.revisions.read_current(term.id)
+            if revision is not None:
+                old_name = previous.name if previous else "Chưa phân nhóm"
+                new_name = group.name if group else "Chưa phân nhóm"
+                audit_events.create(revision, "moved", actor_id, f"{old_name} → {new_name}")
+
+    class DismissalRepository:
+        def read_fingerprints(self, kind):
+            return {fingerprint for stored_kind, fingerprint in dismissed if stored_kind == kind}
+
+        def create(self, values, flush=False):
+            dismissed[(values["kind"], values["fingerprint"])] = values
+
+        def fingerprints(self, kind):
+            return self.read_fingerprints(kind)
+
+    group_repository = GroupRepository()
+    dismissal_repository = DismissalRepository()
+    term_service.groups = group_repository
+    term_service.terms.read_all = lambda: list(term_records)
+    group_service = GlossaryGroupService.__new__(GlossaryGroupService)
+    group_service.groups = group_repository
+    group_service.terms = term_service.terms
+    group_service.revisions = term_service.revisions
+    group_service.events = audit_events
+    monkeypatch.setattr(srv_group_suggestion, "group_suggestion_dismissal_repository", lambda: dismissal_repository)
+    monkeypatch.setattr(
+        srv_group_suggestion,
+        "text_vectors",
+        lambda texts: SimpleNamespace(
+            method="embedding", model="test/embedding", vectors=[VECTORS[text.split(".")[0]] for text in texts]
+        ),
     )
-    _run_source(namespace, SUGGESTION_PATH)
-    return namespace, session, GroupSuggestionDismissal
+    return {
+        "create_term": lambda payload, actor_id: _create_term(term_service, term_records, payload, actor_id),
+        "create_group": group_service.create,
+        "suggest_term_groups": group_service.suggest,
+        "apply_term_grouping": group_service.apply_suggestion,
+        "dismiss_term_suggestion": group_service.dismiss_suggestion,
+        "group_suggestion_dismissal_repository": lambda: dismissal_repository,
+        "suggestion_fingerprint": srv_group_suggestion.suggestion_fingerprint,
+        "approve_term": term_service.approve,
+        "term_service": term_service,
+        "group_service": group_service,
+        "term_records": term_records,
+        "audit_events": audit_events,
+    }, session, dismissal_repository
+
+
+def _create_term(service, term_records, payload, actor_id):
+    revision = service.create(payload, actor_id)
+    if payload.get("group_id") is not None:
+        revision.term.group_id = payload["group_id"]
+    term_records.append(revision.term)
+    return revision
 
 
 def _term(namespace, name, group_id=None):
-    return namespace["create_draft"](_term_payload(canonical_name=name, definition=f"{name}.", group_id=group_id), 7)
+    return namespace["create_term"](
+        _term_payload(canonical_name=name, definition=f"{name}.", group_id=group_id), 7
+    )
 
 
 def _by_target(result):
     return {(suggestion["group"] or {}).get("name"): suggestion for suggestion in result["suggestions"]}
 
 
-def test_term_suggestions_propose_a_new_group_and_a_move_into_a_close_existing_group():
-    namespace, session, _ = _glossary_grouping()
+def test_term_suggestions_propose_a_new_group_and_a_move_into_a_close_existing_group(monkeypatch):
+    namespace, session, _ = _glossary_grouping(monkeypatch)
     wind = namespace["create_group"]({"name": "Gió"})
     strong_wind = _term(namespace, "Gió mạnh", wind.id).term_id
     gust = _term(namespace, "Gió giật").term_id
@@ -247,17 +301,17 @@ def test_term_suggestions_propose_a_new_group_and_a_move_into_a_close_existing_g
     assert new_group["fingerprint"] == namespace["suggestion_fingerprint"](None, [rainy_day, heavy_rain])
 
 
-def test_a_dismissed_suggestion_stays_hidden_until_its_members_change():
-    namespace, session, dismissal_model = _glossary_grouping()
+def test_a_dismissed_suggestion_stays_hidden_until_its_members_change(monkeypatch):
+    namespace, session, dismissal_repository = _glossary_grouping(monkeypatch)
     _term(namespace, "Mưa lớn")
     _term(namespace, "Ngày có mưa")
     session.commit()
     fingerprint = namespace["suggest_term_groups"]()["suggestions"][0]["fingerprint"]
 
     for _ in range(2):
-        assert namespace["dismiss_suggestion"]("glossary", {"fingerprint": fingerprint}, 8, GlossaryValidationError)
+        assert namespace["dismiss_term_suggestion"]({"fingerprint": fingerprint}, 8)
         session.commit()
-    assert session.query(dismissal_model).count() == 1
+    assert len(dismissal_repository.read_fingerprints("glossary")) == 1
     assert namespace["suggest_term_groups"]()["suggestions"] == []
     # Rules keep their own dismissals.
     assert namespace["group_suggestion_dismissal_repository"]().fingerprints("expert_rule") == set()
@@ -269,17 +323,17 @@ def test_a_dismissed_suggestion_stays_hidden_until_its_members_change():
     assert suggestions[0]["fingerprint"] != fingerprint
 
     with pytest.raises(GlossaryValidationError, match="không hợp lệ"):
-        namespace["dismiss_suggestion"]("glossary", {"fingerprint": "abc"}, 8, GlossaryValidationError)
+        namespace["dismiss_term_suggestion"]({"fingerprint": "abc"}, 8)
 
 
-def test_applying_a_changed_suggestion_moves_terms_without_review_and_audits_each_move():
-    namespace, session, _ = _glossary_grouping()
+def test_applying_a_changed_suggestion_moves_terms_without_review_and_audits_each_move(monkeypatch):
+    namespace, session, _ = _glossary_grouping(monkeypatch)
     wind = namespace["create_group"]({"name": "Gió"})
     _term(namespace, "Gió mạnh", wind.id)
     gust = _term(namespace, "Gió giật").term_id
     heavy_rain = _term(namespace, "Mưa lớn").term_id
     rainy_day = _term(namespace, "Ngày có mưa").term_id
-    namespace["approve_revision"](gust, 1, 8, None, False)
+    namespace["approve_term"](gust, 1, 8, None, False)
     session.commit()
 
     group, moved = namespace["apply_term_grouping"]({"member_ids": [gust], "group_id": wind.id}, 8)
@@ -289,12 +343,11 @@ def test_applying_a_changed_suggestion_moves_terms_without_review_and_audits_eac
     session.commit()
     assert (group.name, moved) == ("Mưa", [heavy_rain])
 
-    terms = namespace["glossary_term_repository"]()
-    assert terms.get(gust).group_id == wind.id and terms.get(heavy_rain).group_id == group.id
-    revisions = namespace["glossary_term_revision_repository"]()
-    assert [revision.revision_number for revision in revisions.for_term(gust)] == [1]
-    assert revisions.serving_for(gust).status == "approved"
-    events = namespace["glossary_term_audit_event_repository"]().for_term(gust)
+    terms = {term.id: term for term in namespace["term_records"]}
+    assert terms[gust].group_id == wind.id and terms[heavy_rain].group_id == group.id
+    revision = namespace["term_service"].revisions.read_current(gust)
+    assert revision.revision_number == 1 and revision.status == "approved"
+    events = namespace["term_service"].events.read_history(gust)
     assert [(event.event_type, event.reason) for event in events][-1] == ("moved", "Chưa phân nhóm → Gió")
     # The unticked term is now suggested for the group just created.
     suggestions = namespace["suggest_term_groups"]()["suggestions"]
@@ -313,35 +366,63 @@ def test_applying_a_changed_suggestion_moves_terms_without_review_and_audits_eac
 
 
 def test_applying_a_rule_suggestion_creates_the_group_and_audits_the_move(monkeypatch):
-    session, rule_model, _, audit_model = _lifecycle_session(monkeypatch)
-    created = rule_service.create_draft(session, _rule_payload(), 11, *_lifecycle_resolvers())
-    session.commit()
-    namespace = _run_source(
-        {
-            **SUGGESTION_GLOBALS,
-            "create_rule_group": rule_group_service.create_rule_group,
-            "move_rule": rule_group_service.move_rule,
-            "require_rule_group": rule_group_service.require_rule_group,
-            "ExpertRuleValidationError": ExpertRuleValidationError,
-        },
-        SUGGESTION_PATH,
-    )
-    _run_source(namespace, RULE_SUGGESTION_PATH)
+    rule = SimpleNamespace(id=5, group=None, group_id=None)
+    revision = SimpleNamespace(id=9)
+    events = []
+    groups = {}
 
-    payload = {"member_ids": [created.rule_id], "group_name": "Lọc"}
-    group, moved = namespace["apply_rule_grouping"](session, payload, 12)
-    session.commit()
+    class GroupRepository:
+        def read_by_normalized_name(self, _normalized_name):
+            return next(
+                (group for group in groups.values() if group.normalized_name == _normalized_name), None
+            )
 
-    assert moved == [created.rule_id] and session.get(rule_model, created.rule_id).group_id == group.id
-    events = [(event.event_type, event.reason) for event in session.query(audit_model).order_by(audit_model.id)]
-    assert events == [("created", None), ("moved", "Chưa phân nhóm → Lọc")]
+        def read(self, group_id):
+            return groups.get(group_id)
+
+        def create(self, values):
+            group = SimpleNamespace(id=3, **values)
+            groups[group.id] = group
+            return group
+
+    class RuleRepository:
+        def read_for_update(self, rule_id):
+            return rule if rule_id == rule.id else None
+
+    class RevisionRepository:
+        def read_current(self, rule_id):
+            return revision if rule_id == rule.id else None
+
+    class EventService:
+        def create(self, current_revision, event_type, actor_id, reason=None):
+            events.append((current_revision.id, event_type, actor_id, reason))
+
+    monkeypatch.setattr(rule_group_service, "expert_rule_group_repository", GroupRepository)
+    monkeypatch.setattr(rule_group_service, "expert_rule_repository", RuleRepository)
+    monkeypatch.setattr(rule_group_service, "expert_rule_revision_repository", RevisionRepository)
+    monkeypatch.setattr(rule_group_service, "ExpertRuleEventService", EventService)
+    service = rule_group_service.ExpertRuleGroupService()
+
+    group, moved = service.apply_suggestion({"member_ids": [rule.id], "group_name": "Lọc"}, 12)
+
+    assert moved == [rule.id] and rule.group_id == group.id
+    assert events == [(revision.id, "moved", 12, "Chưa phân nhóm → Lọc")]
     with pytest.raises(ExpertRuleValidationError):
-        namespace["apply_rule_grouping"](session, {"member_ids": "1"}, 12)
+        service.apply_suggestion({"member_ids": "1"}, 12)
 
 
 def test_a_rule_is_embedded_from_its_name_terms_conditions_and_examples():
-    namespace = _run_source({"Any": Any}, RULE_SUGGESTION_PATH)
-    columns = SimpleNamespace(get=lambda column_id: SimpleNamespace(display_name="Lượng mưa", column_name="luong_mua"))
+    tree = ast.parse(RULE_SUGGESTION_PATH.read_text(encoding="utf-8"))
+    helpers = [
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in {"rule_text", "_condition_text"}
+        or isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "OPERATOR_WORDS" for target in node.targets
+        )
+    ]
+    namespace = {"Any": Any}
+    exec(compile(ast.Module(body=helpers, type_ignores=[]), str(RULE_SUGGESTION_PATH), "exec"), namespace)  # noqa: S102
+    columns = SimpleNamespace(read=lambda column_id: SimpleNamespace(display_name="Lượng mưa", column_name="luong_mua"))
     condition = {"field_ref": {"column_dictionary_id": 96}, "operator": "greater_than_or_equal", "value": 50}
     text = namespace["rule_text"](
         "Ngày mưa lớn",
@@ -365,11 +446,12 @@ def _call_name(node):
 
 def test_suggestion_routes_are_admin_only_and_writes_follow_the_decorator_order():
     methods = api_methods()
-    for name, (path, verb) in GLOSSARY_ENDPOINTS.items():
+    for name, (path, verb, path_expression) in GLOSSARY_ENDPOINTS.items():
         method = methods[name]
         decorators = [_call_name(decorator) for decorator in method.decorator_list]
         expose = method.decorator_list[0]
-        assert (expose.args[0].value, expose.keywords[0].value.elts[0].value) == (path, verb)
+        assert ast.dump(expose.args[0]) == ast.dump(ast.parse(path_expression, mode="eval").body)
+        assert method.decorator_list[0].keywords[0].value.elts[0].value == verb
         expected = ["expose", "protect", "safe", "permission_name"]
         if verb != "GET":
             expected += ["csrf_protected", "rollback_on_error"]
@@ -392,6 +474,18 @@ def _suggestion_api(payload=None, **fakes):
 
     session.commit = commit
     session.rollback = lambda: setattr(session, "rollbacks", session.rollbacks + 1)
+
+    class _GlossaryGroupService:
+        def suggest(self):
+            return fakes["suggest_term_groups"]()
+
+        def apply_suggestion(self, request_payload, actor_id):
+            return fakes["apply_term_grouping"](request_payload, actor_id)
+
+        @staticmethod
+        def dismiss_suggestion(request_payload, actor_id):
+            return fakes["dismiss_suggestion"]("glossary", request_payload, actor_id, GlossaryValidationError)
+
     namespace = {
         "RestApi": _ResponseAPI,
         "db": SimpleNamespace(session=session),
@@ -400,9 +494,13 @@ def _suggestion_api(payload=None, **fakes):
         "ensure_dictionary_tables": lambda: None,
         "require_admin": lambda: None,
         "IntegrityError": IntegrityError,
+        "GlossaryGroupService": _GlossaryGroupService,
+        "serialize_glossary_group": lambda group: {
+            "id": group.id, "name": group.name, "description": group.description
+        },
         **fakes,
     }
-    compile_into(namespace, api_class({*GLOSSARY_ENDPOINTS, "_glossary_group"}))
+    compile_into(namespace, api_class(set(GLOSSARY_ENDPOINTS)))
     return namespace["SemanticLayerAPI"](), session
 
 
@@ -432,14 +530,14 @@ def test_listing_keeps_its_answer_when_another_request_cached_the_same_embedding
     result = {"method": "embedding", "model": "m", "threshold": 0.7, "suggestions": []}
     api, session = _suggestion_api(suggest_term_groups=lambda: result)
     session.failing_commit = IntegrityError("insert", {}, Exception())
-    assert api.glossary_group_suggestions() == (200, result)
+    assert api.read_glossary_group_suggestions() == (200, result)
     assert session.rollbacks == 1
 
     def not_admin():
         raise AdminRequiredError()
 
     api, _ = _suggestion_api(suggest_term_groups=lambda: result, require_admin=not_admin)
-    assert api.glossary_group_suggestions() == (403, {"message": "Admin access required."})
+    assert api.read_glossary_group_suggestions() == (403, {"message": "Admin access required."})
 
 
 def test_dismiss_route_records_the_fingerprint_for_glossary_terms():

@@ -2,10 +2,11 @@ from flask import request
 from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset import db
 
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_user import active_users, require_user
+
 from ....core.database import handle_errors, rollback_on_error
 from ....core.security import csrf_protected, require_admin
 from ....migrations import ensure_dictionary_tables
-from ...superset.services.users import active_users, require_user
 from ..services.roles import (
     assign_semantic_layer_roles,
     requested_role_names,
