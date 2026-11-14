@@ -1,10 +1,10 @@
-"""Smoke-test the deployed Semantic Layer API through the running Superset.
+"""Smoke-test Semantic Layer and AI Agent public query APIs through the running Superset.
 
 Usage: uv run scripts/smoke.py
 
 Logs in through the Superset login form as the admin (SUPERSET_ADMIN_USERNAME / SUPERSET_ADMIN_PASSWORD, default
 admin/admin), then calls
-the read-only Semantic Layer endpoints and checks that each answers 200 with a JSON object. Run it
+the read-only endpoints and checks that each answers 200 with a JSON object and the public v1 envelope where applicable. Run it
 after scripts/deploy.py; it does not change any data.
 """
 
@@ -21,10 +21,15 @@ from _common import API_PREFIX, SUPERSET_URL, fail, step, wait_for_health
 
 SEMANTIC_API = f"{API_PREFIX}/semantic-layer"
 EXPERT_RULES_API = f"{API_PREFIX}/expert-rules"
+AGENT_QUERY_API = "/extensions/text-to-bi/superset-ai-agent/semantic-query"
 
 READ_ONLY_ENDPOINTS = [
     f"{SEMANTIC_API}/access",
-    f"{SEMANTIC_API}/semantic-catalog",
+    f"{SEMANTIC_API}/datasets/query-metadata",
+    f"{SEMANTIC_API}/metrics/query-metadata",
+    f"{SEMANTIC_API}/relationships/approved",
+    f"{AGENT_QUERY_API}/semantic-catalog",
+    f"{AGENT_QUERY_API}/data-model/sources",
     f"{SEMANTIC_API}/datasets/reference-options",
     f"{SEMANTIC_API}/data-layers",
     f"{SEMANTIC_API}/glossary",
@@ -85,16 +90,19 @@ def main(argv: list[str] | None = None) -> None:
         endpoints.append(f"{SEMANTIC_API}/dataset/{dataset['id']}/dictionary")
         endpoints.append(f"{SEMANTIC_API}/business-model?database_id={dataset['database']['id']}")
         endpoints.append(f"{SEMANTIC_API}/metric-contracts?database_id={dataset['database']['id']}")
-        endpoints.append(f"{SEMANTIC_API}/schema-graph?database_id={dataset['database']['id']}")
+        endpoints.append(f"{AGENT_QUERY_API}/schema-graph?database_id={dataset['database']['id']}")
         endpoints.append(f"{SEMANTIC_API}/dataset/{dataset['id']}/relationships")
     else:
         print("No Superset dataset found; skipping the dataset dictionary, business model and metric endpoints.")
 
-    step("Calling the Semantic Layer API")
+    step("Calling Semantic Layer and AI Agent query APIs")
     failures = []
     for path in endpoints:
         status, payload = _request(opener, path)
         ok = status == 200 and isinstance(payload, dict)
+        public = path.startswith(AGENT_QUERY_API) or "/query-metadata" in path or path.endswith(("/relationships/approved", "/glossary/discovery", "/expert-rules/discover"))
+        if ok and public:
+            ok = type(payload.get("schema_version")) is int and payload["schema_version"] == 1 and isinstance(payload.get("result"), dict)
         print(f"{'ok  ' if ok else 'FAIL'} {status} GET {path}")
         if not ok:
             failures.append(path)

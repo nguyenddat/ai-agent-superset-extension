@@ -30,6 +30,8 @@ node_modules/
 *.sqlite3
 *.log
 *.supx
+*.provenance.json
+.release-backups/
 .DS_Store
 
 # Airflow runtime logs

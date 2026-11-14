@@ -1,19 +1,17 @@
-"""Build the Semantic Layer bundle into extensions/superset-semantic-layer-<version>.supx.
+"""Build both extension bundles and record the source hashes used for each build.
 
 Usage: uv run scripts/build.py
-
-Runs `superset-extensions bundle` in-process. The CLI starts npm with `subprocess.run(["npm", ...])`, which
-Windows cannot resolve because npm is `npm.cmd`, so every subprocess executable is resolved through PATH first.
 """
 
 import argparse
+import json
 import os
 import subprocess
 
-from _common import BUNDLE_PATH, EXTENSION_DIR, resolve_command, sha256_file, step
+from _common import Extension, extensions, resolve_command, sha256_file, source_fingerprint, step
 
 
-def _bundle() -> None:
+def _bundle(extension: Extension) -> None:
     real_run = subprocess.run
 
     def run_resolved(command, *args, **kwargs):
@@ -26,8 +24,8 @@ def _bundle() -> None:
     try:
         from superset_extensions_cli.cli import app
 
-        os.chdir(EXTENSION_DIR)
-        app.main(["bundle", "--output", str(BUNDLE_PATH)], standalone_mode=False)
+        os.chdir(extension.directory)
+        app.main(["bundle", "--output", str(extension.bundle)], standalone_mode=False)
     finally:
         os.chdir(previous_cwd)
         subprocess.run = real_run
@@ -35,11 +33,15 @@ def _bundle() -> None:
 
 def main(argv: list[str] | None = None) -> None:
     argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args(argv)
-
-    step(f"Bundling {EXTENSION_DIR.relative_to(EXTENSION_DIR.parents[1])}")
-    _bundle()
-    print(f"Bundle: {BUNDLE_PATH}")
-    print(f"sha256: {sha256_file(BUNDLE_PATH)}")
+    for extension in extensions():
+        step(f"Bundling {extension.name}")
+        sources = source_fingerprint(extension)
+        _bundle(extension)
+        if source_fingerprint(extension) != sources:
+            raise RuntimeError(f"{extension.name} sources changed while building; run the build again")
+        bundle_hash = sha256_file(extension.bundle)
+        extension.provenance.write_text(json.dumps({"bundle_sha256": bundle_hash, "sources": sources}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"Bundle: {extension.bundle}\nsha256: {bundle_hash}")
 
 
 if __name__ == "__main__":
