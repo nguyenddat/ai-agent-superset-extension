@@ -101,23 +101,10 @@ tả, từ đồng nghĩa và vai trò, đều chỉ có hiệu lực khi quản
 
 ### 4.3 Chỉ số dạng key-value
 
-Khai báo ở cấp bảng, cho bảng lưu giá trị theo từng chỉ số:
-
-```text
-tb_gia_tri_quan_sat
-  indicator_column  = chi_so_id            → dm_chi_so_thoi_tiet.chi_so_id (theo quan hệ đã duyệt)
-  value_columns     = gia_tri_so (SO), gia_tri_dung_sai (DUNG_SAI), gia_tri_chu (CHU)
-dm_chi_so_thoi_tiet
-  indicator_code    = ma_chi_so
-  indicator_name    = ten_chi_so
-  indicator_unit    = ten_don_vi
-  value_kind        = kieu_du_lieu
-  aggregation       = cach_tong_hop        (TRUNG_BINH → AVG, TONG → SUM, NHO_NHAT → MIN, LON_NHAT → MAX)
-```
-
-Danh sách chỉ số (mã, tên, đơn vị, cách tổng hợp) được đọc từ bảng chỉ số qua ChartData như `dimension-members`. Nhờ
-vậy "nhiệt độ" được định vị thành `gia_tri_so` với điều kiện `ma_chi_so = '…'` và phép gộp `AVG`, đúng như dữ liệu
-tự mô tả.
+Không có khai báo riêng: tab "Chỉ số" và `indicator_model` đã bỏ (12/11/2026). Một giá trị key-value như nhiệt độ được
+hỏi như mọi phép đo khác: cột đo `tb_gia_tri_quan_sat.gia_tri_so` (vai trò `measure`) kèm điều kiện lọc trên cột mã
+của bảng danh mục, ví dụ `dm_chi_so_thoi_tiet.ma_chi_so = 'nhiet_do_c'`. Giá trị mã của cột đó có trong đồ thị
+(`values`) như mọi cột chiều, nên linking chọn được mã đúng.
 
 ### 4.4 Grain trên base table
 
@@ -127,7 +114,10 @@ Dùng lại bước 1, khai báo cho `tb_quan_sat_thoi_tiet`: cột thời gian 
 
 ### 4.5 Endpoint `/schema-graph` cho AI Agent
 
-Endpoint trả về đồ thị của một database, chỉ gồm:
+Endpoint thuộc AI Agent: `GET /extensions/text-to-bi/superset-ai-agent/semantic-query/schema-graph?database_id=<id>`.
+AI Agent ghép từ projection public của Data Dictionary. Success dùng envelope public v1
+(xem [public-api-v1.md](public-api-v1.md)); ví dụ dưới đây là nội dung `result`.
+Đồ thị của một database chỉ gồm:
 
 - base table vật lý mà **người hỏi** được quyền xem (theo quyền datasource của Superset);
 - quan hệ **đã duyệt và còn hiệu lực** giữa các bảng đó.
@@ -140,8 +130,7 @@ Endpoint trả về đồ thị của một database, chỉ gồm:
     "description": "…", "time": {"column": "thoi_diem_quan_sat", "row_kind_column": "loai_quan_sat",
     "row_kinds": [{"value": "DU_BAO_GIO", "grain": "hour"}]},
     "columns": [{"name": "loai_quan_sat", "label": "Loại quan sát", "type": "VARCHAR(30)",
-      "role": "row_kind", "values": ["DU_BAO_GIO", "DU_BAO_NGAY", "HIEN_TAI"], "synonyms": []}],
-    "indicators": null
+      "role": "row_kind", "values": ["DU_BAO_GIO", "DU_BAO_NGAY", "HIEN_TAI"], "synonyms": []}]
   }],
   "edges": [{
     "id": 7, "from": {"dataset_id": 13, "columns": ["quan_sat_id"]},
@@ -160,9 +149,9 @@ cho việc soạn đề xuất dataset.
 ### 5.1 Linking: xác định dữ liệu và vị trí
 
 1. **Lọc ứng viên không dùng model:** so khớp từ khoá của câu hỏi (đã bỏ dấu) với nhãn, từ đồng nghĩa, mô tả, giá trị
-   mã và tên chỉ số. Kết quả là một tập bảng và cột ứng viên có điểm.
+   mã. Kết quả là một tập bảng và cột ứng viên có điểm.
 2. **Một lần gọi model:** model chọn từ danh sách ứng viên, không được tự đặt tên.
-   - **Đo gì:** cột đo lường, hoặc chỉ số dạng key-value, cùng phép gộp nằm trong `aggregations` hay `cach_tong_hop`.
+   - **Đo gì:** cột đo lường cùng phép gộp nằm trong `aggregations`; giá trị key-value kèm điều kiện lọc mã chỉ số.
    - **Chia theo gì:** cột chiều hoặc thời gian, kèm đơn vị thời gian nếu có.
    - **Lọc theo gì:** cột, toán tử, giá trị. Giá trị lấy từ giá trị mã hoặc nhãn có thật.
    - **Loại dòng:** loại nào của bảng có nhiều grain.
@@ -180,7 +169,7 @@ Tập đỉnh cần nối (terminal) là các bảng chứa cột đã link. M�
 **cây nhỏ nhất nối mọi terminal** (cây Steiner); đường ngắn nhất giữa hai bảng là trường hợp riêng của nó. Ghép từng cặp
 đường ngắn nhất lại với nhau có thể thừa cạnh hoặc tạo vòng khi đồ thị có nhiều lối đi. Thuật toán (chốt 26/10/2026):
 
-1. Chọn **bảng gốc**: bảng chứa cột đo lường, hoặc bảng giá trị của chỉ số key-value. Đây là bảng có grain mịn nhất
+1. Chọn **bảng gốc**: bảng chứa cột đo lường. Đây là bảng có grain mịn nhất
    trong các bảng cần đo.
 2. **Đường chính: Dijkstra từ bảng gốc** theo chiều nhiều → một tới từng terminal. Mô hình danh mục và nghiệp vụ thường
    có dạng snowflake, nên hợp các đường ngắn nhất từ gốc đã là một cây và không nhân dòng. Phần lớn câu hỏi xong ở
@@ -213,7 +202,8 @@ Thuật toán là Python thuần, không gọi model, có unit test đầy đủ
   - không có hàm hệ thống;
   - có `LIMIT`.
 
-  Bộ kiểm tra hiện có ở `agent_ladder/service.py` được dùng lại.
+  Bộ kiểm tra SQL dataset nháp ở Semantic Layer `data_dictionary/services/srv_dataset_draft.py` được dùng lại tại API
+  `/dataset-drafts/validate`; AI Agent gọi qua HTTP, không import trực tiếp code của extension khác.
 
 ### 5.4 Chạy và trả lời
 
@@ -228,8 +218,8 @@ Mỗi câu trả lời qua schema link có một bước "Phân tích dữ liệ
 ngày 26/10/2026). Chặng nào chưa chạy tới (dừng vì thiếu dữ liệu hoặc hỏi lại) thì hiện ở trạng thái chưa xong, kèm lý
 do.
 
-1. **Mục tiêu.** Câu hỏi được hiểu thành đo gì (chỉ số hoặc cột đo, phép gộp), chia theo gì, lọc theo gì, loại dòng
-   nào. Mỗi mục ghi nguồn: khớp nhãn, từ đồng nghĩa, giá trị mã, tên chỉ số hoặc model chọn.
+1. **Mục tiêu.** Câu hỏi được hiểu thành đo gì (cột đo, phép gộp), chia theo gì, lọc theo gì, loại dòng
+   nào. Mỗi mục ghi nguồn: khớp nhãn, từ đồng nghĩa, giá trị mã hoặc model chọn.
 2. **Node.** Các bảng và cột ứng viên kèm điểm khớp. Terminal (bảng phải có trong truy vấn) và bảng gốc được đánh dấu.
 3. **Đồ thị.** Toàn bộ đồ thị schema người hỏi được thấy: base table xếp theo tầng (Danh mục, Nghiệp vụ), cạnh đã duyệt
    kèm bản số. Bảng không liên quan để mờ, terminal tô đậm.
@@ -245,9 +235,9 @@ trả về cả tầng dữ liệu của từng bảng.
 
 1. **Semantic Layer: quan hệ có kiểm chứng (4.1).** Tab "Quan hệ", gợi ý từ nhiều nguồn, kiểm chứng, duyệt. Sau bước
    này: duyệt 6 quan hệ của kho mẫu.
-2. **Semantic Layer: vai trò cột, chỉ số key-value, grain base table (4.2–4.4).** Sau bước này: khai báo cho 8 base
+2. **Semantic Layer: vai trò cột, grain base table (4.2, 4.4).** Sau bước này: khai báo cho 8 base
    table.
-3. **Semantic Layer: `/schema-graph` (4.5)**, có test quyền: người không được xem bảng thì không thấy đỉnh và cạnh của
+3. **AI Agent: `/semantic-query/schema-graph` (4.5)**, có test quyền: người không được xem bảng thì không thấy đỉnh và cạnh của
    bảng đó.
 4. **AI Agent: thuật toán đồ thị và sinh SQL (5.2–5.3)**, kèm trang "Thử phân tích dữ liệu" cho quản trị viên
    (`/ai-agent/?lab=schema-link`): nhập mục tiêu dạng JSON, xem bốn chặng của 5.5 và SQL đã dựng. Đã làm 26/10/2026. Python thuần, test trên đồ thị của kho mẫu và các đồ thị tự

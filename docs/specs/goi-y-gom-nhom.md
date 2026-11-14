@@ -29,9 +29,10 @@ trường hợp biên, và các thuật ngữ trên cùng một dataset sẽ tr�
 - Mặc định dùng `openai/text-embedding-3-small` (`OPENROUTER_EMBEDDING_MODEL` trong `core/config.py`): đọc được tiếng
   Việt, 1536 chiều, rẻ (10 thuật ngữ mẫu tốn khoảng 0,00001 USD), và là mô hình phổ biến nên ít bị gỡ khỏi OpenRouter.
   Đặt biến này rỗng để chỉ dùng cách dự phòng.
-- Vector được lưu trong `text_to_bi_text_embedding`, khoá theo (`model`, SHA-256 của văn bản). Mục không đổi nội dung
-  thì không gọi lại mô hình; sửa định nghĩa, từ đồng nghĩa hay điều kiện làm văn bản đổi nên được embed lại. Vector lưu
-  dạng JSON (làm tròn 6 chữ số); không cần pgvector ở quy mô vài trăm mục.
+- Vector đã có trong `text_to_bi_text_embedding` được đọc theo (`model`, SHA-256 của văn bản). Khi cache có vector
+  tương ứng thì không gọi lại mô hình; phần thiếu được tính và giữ trong bộ nhớ của lần gọi, không lưu cache mới.
+  Vì vậy văn bản chưa có trong cache có thể phải gọi mô hình lại ở lần GET sau. Vector dùng JSON (làm tròn 6 chữ số);
+  không cần pgvector ở quy mô vài trăm mục.
 
 ### 2.2 Cách dự phòng: TF-IDF trên từ
 
@@ -66,7 +67,7 @@ Gợi ý chỉ chuyển mục **chưa phân nhóm**: mục đã ở một nhóm 
 | Embedding `text-embedding-3-small` | 0,70 | Ba thuật ngữ về mưa 0,75–0,79; "Độ ẩm" – "Nồm ẩm" 0,72; cặp không liên quan cao nhất 0,67 ("Nắng nóng" – "Giờ nắng") |
 | TF-IDF | 0,25 | "Độ ẩm" – "Nồm ẩm" 0,46; nhóm mưa: các cặp 0,24–0,38, liên kết trung bình 0,28; cặp không liên quan cao nhất 0,22 ("Rét đậm" – "Nồm ẩm") |
 
-Đổi sang mô hình embedding khác có thể cần ngưỡng khác (`THRESHOLDS` trong `glossary/services/group_suggestion.py`).
+Đổi sang mô hình embedding khác có thể cần ngưỡng khác (`THRESHOLDS` trong `glossary_management/services/srv_group_suggestion.py`).
 
 ### 3.2 Nội dung một gợi ý
 
@@ -100,19 +101,20 @@ trạng thái duyệt giữ nguyên, nên không cần duyệt lại. Mọi bư�
 | `POST …/group-suggestions/dismiss` | `{"fingerprint": "<64 ký tự hex>"}` |
 
 Mọi route gọi `require_admin()`. Route ghi có `csrf_protected` và `rollback_on_error` theo thứ tự decorator của
-handbook. Route GET commit các vector mới vào cache; nếu một request khác vừa lưu cùng văn bản (trùng khoá), nó
-rollback phần cache và vẫn trả kết quả.
+handbook. Service embedding chỉ đọc vector đã cache; vector thiếu được tính trong bộ nhớ và không ghi database.
+GET expert rule không commit. GET glossary vẫn có lệnh commit cũ sau khi gợi ý, nhưng service không thêm vector mới;
+route glossary còn gọi migration gate theo luồng sẵn có. Không coi hai route đã hoàn toàn giống nhau về transaction.
 
 ## 6. Vị trí code
 
 | Phần | File |
 | --- | --- |
 | TF-IDF, cosine, phân cụm (thuần, không phụ thuộc Superset) | `common/utils/similarity.py` |
-| Bảng cache vector và gợi ý bị bỏ qua | `modules/glossary/models/group_suggestion.py` |
-| Gọi OpenRouter, cache, dự phòng | `modules/glossary/services/embedding.py` |
-| Dựng gợi ý, fingerprint, bỏ qua, kiểm tra payload áp dụng | `modules/glossary/services/group_suggestion.py` |
-| Văn bản và áp dụng cho thuật ngữ | `modules/glossary/services/group.py` |
-| Văn bản và áp dụng cho rule | `modules/expert_rules/services/rule_group_suggestion.py` |
+| Bảng cache vector và gợi ý bị bỏ qua | `modules/glossary_management/models/model_grouping.py` |
+| Gọi OpenRouter, cache, dự phòng | `modules/glossary_management/services/srv_glossary_embedding.py` |
+| Dựng gợi ý, fingerprint, bỏ qua, kiểm tra payload áp dụng | `modules/glossary_management/services/srv_group_suggestion.py` |
+| Văn bản và áp dụng cho thuật ngữ | `modules/glossary_management/services/srv_glossary_group.py` |
+| Văn bản và áp dụng cho rule | `modules/expert_rule_management/services/srv_expert_rule_group.py` |
 | Hộp thoại | `frontend/src/features/semantic-layer/GroupSuggestions.tsx` |
 
 Hai bảng mới thuộc module `glossary`; module `expert_rules` dùng chúng qua service của `glossary`, như nó đã dùng
@@ -122,6 +124,9 @@ repository thuật ngữ. Không tạo module mới vì gom nhóm là một ph�
 
 `tests/test_group_suggestions.py`: chuẩn hoá từ và TF-IDF; phân cụm trên vector cố định (nhóm mới, đưa vào nhóm có
 sẵn, hai nhóm có sẵn không ghép, liên kết trung bình không nối dây chuyền); embedding dự phòng khi không có khoá, khi
-lời gọi lỗi hoặc sai dạng, cache theo hash chỉ gọi văn bản mới; gợi ý trên SQLite với nhóm có sẵn; nhớ gợi ý bị bỏ
+lời gọi lỗi hoặc sai dạng, đọc cache theo hash; gợi ý trên SQLite với nhóm có sẵn; nhớ gợi ý bị bỏ
 qua và hiện lại khi tập mục đổi; áp dụng gợi ý đã sửa (sự kiện `moved`, giữ trạng thái duyệt, tên trùng 409); thứ tự
 decorator, quyền admin, commit một lần của route.
+
+Sau sửa lỗi, cần đối chiếu các test cache cũ với hành vi chỉ đọc cache. `test_expert_rule_regressions.py` kiểm tra thêm
+savepoint khi tạo dismissal trùng; bộ test cũ hiện còn bị chặn bởi import đường dẫn module trước đợt refactor.

@@ -4,9 +4,9 @@
 
 ## Độ dài dòng và xuống dòng
 
-- Một dòng tối đa 120 ký tự. Ruff kiểm tra Python với giới hạn này (`pyproject.toml` ở gốc và ở mỗi
+- Một dòng tối đa 200 ký tự. Ruff kiểm tra Python với giới hạn này (`pyproject.toml` ở gốc và ở mỗi
   `extensions/*/backend/`); frontend không có formatter nên tự giữ giới hạn.
-- Chỉ xuống dòng khi vượt 120 ký tự. Lời gọi hàm, import, object, comprehension hay JSX element ngắn thì để trên một dòng.
+- Chỉ xuống dòng khi vượt 200 ký tự. Lời gọi hàm, import, object, comprehension hay JSX element ngắn thì để trên một dòng.
 
 ```python
 # Đúng
@@ -27,6 +27,13 @@ datasets = {
   (`require_dataset`, `require_admin`).
 - Exception đặt tên theo điều đã xảy ra và kết thúc bằng `Error`: `MetricContractNotFoundError`,
   `GlossarySelfApprovalError`.
+
+## Import
+
+- Trong cùng một module (`modules/<module>/`) import tương đối: `from ..models.model_metric import MetricContract`.
+- Ra ngoài module, kể cả sang `common`, `core` hay module khác, import tuyệt đối từ tên package đầy đủ:
+  `from text_to_bi.superset_semantic_layer.common.base_repo import BaseRepository`. Không viết `from common...`:
+  Superset nạp `.supx` theo tên module đầy đủ nên không có package `common` ở cấp cao nhất.
 
 ## Docstring và comment
 

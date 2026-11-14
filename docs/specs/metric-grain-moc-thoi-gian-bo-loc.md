@@ -56,6 +56,19 @@ nghĩa nghiệp vụ trước. Quy tắc (lỗi 400, thông điệp tiếng Vi�
 
 Mỗi lần lưu ghi một sự kiện `definition` vào lịch sử duyệt.
 
+### 4.1. Kiểm tra ngữ nghĩa công thức
+
+Trước khi đề xuất hoặc duyệt metric, Semantic Layer đối chiếu công thức với khai báo của Từ điển dữ liệu:
+
+- Cột được tổng hợp phải có `semantic_role = measure` và liệt kê aggregation đang dùng trong `aggregations`.
+- Cột điều kiện phải có vai trò ngữ nghĩa hợp lệ; cột không có khai báo hoặc đang là cột tính toán/không active không được dùng.
+- `SUM`, `AVG`, `MIN`, `MAX` giữ đơn vị của measure. Đơn vị metric phải khớp chính xác đơn vị cột; hệ thống không tự đổi đơn vị.
+- Tỷ lệ chỉ hợp lệ khi hai vế cùng đơn vị; đơn vị đầu ra để trống hoặc khai báo `%`, `percent`, `phần trăm`, `ratio` hay `tỷ lệ`.
+- Các vế của một tỷ lệ phải lọc cùng loại dòng. Loại dòng công thức phải tồn tại trong grain của dataset.
+- Grain đọc và khoảng thời gian mặc định phải tương thích với grain gốc của loại dòng, theo các quy tắc ở trên.
+
+Thiếu khai báo ngữ nghĩa làm metric không đủ điều kiện đề xuất/duyệt; lỗi trả về nêu cột hoặc quy tắc cần sửa. Thay đổi semantic role, aggregation, unit, row-kind hoặc grain sau duyệt phải làm contract hết hiệu lực.
+
 ## 5. Vòng đời duyệt
 
 Ba khai báo là một phần nghĩa của metric, như công thức. `metric_contract_hash` thêm khối `query_defaults` (kể cả

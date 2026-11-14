@@ -5,6 +5,10 @@ quy tắc này để client nhận cùng một kiểu phản hồi ở mọi nơ
 
 ## Exception
 
+API public giữa extension và bên tiêu thụ dùng success envelope `{"schema_version": 1, "result": {...}}`.
+Các route và quy tắc version nằm trong [public-api-v1.md](../specs/public-api-v1.md). Lỗi giữ HTTP status cùng
+`message` an toàn; API quản trị hiện có và SSE giữ giao thức hiện hành. Client từ chối version chưa hỗ trợ.
+
 `common/exceptions/` giữ các lớp lỗi gốc. Chúng là lớp trừu tượng (khởi tạo trực tiếp sẽ ném `TypeError`); mỗi lớp
 mang `status` và `message` mặc định:
 
@@ -36,20 +40,24 @@ Quy tắc:
 ## Thứ tự decorator của route
 
 ```python
-@expose("/glossary/<int:term_id>/approve", methods=("POST",))
+@expose(f"{prefix}/approve", methods=("POST",))
 @protect()
 @safe
 @permission_name("write")
 @csrf_protected        # chỉ route thay đổi dữ liệu
 @rollback_on_error     # chỉ route thay đổi dữ liệu
-@handle_errors         # luôn nằm sát hàm
-def approve_glossary(self, term_id: int):
+@handle_errors         # dưới mọi decorator của Superset
+@requires_metric       # nếu có: nạp đối tượng từ ID trên URL, sát hàm nhất
+def approve_metric_contract(self, dataset, metric):
     ...
 ```
 
 - `handle_errors` (`core/database.py`) bắt `SemanticLayerError` (AI Agent: `AgentError`), rollback session và trả
-  `status` cùng `message` của lỗi. Nó phải nằm trong cùng, sát `def`: `@safe` của Superset và `rollback_on_error` biến
-  mọi exception thành 500.
+  `status` cùng `message` của lỗi. Nó phải nằm dưới `@safe` và `rollback_on_error`, vì hai decorator đó biến mọi
+  exception thành 500.
+- `@requires_dataset`, `@requires_metric`, `@requires_database`, `@requires_user` (`modules/superset/dependencies.py`)
+  nằm dưới `handle_errors`, sát `def`: chúng lấy ID khỏi tham số URL, truyền đối tượng (`dataset`, `metric`, …) vào hàm
+  và ném lỗi 404 của module `superset` để `handle_errors` trả về.
 - `rollback_on_error` bắt lỗi ngoài dự kiến, ghi log, rollback và trả 500 "Could not save the change.", không lộ chi
   tiết lỗi.
 - Route chỉ đọc (GET) không cần `csrf_protected` và `rollback_on_error`, nhưng vẫn có `handle_errors`.
@@ -81,8 +89,15 @@ def approve_glossary(self, term_id: int):
   tra quyền đọc; thiếu quyền là 403 "Dataset and database access required.".
 - Mọi route thay đổi dữ liệu dùng chung `csrf_protected` của `core/security.py`; token sai trả 403
   "CSRF token không hợp lệ." cho mọi API, kể cả `ExpertRuleAPI`.
-- Duyệt thuật ngữ, rule và metric: khi `TEXT_TO_BI_REQUIRE_SECOND_REVIEWER = True` trong `superset_config`, người soạn
+- Duyệt thuật ngữ, rule, metric và relationship contract: khi `TEXT_TO_BI_REQUIRE_SECOND_REVIEWER = True` trong `superset_config`, người soạn
   không được tự duyệt (`SelfApprovalError`, 403). Mặc định tắt để một quản trị viên tự duyệt được.
+
+- GET từ điển, quan hệ, schema graph và xuất file không gọi seed; metadata chưa lưu được biểu diễn bằng snapshot
+  trong bộ nhớ, không thêm vào session. Preview file cũng không seed. Migration gate trên lần truy cập đầu vẫn theo
+  quy tắc riêng bên dưới; không coi đó là thao tác seed thường xuyên của route đọc.
+- Recheck relationship không đạt hoặc truy vấn kiểm tra lỗi sẽ bỏ duyệt và xóa người/thời điểm duyệt. Trường hợp
+  truy vấn lỗi là ngoại lệ có chủ đích: route commit việc vô hiệu hóa contract rồi trả 500, tránh giữ cạnh join không
+  còn bằng chứng hợp lệ. Lỗi ghi ngoài dự kiến vẫn rollback theo quy tắc chung.
 
 ## Bảng và migration
 

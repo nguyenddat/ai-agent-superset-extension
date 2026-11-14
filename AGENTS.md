@@ -186,16 +186,13 @@ suggests them from the database's foreign keys and from column names, checks
 the data (unique target, matching types, orphans) and approves only a passing
 check. Each column dictionary row also has a `semantic_role` (key, measure,
 dimension, label, time, row_kind, attribute), the `aggregations` that make
-sense on a measure, `synonyms` and a `description`; a dataset dictionary's
-`indicator_model` declares a table that keeps one value per indicator
-(`tb_gia_tri_quan_sat`) or the catalog naming the indicators
-(`dm_chi_so_thoi_tiet`, read through `/dataset/<id>/indicators`).
+sense on a measure, `synonyms` and a `description`.
 `text_to_bi_metric_definition` also keeps each metric's query defaults: its `grain`, `row_kind_value`, `time_column`,
 default `time_window` and `time_anchor` (`now` or `latest_data`), and `default_filters`. They are checked against the
 dataset's grains and filterable columns, hashed into the metric contract (changing them outdates an approval like a
 formula edit), listed in `/semantic-catalog` and applied by metric execution unless the caller overrides them; see
 `docs/specs/metric-grain-moc-thoi-gian-bo-loc.md`.
-`text_to_bi_dataset_proposal` holds the virtual datasets the AI
+The AI Agent extension owns `text_to_bi_dataset_proposal`, which holds the virtual datasets the AI
 Agent drafts over base (`dm_*`, `tb_*`) datasets when no aggregate dataset can
 answer a question; an administrator creates or rejects them in "Xử lý câu hỏi" →
 "Đề xuất dataset". A dataset dictionary and a column dictionary row each carry
@@ -231,7 +228,7 @@ business domain; datasets not classified in the Data Dictionary stay out of it.
 The full rules are in `docs/handbook/quy-uoc-code.md`. In short, for Python and
 TypeScript alike:
 
-- Lines may be up to 120 characters. Wrap only past that limit; keep a short
+- Lines may be up to 200 characters. Wrap only past that limit; keep a short
   call, import, object or JSX element on one line instead of splitting it.
 - Name variables, functions and components for what they mean in the domain,
   such as `metricContract`, `selectedDataset` or `approvedAt`. Do not abbreviate
@@ -245,7 +242,7 @@ TypeScript alike:
   `fix(semantic-layer): answer an expert rule name collision with 400`.
 
 Ruff configuration is in the root `pyproject.toml` and each extension backend's
-`pyproject.toml`, with the 120-character line length. The frontends have no
+`pyproject.toml`, with the 200-character line length. The frontends have no
 formatter; follow the same limit by hand.
 
 ## Local configuration and secrets
