@@ -10,11 +10,17 @@ from .members import build_values_payload, coded_value_columns, coded_values_fro
 
 def dataset_context(row: dict[str, Any]) -> tuple[Any, Any, dict[str, Any], list[Any], Any]:
     database = row["database"]
-    dataset = SimpleNamespace(id=row["id"], table_name=row["name"], schema=row["schema"], description=row.get("description"), database_id=database["id"],
-                              sql="virtual" if row["is_virtual"] else None, columns=[SimpleNamespace(**column) for column in row["columns"]])
+    dataset = SimpleNamespace(
+        id=row["id"], table_name=row["name"], schema=row["schema"], description=row.get("description"),
+        database_id=database["id"], sql="virtual" if row["is_virtual"] else None,
+        columns=[SimpleNamespace(**column) for column in row["columns"]],
+    )
     dictionary = SimpleNamespace(**row["dictionary"])
     entries = {entry["column_name"]: SimpleNamespace(**entry) for entry in row["dictionary_columns"]}
-    return dataset, dictionary, entries, [SimpleNamespace(**grain) for grain in row["grains"]], SimpleNamespace(**row["layer"]) if row["layer"] else None
+    return (
+        dataset, dictionary, entries, [SimpleNamespace(**grain) for grain in row["grains"]],
+        SimpleNamespace(**row["layer"]) if row["layer"] else None,
+    )
 
 
 def require_dataset_context(dataset_id: int, cookie: str) -> tuple[Any, Any, dict[str, Any], list[Any], Any]:

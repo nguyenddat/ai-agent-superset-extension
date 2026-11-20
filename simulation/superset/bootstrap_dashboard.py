@@ -7,7 +7,6 @@ from typing import Any
 
 from superset.app import create_app
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 LOGGER = logging.getLogger(__name__)
 
@@ -101,7 +100,6 @@ LAYOUT: list[list[tuple[str, int, dict[str, Any]]]] = [
 
 
 def _position_json(rows: list[list[tuple[Any, int]]]) -> dict[str, Any]:
-    """Build a Superset v2 dashboard layout with one row per LAYOUT entry."""
     position: dict[str, Any] = {
         "DASHBOARD_VERSION_KEY": "v2",
         "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},

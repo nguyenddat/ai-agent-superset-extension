@@ -25,7 +25,9 @@ export function QuestionReview() {
           Đề xuất dataset
         </button>
       </div>
-      {tab === 'definitions' ? <DefinitionReview /> : tab === 'metrics' ? <MissingMetricReview /> : <DatasetProposalReview />}
+      {tab === 'definitions'
+        ? <DefinitionReview />
+        : tab === 'metrics' ? <MissingMetricReview /> : <DatasetProposalReview />}
     </div>
   );
 }

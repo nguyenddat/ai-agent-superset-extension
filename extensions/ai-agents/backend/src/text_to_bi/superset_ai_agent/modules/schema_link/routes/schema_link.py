@@ -18,7 +18,6 @@ def _require_lab_access() -> None:
 
 
 def _schema_graph(database_id: int) -> SchemaGraph:
-    """The signed-in user's schema graph; raises SemanticLayerUnavailableError when the Semantic Layer cannot."""
     payload = cached_schema_graph(int(current_user.id), database_id, request.headers.get("Cookie", ""))
     return SchemaGraph.from_payload(payload)
 
@@ -47,7 +46,6 @@ class AgentSchemaLinkAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def graph(self):
-        """The schema graph the lab draws before any analysis."""
         _require_lab_access()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
@@ -61,7 +59,6 @@ class AgentSchemaLinkAPI(RestApi):
     @csrf_protected
     @handle_errors
     def analyze_goal(self):
-        """The four-stage trace of a goal written by hand: goal, nodes, graph, chosen path, and the SQL."""
         _require_lab_access()
         body = request.get_json(silent=True) or {}
         database_id = body.get("database_id")

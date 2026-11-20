@@ -20,7 +20,6 @@ class ExpertRuleEventRepository(BaseRepository[ExpertRuleAuditEvent]):
         return self.query().filter_by(rule_id=rule_id).order_by(ExpertRuleAuditEvent.id).all()
 
     def read_latest_authoring(self, revision_id: int) -> ExpertRuleAuditEvent | None:
-        """Sự kiện tạo hoặc sửa gần nhất của một bản; người thực hiện là tác giả."""
         return (
             self.query()
             .filter(

@@ -4,12 +4,6 @@ from ....common.base_model import BaseModel
 
 
 class DatasetProposal(BaseModel):
-    """A dataset the AI Agent drafted over base datasets when no aggregate dataset could answer a question.
-
-    Nothing runs until an administrator reviews the SQL and creates it: creating makes a Superset virtual dataset, an
-    aggregate dataset in the data dictionary, with the proposed metric as an AI Agent candidate on it.
-    """
-
     __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)

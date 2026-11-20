@@ -4,11 +4,12 @@ version = "0.1.0"
 license = "Apache-2.0"
 
 [tool.ruff]
-line-length = 200
+line-length = 120
 # Superset 6.1 runs extension backends on Python 3.10.
 target-version = "py310"
 
 [tool.ruff.lint]
+extend-select = ["E501", "I"]
 ignore = ["D100"]
 
 [tool.apache_superset_extensions.build]

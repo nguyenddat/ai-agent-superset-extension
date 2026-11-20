@@ -13,12 +13,10 @@ CONTENT_FIELDS = {"canonical_name", "definition", "synonyms", "steward_id", "lin
 
 
 def normalized_name(value: str) -> str:
-    """Tên so sánh không phân biệt hoa thường và khoảng trắng."""
     return " ".join(value.split()).casefold()
 
 
 def expected_revision_of(payload: Any) -> int:
-    """Số phiên bản client đã đọc; thay đổi phải còn khớp với nó."""
     expected_revision = payload.get("expected_revision") if isinstance(payload, dict) else None
     if isinstance(expected_revision, bool) or not isinstance(expected_revision, int):
         raise GlossaryValidationError("expected_revision is required.")
@@ -26,7 +24,6 @@ def expected_revision_of(payload: Any) -> int:
 
 
 def review_reason(payload: Any) -> str | None:
-    """Ghi chú khi duyệt hoặc thu hồi, đã cắt khoảng trắng; rỗng là không có."""
     reason = payload.get("reason") if isinstance(payload, dict) else None
     if reason is None:
         return None
@@ -36,7 +33,6 @@ def review_reason(payload: Any) -> str | None:
 
 
 def group_id_of(payload: Any) -> int | None:
-    """Nhóm request đặt thuật ngữ vào; null là bỏ khỏi mọi nhóm."""
     group_id = payload.get("group_id") if isinstance(payload, dict) else None
     if group_id is not None and (isinstance(group_id, bool) or not isinstance(group_id, int)):
         raise GlossaryValidationError("Nhóm thuật ngữ không hợp lệ.")
@@ -44,7 +40,6 @@ def group_id_of(payload: Any) -> int | None:
 
 
 def normalize_group_payload(payload: Any) -> dict[str, Any]:
-    """Tên nhóm (duy nhất, không phân biệt hoa thường và khoảng trắng) và mô tả tùy chọn."""
     if not isinstance(payload, dict) or set(payload) - {"name", "description"}:
         raise GlossaryValidationError("Nhóm thuật ngữ chỉ có tên và mô tả.")
     name = payload.get("name")
@@ -62,7 +57,6 @@ def normalize_group_payload(payload: Any) -> dict[str, Any]:
 
 
 def normalize_glossary_payload(payload: Any) -> dict[str, Any]:
-    """Từ chối trường lạ và chuẩn hóa nội dung thuật ngữ trước khi lưu."""
     if not isinstance(payload, dict) or set(payload) - CONTENT_FIELDS - {"expected_revision", "group_id"}:
         raise GlossaryValidationError("Unsupported glossary fields.")
     name = _required_text(payload.get("canonical_name"), "canonical_name", MAX_NAME_LENGTH)
@@ -105,7 +99,6 @@ def normalize_glossary_payload(payload: Any) -> dict[str, Any]:
 
 
 def content_hash(values: dict[str, Any]) -> str:
-    """Hash nội dung một bản, để quy tắc chuyên gia biết khi thuật ngữ đổi nghĩa."""
     content = {key: values.get(key) for key in ("canonical_name", "definition", "synonyms", "links")}
     return hashlib.sha256(json.dumps(content, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 

@@ -33,8 +33,6 @@ SEMANTIC_KINDS = ("term_term_meaning", "term_metric_meaning", "rule_term_meaning
 
 @dataclass(frozen=True)
 class TermItem:
-    """A glossary term's current draft or approved revision, as the checks read it."""
-
     id: int
     name: str
     definition: str
@@ -48,8 +46,6 @@ class TermItem:
 
 @dataclass(frozen=True)
 class RuleItem:
-    """An expert rule's current draft or approved revision, with the labels of the columns its conditions use."""
-
     id: int
     name: str
     dataset_id: int
@@ -67,8 +63,6 @@ class RuleItem:
 
 @dataclass(frozen=True)
 class MetricItem:
-    """A metric a term links, with its formula as pseudo code."""
-
     id: int
     dataset_id: int
     name: str
@@ -85,8 +79,6 @@ class ItemReference:
 
 @dataclass(frozen=True)
 class Finding:
-    """One contradiction: its kind, the one or two items involved, and what shows it."""
-
     kind: str
     items: tuple[ItemReference, ...]
     fingerprint: str
@@ -100,8 +92,6 @@ class Finding:
 
 @dataclass(frozen=True)
 class Candidate:
-    """A pair worth asking the AI model about, with each item written out for it."""
-
     kind: str
     items: tuple[ItemReference, ...]
     fingerprint: str
@@ -113,10 +103,6 @@ def pair_key(kind: str, items: Iterable[ItemReference]) -> str:
 
 
 def content_fingerprint(kind: str, contents: Iterable[tuple[str, int, str]]) -> str:
-    """A hash of the kind and of each involved item's type, ID and content hash.
-
-    It changes when either item's content changes, which is what reopens a dismissed contradiction.
-    """
     payload = json.dumps([kind, [list(content) for content in contents]], separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
 
@@ -154,10 +140,6 @@ def _term_names(term_ids: Iterable[int], terms: dict[int, TermItem]) -> str:
 
 
 def name_clashes(terms: list[TermItem]) -> list[Finding]:
-    """Two terms claim the same word as their name or a synonym, so a question using it could mean either.
-
-    Terms an administrator put in one group mean the same thing, so a shared word between them is expected.
-    """
     claims: dict[str, list[tuple[TermItem, str, str]]] = {}
     for term in terms:
         words = [(term.name, "tên"), *((synonym, "từ đồng nghĩa") for synonym in term.synonyms)]
@@ -185,7 +167,6 @@ def name_clashes(terms: list[TermItem]) -> list[Finding]:
 
 
 def empty_rules(rules: list[RuleItem]) -> list[Finding]:
-    """A rule whose own conditions on one column can never hold together, so it never applies."""
     findings = []
     for rule in rules:
         domains = rule_domains(rule.conditions)
@@ -229,12 +210,6 @@ def _differing_lines(first: RuleItem, second: RuleItem, first_domains: dict, sec
 
 
 def rule_pairs(rules: list[RuleItem], terms: dict[int, TermItem]) -> list[Finding]:
-    """Two rules on one dataset that disagree about which rows a concept covers.
-
-    - `rule_rule_same_term`: both define the same glossary term, with different conditions.
-    - `rule_rule_overlap`: they define different terms on the same columns, and some rows satisfy both, with neither
-      rule's rows simply inside the other's (a stricter grade nested in a looser one is how levels are written).
-    """
     findings = []
     ordered = sorted(rules, key=lambda rule: rule.id)
     for first, second in combinations(ordered, 2):
@@ -281,8 +256,6 @@ def rule_pairs(rules: list[RuleItem], terms: dict[int, TermItem]) -> list[Findin
 
 
 def _rule_threshold_column(rule: RuleItem, domains: dict[int, ColumnDomain], term: TermItem) -> int | None:
-    """The column a term's stated threshold is about: the rule's only threshold column, or else the only one of its
-    threshold columns that the term links."""
     columns = _threshold_columns(domains)
     if len(columns) == 1:
         return columns[0]
@@ -291,7 +264,6 @@ def _rule_threshold_column(rule: RuleItem, domains: dict[int, ColumnDomain], ter
 
 
 def rule_term_thresholds(rules: list[RuleItem], terms: dict[int, TermItem]) -> list[Finding]:
-    """A rule's threshold differs from the one stated by the definition of a term it links."""
     findings = []
     for rule in sorted(rules, key=lambda item: item.id):
         domains = rule_domains(rule.conditions)
@@ -320,7 +292,6 @@ def rule_term_thresholds(rules: list[RuleItem], terms: dict[int, TermItem]) -> l
 
 
 def example_thresholds(rules: list[RuleItem]) -> list[Finding]:
-    """An example question or its intent states a threshold other than the rule's own condition."""
     findings = []
     for rule in sorted(rules, key=lambda item: item.id):
         domains = rule_domains(rule.conditions)
@@ -349,7 +320,6 @@ def example_thresholds(rules: list[RuleItem]) -> list[Finding]:
 
 
 def detect(terms: list[TermItem], rules: list[RuleItem]) -> list[Finding]:
-    """Every contradiction found by reading names, links and conditions, at most one per kind and items."""
     terms_by_id = {term.id: term for term in terms}
     findings = [
         *name_clashes(terms),
@@ -385,7 +355,6 @@ def rule_text(rule: RuleItem, terms: dict[int, TermItem]) -> str:
 
 
 def _mentions(term: TermItem, other: TermItem) -> bool:
-    """`other`'s name or a synonym appears in `term`'s definition, so one term is described through the other."""
     definition = f" {normalized_name(term.definition)} "
     return any(f" {normalized_name(word)} " in definition for word in (other.name, *other.synonyms))
 
@@ -411,12 +380,6 @@ def _candidate(kind: str, involved: tuple, texts: tuple[str, ...]) -> Candidate:
 def semantic_candidates(
     terms: list[TermItem], rules: list[RuleItem], metrics: list[MetricItem], findings: list[Finding]
 ) -> list[Candidate]:
-    """The pairs whose prose the AI model judges, chosen cheaply so only related content is sent.
-
-    Terms sharing a column or metric link, a group, or naming each other in a definition; each term with each metric
-    it links; each rule with each term it links; and rules on one dataset sharing a term or a condition column. A pair
-    already shown contradictory by a rule-based check is not sent again.
-    """
     flagged = {frozenset((item.type, item.id) for item in finding.items) for finding in findings}
 
     def already_flagged(*items: ItemReference) -> bool:

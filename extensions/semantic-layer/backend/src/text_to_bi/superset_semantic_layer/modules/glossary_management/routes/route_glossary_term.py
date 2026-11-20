@@ -42,7 +42,6 @@ class GlossaryTermRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_glossary_terms(self):
-        """Bản hiện tại của mọi thuật ngữ người gọi được đọc, kèm nhóm và người dùng để chọn phụ trách."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         user_name = user_names()
@@ -62,7 +61,6 @@ class GlossaryTermRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_glossary_options(self):
-        """Dataset, cột vật lý và metric đã duyệt mà thuật ngữ được liên kết tới."""
         require_semantic_layer_view()
         return self.response(200, datasets=link_options())
 
@@ -84,7 +82,6 @@ class GlossaryTermRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_glossary_events(self, term_id: int):
-        """Lịch sử tạo, sửa, duyệt, thu hồi và chuyển nhóm của thuật ngữ."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         if not term_readable(term_id):
@@ -98,7 +95,6 @@ class GlossaryTermRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_glossary_discovery(self):
-        """Chỉ thuật ngữ đã duyệt, với liên kết còn mới tới dataset người gọi được đọc."""
         require_semantic_layer_query()
         ensure_dictionary_tables()
         return self.response(200, **public_payload({"terms": discoverable_glossary_terms()}))
@@ -127,7 +123,6 @@ class GlossaryTermRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def update_glossary_term(self, term_id: int):
-        """Lưu chỉnh sửa thành bản nháp mới chờ duyệt."""
         require_admin()
         ensure_dictionary_tables()
         payload = request.get_json(silent=True)
@@ -177,7 +172,6 @@ class GlossaryTermRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def update_glossary_term_group(self, term_id: int):
-        """Chuyển thuật ngữ vào nhóm, hoặc bỏ khỏi mọi nhóm với `group_id` null; không cần duyệt."""
         require_admin()
         ensure_dictionary_tables()
         group_id = group_id_of(request.get_json(silent=True))

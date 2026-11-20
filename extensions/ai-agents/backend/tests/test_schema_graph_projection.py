@@ -82,7 +82,9 @@ def test_a_table_node_keeps_physical_columns_with_their_semantics():
 
 
 def test_a_table_without_a_dictionary_label_is_named_by_its_table():
-    dictionary = SimpleNamespace(display_name=None, description=None, grain=None, time_column=None, row_kind_column=None)
+    dictionary = SimpleNamespace(
+        display_name=None, description=None, grain=None, time_column=None, row_kind_column=None,
+    )
     dataset = SimpleNamespace(id=13, schema=None, table_name="tb_gia_tri_quan_sat", description=None, columns=[])
 
     node = table_node(dataset, dictionary, {}, [], {}, None)

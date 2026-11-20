@@ -2,7 +2,7 @@ from ...common.exceptions import NotFoundError, ValidationError
 
 
 class QueryPlanError(ValidationError):
-    """The plan cannot be run as asked; the message is safe to show to the user."""
+    pass
 
 
 class ChatQuestionError(ValidationError):

@@ -22,13 +22,17 @@ from text_to_bi.superset_semantic_layer.common.utils.similarity import (
 )
 from text_to_bi.superset_semantic_layer.core.exceptions import AdminRequiredError
 from text_to_bi.superset_semantic_layer.modules.expert_rule_management.exceptions import ExpertRuleValidationError
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_group as rule_group_service
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule_group as rule_group_service,
+)
 from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import (
     GlossaryConflictError,
     GlossaryValidationError,
 )
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_group_suggestion
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_group import GlossaryGroupService
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_group import (
+    GlossaryGroupService,
+)
 
 EMBEDDING_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_embedding.py"
 RULE_SUGGESTION_PATH = MODULES_PATH / "expert_rule_management" / "services" / "srv_expert_rule_group.py"
@@ -42,7 +46,6 @@ GLOSSARY_ENDPOINTS = {
     ),
 }
 def _run_source(namespace: dict, path) -> dict:
-    """Run a module's definitions, without its imports, with `namespace` as their globals."""
     namespace.setdefault("__name__", path.stem)
     tree = ast.parse(path.read_text(encoding="utf-8"))
     body = [node for node in tree.body if not isinstance(node, (ast.Import, ast.ImportFrom))]
@@ -87,7 +90,6 @@ def test_existing_groups_never_merge_and_average_linkage_does_not_chain():
 
 
 def _embedding_service(api_key="secret", responses=None):
-    """embedding.py with fake settings, HTTP and cache; `responses` gives each call's vectors, or "fail"."""
     rows, calls = [], []
 
     class RequestException(Exception):
@@ -155,7 +157,9 @@ def test_vectors_are_cached_by_text_hash_and_only_new_texts_are_requested():
     assert calls[0]["input"] == ["Mưa lớn", "Ngày có mưa"] and rows == []
 
     # This service reads persisted vectors; cache population is a separate write operation.
-    rows.append(SimpleNamespace(model="test/embedding", content_hash=namespace["text_hash"]("Ngày có mưa"), vector=[0.0, 1.0]))
+    rows.append(
+        SimpleNamespace(model="test/embedding", content_hash=namespace["text_hash"]("Ngày có mưa"), vector=[0.0, 1.0]),
+    )
     second = namespace["text_vectors"](["Ngày có mưa", "Độ ẩm"])
     assert second.vectors == [[0.0, 1.0], [0.6, 0.8]]
     assert calls[1]["input"] == ["Độ ẩm"] and len(rows) == 1
@@ -175,7 +179,6 @@ VECTORS = {
 
 
 def _glossary_grouping(monkeypatch):
-    """Combine the current term and group services with small in-memory repositories."""
     term_service, session = _current_glossary_service(monkeypatch)
     term_records = []
     group_records = {}

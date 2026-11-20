@@ -21,16 +21,13 @@ class ExpertRuleRevisionRepository(BaseRepository[ExpertRuleRevision]):
         return self.query().filter_by(rule_id=rule_id, is_current=True).one_or_none()
 
     def read_current_for_update(self, rule_id: int) -> ExpertRuleRevision | None:
-        """Đọc lại bản hiện tại của rule và giữ khóa dòng tới hết transaction."""
         current = self.query().filter_by(rule_id=rule_id, is_current=True)
         return current.populate_existing().with_for_update().one_or_none()
 
     def read_all_current(self) -> list[ExpertRuleRevision]:
-        """Bản hiện tại của mọi rule, theo rule."""
         return self.query().filter_by(is_current=True).order_by(ExpertRuleRevision.rule_id).all()
 
     def read_all(self) -> list[ExpertRuleRevision]:
-        """Mọi bản, theo số phiên bản."""
         return self.query().order_by(ExpertRuleRevision.revision_number).all()
 
     def read_all_approved_current(self) -> list[ExpertRuleRevision]:

@@ -3,7 +3,11 @@ from typing import Any
 from superset.connectors.sqla.models import SqlaTable
 
 from text_to_bi.superset_semantic_layer.modules.business_model.dependencies import data_layer_repository
-from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import datasets_by_name, get_dataset, is_internal_dataset
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import (
+    datasets_by_name,
+    get_dataset,
+    is_internal_dataset,
+)
 
 from ..dependencies import column_dictionary_repository, dataset_dictionary_repository
 from ..exceptions import DataDictionaryValidationError, ReferencedColumnMissingError
@@ -40,7 +44,9 @@ STRING_FIELD_LIMITS = {"display_name": 255}
 
 OPTIONAL_STRING_FIELD_LIMITS = {"format": 128, "unit": 128}
 
-DATASET_DICTIONARY_FIELDS = {"display_name", "description", "grain", "create_column", "dataset_type", "layer_id", "contains_pii"}
+DATASET_DICTIONARY_FIELDS = {
+    "display_name", "description", "grain", "create_column", "dataset_type", "layer_id", "contains_pii"
+}
 
 # Saved together: the grains are checked against the time column and the column telling kinds of rows apart.
 DATASET_TIME_FIELDS = {"time_column", "row_kind_column", "grains"}
@@ -53,15 +59,15 @@ class DataDictionaryService:
 
     # -------------------------READ---------------------------
     def read(self, dataset: SqlaTable) -> tuple[DatasetDictionary, list[ColumnDictionary]]:
-        """Đọc từ điển và mặc định cho các cột còn thiếu, không ghi database."""
         return read_dictionary_snapshot(dataset)
 
     def read_reference_options(self) -> list[dict[str, Any]]:
-        """Dataset Superset và cột của chúng để chọn đích khóa ngoại, kèm cột khóa đã khai báo."""
         # Key flags declared in the data dictionary let the picker offer key columns as FK targets first.
         key_flags: dict[int, dict[str, dict[str, bool]]] = {}
         for row in self.columns.read_key_columns():
-            key_flags.setdefault(row.dataset_id, {})[row.column_name] = {"pk": bool(row.is_pk), "unique": bool(row.is_unique)}
+            key_flags.setdefault(row.dataset_id, {})[row.column_name] = {
+                "pk": bool(row.is_pk), "unique": bool(row.is_unique)
+            }
         options = []
         for dataset in datasets_by_name():
             if is_internal_dataset(dataset):
@@ -76,7 +82,10 @@ class DataDictionaryService:
                     "database_name": database_name,
                     "schema": dataset.schema,
                     "columns": [str(column.column_name) for column in dataset.columns],
-                    "column_types": {str(column.column_name): str(getattr(column, "type", None) or "")[:64] for column in dataset.columns},
+                    "column_types": {
+                        str(column.column_name): str(getattr(column, "type", None) or "")[:64]
+                        for column in dataset.columns
+                    },
                     "key_columns": key_flags.get(dataset.id, {}),
                 }
             )
@@ -84,17 +93,22 @@ class DataDictionaryService:
 
     # -------------------------UPDATE-------------------------
     def update(self, dataset: SqlaTable, payload: Any) -> tuple[DatasetDictionary, list[ColumnDictionary]]:
-        """Lưu metadata của dataset và các cột gửi lên; trả từ điển như sau khi lưu. Người gọi commit."""
         actual_column_names = {str(column.column_name) for column in dataset.columns}
         updates = validate_dictionary_payload(payload, actual_column_names, dataset.id)
         dataset_updates, time_updates = normalize_dataset_payload(payload.get("dataset", {}), actual_column_names)
 
         # Seed first: each seed commits, so it must not run between the updates below and their commit.
         seed_dictionary(dataset)
-        for referenced_id in {item["referenced_dataset_id"] for item in updates if item.get("referenced_dataset_id") is not None} - {dataset.id}:
+        for referenced_id in (
+            {item["referenced_dataset_id"] for item in updates if item.get("referenced_dataset_id") is not None}
+            - {dataset.id}
+        ):
             seed_dictionary(get_dataset(referenced_id))
         # A transformation's input columns need dictionary rows to point at.
-        for source_dataset_id in {source_id for item in updates for source_id, _ in (item.get("transformation") or {}).get("sources", [])} - {dataset.id}:
+        for source_dataset_id in (
+            {source_id for item in updates for source_id, _ in (item.get("transformation") or {}).get("sources", [])}
+            - {dataset.id}
+        ):
             seed_dictionary(get_dataset(source_dataset_id))
         self.datasets.update(self.datasets.read(dataset.id), dataset_updates)
         rows_by_name = {row.column_name: row for row in self.columns.read_by_dataset(dataset.id)}
@@ -104,7 +118,6 @@ class DataDictionaryService:
         return self.datasets.read(dataset.id), self.columns.read_by_dataset(dataset.id)
 
     def _update_column(self, row: ColumnDictionary, update: dict[str, Any]) -> None:
-        """Lưu một cột: phép biến đổi, khóa ngoại theo tên dataset và cột đích, rồi các trường còn lại."""
         if "transformation" in update:
             save_transformation(row.id, update.pop("transformation"))
         if "referenced_dataset_id" in update or "referenced_column_name" in update:
@@ -122,8 +135,9 @@ class DataDictionaryService:
             row.aggregations = None
 
 
-def normalize_dataset_payload(dataset_updates: Any, actual_column_names: set[str]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Kiểm tra phần `dataset` của một lần lưu; trả (trường của dataset, trường thời gian lưu riêng)."""
+def normalize_dataset_payload(
+    dataset_updates: Any, actual_column_names: set[str]
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(dataset_updates, dict):
         raise DataDictionaryValidationError("dataset must be an object.")
     time_updates = {field: dataset_updates.pop(field) for field in DATASET_TIME_FIELDS if field in dataset_updates}
@@ -132,14 +146,18 @@ def normalize_dataset_payload(dataset_updates: Any, actual_column_names: set[str
             time_updates[field] = None
     unknown_fields = set(dataset_updates) - DATASET_DICTIONARY_FIELDS
     if unknown_fields:
-        raise DataDictionaryValidationError(f"dataset contains unsupported fields: {', '.join(sorted(unknown_fields))}.")
+        raise DataDictionaryValidationError(
+            f"dataset contains unsupported fields: {', '.join(sorted(unknown_fields))}."
+        )
     for field in ("display_name", "description", "grain", "create_column"):
         if field not in dataset_updates:
             continue
         value = dataset_updates.get(field)
         if field == "display_name":
             if not isinstance(value, str) or not value.strip() or len(value) > 255:
-                raise DataDictionaryValidationError("dataset.display_name must be a non-empty string of at most 255 characters.")
+                raise DataDictionaryValidationError(
+                    "dataset.display_name must be a non-empty string of at most 255 characters."
+                )
         elif value is not None and not isinstance(value, str):
             raise DataDictionaryValidationError(f"dataset.{field} must be a string or null.")
     for field in ("description", "grain", "create_column"):
@@ -154,7 +172,9 @@ def normalize_dataset_payload(dataset_updates: Any, actual_column_names: set[str
     if dataset_updates.get("create_column") and dataset_updates["create_column"] not in actual_column_names:
         raise DataDictionaryValidationError("dataset.create_column must reference a column in this dataset.")
     layer_id = dataset_updates.get("layer_id")
-    if layer_id is not None and (isinstance(layer_id, bool) or not isinstance(layer_id, int) or data_layer_repository().get(layer_id) is None):
+    if layer_id is not None and (
+        isinstance(layer_id, bool) or not isinstance(layer_id, int) or data_layer_repository().get(layer_id) is None
+    ):
         raise DataDictionaryValidationError("dataset.layer_id must reference an existing data layer or be null.")
     if "contains_pii" in dataset_updates:
         dataset_updates["contains_pii"] = checked_pii_flag(dataset_updates["contains_pii"], "dataset.contains_pii")
@@ -162,7 +182,6 @@ def normalize_dataset_payload(dataset_updates: Any, actual_column_names: set[str
 
 
 def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dataset_id: int) -> list[dict[str, Any]]:
-    """Kiểm tra mảng `columns` của một lần lưu; trả giá trị đã chuẩn hóa của từng cột."""
     if not isinstance(payload, dict) or not isinstance(payload.get("columns"), list):
         raise DataDictionaryValidationError("Request body must contain a columns array.")
 
@@ -172,7 +191,9 @@ def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dat
     def columns_of(source_dataset_id: int) -> set[str] | None:
         if source_dataset_id not in dataset_columns:
             source = get_dataset(source_dataset_id)
-            dataset_columns[source_dataset_id] = None if source is None else {str(column.column_name) for column in source.columns}
+            dataset_columns[source_dataset_id] = (
+                None if source is None else {str(column.column_name) for column in source.columns}
+            )
         return dataset_columns[source_dataset_id]
 
     normalized: list[dict[str, Any]] = []
@@ -182,7 +203,9 @@ def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dat
             raise DataDictionaryValidationError(f"columns[{index}] must be an object.")
         unknown_fields = set(item) - DICTIONARY_FIELDS - {"column_name"}
         if unknown_fields:
-            raise DataDictionaryValidationError(f"columns[{index}] contains unsupported fields: {', '.join(sorted(unknown_fields))}.")
+            raise DataDictionaryValidationError(
+                f"columns[{index}] contains unsupported fields: {', '.join(sorted(unknown_fields))}."
+            )
         column_name = item.get("column_name")
         if not isinstance(column_name, str) or not column_name:
             raise DataDictionaryValidationError(f"columns[{index}].column_name must be a non-empty string.")
@@ -200,7 +223,9 @@ def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dat
             if not isinstance(value, str) or not value.strip():
                 raise DataDictionaryValidationError(f"columns[{index}].{field} must be a non-empty string.")
             if len(value) > max_length:
-                raise DataDictionaryValidationError(f"columns[{index}].{field} must be at most {max_length} characters.")
+                raise DataDictionaryValidationError(
+                    f"columns[{index}].{field} must be at most {max_length} characters."
+                )
             values[field] = value
         for field in ("default_value", "business_term"):
             if field in item:
@@ -219,23 +244,30 @@ def validate_dictionary_payload(payload: Any, actual_column_names: set[str], dat
         for field in ("unit", "format"):
             if field in item:
                 value = item[field]
-                if value is not None and (not isinstance(value, str) or len(value) > OPTIONAL_STRING_FIELD_LIMITS[field]):
-                    raise DataDictionaryValidationError(f"columns[{index}].{field} must be a string of at most 128 characters or null.")
+                if value is not None and (
+                    not isinstance(value, str) or len(value) > OPTIONAL_STRING_FIELD_LIMITS[field]
+                ):
+                    raise DataDictionaryValidationError(
+                        f"columns[{index}].{field} must be a string of at most 128 characters or null."
+                    )
                 values[field] = value if value is None or value.strip() else None
         if "temporal_kind" in item:
             values["temporal_kind"] = checked_temporal_kind(item["temporal_kind"], index)
         # The stored role is not known here; the save clears aggregations on a column that ends up not a measure.
         values.update(checked_column_semantics(item, index, item.get("semantic_role")))
         if "transformation" in item:
-            values["transformation"] = checked_transformation(item["transformation"], f"columns[{index}].transformation", (dataset_id, column_name), columns_of)
+            values["transformation"] = checked_transformation(
+                item["transformation"], f"columns[{index}].transformation", (dataset_id, column_name), columns_of
+            )
         if "contains_pii" in item:
             values["contains_pii"] = checked_pii_flag(item["contains_pii"], f"columns[{index}].contains_pii")
         normalized.append(values)
     return normalized
 
 
-def _checked_reference(item: dict[str, Any], index: int, column_name: str, actual_column_names: set[str], dataset_id: int) -> dict[str, Any]:
-    """Khóa ngoại của một cột: theo ID dataset và tên cột đích, hoặc theo tên cột cùng dataset (dạng cũ)."""
+def _checked_reference(
+    item: dict[str, Any], index: int, column_name: str, actual_column_names: set[str], dataset_id: int
+) -> dict[str, Any]:
     if "referenced_dataset_id" in item or "referenced_column_name" in item:
         referenced_dataset_id = item.get("referenced_dataset_id")
         referenced_column_name = item.get("referenced_column_name")
@@ -264,5 +296,8 @@ def _checked_reference(item: dict[str, Any], index: int, column_name: str, actua
             raise DataDictionaryValidationError("A column cannot reference itself.")
         if referenced_column is not None and referenced_column not in actual_column_names:
             raise DataDictionaryValidationError(f"Unknown referenced column: {referenced_column}.")
-        return {"referenced_dataset_id": dataset_id if referenced_column else None, "referenced_column_name": referenced_column}
+        return {
+            "referenced_dataset_id": dataset_id if referenced_column else None,
+            "referenced_column_name": referenced_column
+        }
     return {}

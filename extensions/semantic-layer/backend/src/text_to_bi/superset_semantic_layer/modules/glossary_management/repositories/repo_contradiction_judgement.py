@@ -22,6 +22,5 @@ class ContradictionJudgementRepository(BaseRepository[ContradictionJudgement]):
 
     # -------------------------DELETE-------------------------
     def delete_except(self, fingerprints: Collection[str]) -> None:
-        """Xóa kết luận của nội dung không còn lượt kiểm tra nào đọc tới."""
         stale = self.query().filter(ContradictionJudgement.fingerprint.notin_(list(fingerprints)))
         stale.delete(synchronize_session=False)

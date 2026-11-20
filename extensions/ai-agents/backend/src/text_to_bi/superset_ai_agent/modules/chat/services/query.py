@@ -47,11 +47,6 @@ class PlannedQuery:
     time_grain: str | None = None
 
     def request_body(self, compared: bool = False) -> dict[str, Any]:
-        """What the Semantic Layer's execution endpoint accepts: column names, filters and a time grain.
-
-        The Semantic Layer applies each metric's own grain, time window and default filters unless a filter here names
-        the same column.
-        """
         filters = self.comparison["filters"] if compared and self.comparison else self.filters
         body = {
             "dimensions": [dimension["name"] for dimension in self.dimensions],
@@ -65,7 +60,6 @@ class PlannedQuery:
 
 
 def whole_day_filters(item: dict[str, Any], timestamp: bool) -> list[dict[str, Any]]:
-    """A filter as sent; on a timestamp column a date means the whole day, so "<= 25/10" keeps 25/10 23:00."""
     sent = {"column": item["column"], "operator": item["operator"], "value": item["value"]}
     day = _date_only(item["value"]) if timestamp else None
     if day is None:
@@ -81,7 +75,6 @@ def whole_day_filters(item: dict[str, Any], timestamp: bool) -> list[dict[str, A
 
 
 def _date_only(value: Any) -> date | None:
-    """The date a value names when it is a bare date such as "2026-10-25", not a moment of a day."""
     if not isinstance(value, str) or len(value) != 10:
         return None
     try:
@@ -99,7 +92,6 @@ def _is_numeric(column: dict[str, Any]) -> bool:
 
 
 def _coerced(value: Any, column: dict[str, Any]) -> Any:
-    """A number the model wrote as text becomes a number on a numeric column; a date stays an ISO string."""
     if isinstance(value, list):
         return [_coerced(item, column) for item in value]
     if not _is_numeric(column):
@@ -113,16 +105,10 @@ def _coerced(value: Any, column: dict[str, Any]) -> Any:
 
 
 def _key(value: Any) -> str:
-    """A key as text, so 1, 1.0 and "1" find the same label."""
     return str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
 
 
 def _value_labels(dataset: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """For each key column with labelled values, the label of each key, so a result says "Ha Noi" rather than 1.
-
-    A key can have several labelling columns (a city's name and its region); the one that tells the most keys apart
-    names the key itself.
-    """
     labels: dict[str, dict[str, Any]] = {}
     for item in dataset.get("labelled_values", []):
         candidate = {_key(member["value"]): member["label"] for member in item.get("values", [])}
@@ -139,17 +125,11 @@ def _shown_value(value: Any, labels: dict[str, str]) -> Any:
 
 
 def _folded(text: Any) -> str:
-    """Text without case, accents or extra spaces, so "Hà Nội" and "ha  noi" both find "Ha Noi"."""
     decomposed = unicodedata.normalize("NFD", str(text).replace("đ", "d").replace("Đ", "D"))
     return " ".join("".join(char for char in decomposed if not unicodedata.combining(char)).casefold().split())
 
 
 def _stored_spellings(dataset: dict[str, Any], value_labels: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """For each column with labelled values, the stored value that each label, however spelled, stands for.
-
-    The warehouse may store names without accents ("Ha Noi") while a question writes "Hà Nội". A key column takes the
-    key its label names, when no other key shares that label; a column holding the labels takes the stored label.
-    """
     spellings: dict[str, dict[str, Any]] = {}
     for item in dataset.get("labelled_values", []):
         if item.get("label_column"):
@@ -164,7 +144,6 @@ def _stored_spellings(dataset: dict[str, Any], value_labels: dict[str, dict[str,
 
 
 def _respelled(value: Any, spellings: dict[str, Any]) -> Any:
-    """A value as the column stores it, when it is a known label spelled another way."""
     if isinstance(value, list):
         return [_respelled(item, spellings) for item in value]
     if not isinstance(value, str):
@@ -203,7 +182,6 @@ def _checked_filter(
 
 
 def checked_conditions(dataset: dict[str, Any], filters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """A definition's conditions checked against its dataset, kept as `{column, label, operator, value}`."""
     columns = {column["name"]: column for column in dataset["columns"]}
     value_labels = _value_labels(dataset)
     spellings = _stored_spellings(dataset, value_labels)
@@ -224,7 +202,6 @@ def _shown_date(value: date | str) -> str:
 
 
 def _period(filters: list[dict[str, Any]], column: str) -> tuple[date | None, date | None]:
-    """The first and last day the time filters on `column` allow."""
     start = end = None
     for item in filters:
         if item["column"] != column or item["operator"] not in ("==", ">=", ">", "<=", "<"):
@@ -240,7 +217,6 @@ def _period(filters: list[dict[str, Any]], column: str) -> tuple[date | None, da
 
 
 def _coverage(dataset: dict[str, Any], column: str, start: date | None, end: date | None) -> dict[str, Any] | None:
-    """How much of the asked period the data covers: all of it, part of it, or none of it."""
     known = next((item for item in dataset.get("time_ranges", []) if item["column"] == column), None)
     first, last = (_iso_date(known["min"]), _iso_date(known["max"])) if known else (None, None)
     if first is None or last is None:
@@ -272,7 +248,6 @@ def _comparison(
     plan: dict[str, Any], filters: list[dict[str, Any]], dimensions: list[dict[str, Any]],
     columns: dict[str, dict[str, Any]], value_labels: dict[str, dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """The same filters with the asked period swapped for the compared one."""
     asked = plan.get("comparison")
     if not asked:
         return None
@@ -300,11 +275,6 @@ def _comparison(
 def _time_grain(
     asked: Any, metrics: list[dict[str, Any]], dimensions: list[dict[str, Any]]
 ) -> tuple[str | None, list[str]]:
-    """The grain to group the metrics' time column by, and a note when the data is coarser than the question.
-
-    Only a grain every metric can take is sent: each metric must declare a time column (its `query_defaults`) that the
-    query is split by; otherwise the metrics keep their own grain.
-    """
     if asked not in GRAINS[1:]:
         return None, []
     dimension_names = {dimension["name"] for dimension in dimensions}
@@ -314,7 +284,9 @@ def _time_grain(
     native = [item["native_grain"] for item in defaults if item.get("native_grain") in GRAINS]
     coarsest = max(native, key=GRAINS.index, default=None)
     if coarsest and coarsest != "instant" and GRAINS.index(asked) < GRAINS.index(coarsest):
-        names = ", ".join(metric["name"] for metric, item in zip(metrics, defaults) if item.get("native_grain") == coarsest)
+        names = ", ".join(
+            metric["name"] for metric, item in zip(metrics, defaults) if item.get("native_grain") == coarsest
+        )
         word = GRAIN_WORDS.get(coarsest, coarsest)
         return coarsest, [f"{names} chỉ có số liệu theo {word}, nên kết quả được tính theo {word}."]
     return asked, []
@@ -326,11 +298,6 @@ def plan_query(
     catalog_metrics: list[dict[str, Any]],
     rules: list[dict[str, Any]],
 ) -> PlannedQuery:
-    """Check the model's plan and add the stored conditions of the rules and user definitions the question uses.
-
-    Each of `rules` is `{name, dataset_id, filters, source}`, with source `expert_rule` (the default) or
-    `user_definition`.
-    """
     if not plan:
         raise QueryPlanError("Chưa lập được truy vấn cho câu hỏi.")
     dataset = next((item for item in catalog_datasets if item["id"] == plan.get("dataset_id")), None)
@@ -424,7 +391,6 @@ def plan_query(
 
 
 def _cell(value: Any, dimension: dict[str, Any]) -> Any:
-    """Superset sends dates as HTTP dates and keys as keys; the answer and the chart want ISO dates and labels."""
     if "value_labels" in dimension:
         return dimension["value_labels"].get(_key(value), value)
     if dimension["temporal"] and isinstance(value, str):
@@ -451,7 +417,6 @@ def _number(value: Any) -> Any:
 def _merge(
     rows: dict[tuple, dict[str, Any]], planned: PlannedQuery, answers: list[dict[str, Any]], suffix: str = "",
 ) -> bool:
-    """Fold each metric's rows into one row per dimension value; True when the Semantic Layer cut any of them."""
     truncated = False
     for metric, answer in zip(planned.metrics, answers):
         truncated = truncated or bool(answer.get("truncated"))
@@ -466,7 +431,6 @@ def _merge(
 
 
 def _days_when_daily(rows: list[dict[str, Any]], planned: PlannedQuery) -> None:
-    """A time column whose every value falls at midnight holds days, shown as dates; an hourly one keeps its times."""
     for dimension in planned.dimensions:
         if not dimension["temporal"]:
             continue
@@ -493,7 +457,6 @@ def _ordered(rows: list[dict[str, Any]], planned: PlannedQuery) -> list[dict[str
 
 
 def applied_defaults(planned: PlannedQuery, answers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What each metric's own defaults added to the query, with a note when a default time window chose the period."""
     applied = []
     for metric, answer in zip(planned.metrics, answers):
         used = answer.get("applied_defaults")
@@ -522,7 +485,6 @@ def applied_defaults(planned: PlannedQuery, answers: list[dict[str, Any]]) -> li
 def combined_result(
     planned: PlannedQuery, answers: list[dict[str, Any]], compared_answers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One table: a row per dimension value, a column per metric, and per metric its value in the compared period."""
     rows: dict[tuple, dict[str, Any]] = {}
     truncated = _merge(rows, planned, answers)
     if planned.comparison and compared_answers is not None:
@@ -582,14 +544,12 @@ def combined_result(
 
 
 def shown_number(value: Any) -> Any:
-    """A float rounded as the result card shows it, half away from zero, so the answer quotes the same figure."""
     if isinstance(value, float):
         return float(Decimal(value).quantize(ANSWER_DECIMALS, rounding=ROUND_HALF_UP))
     return value
 
 
 def result_for_answer(result: dict[str, Any]) -> dict[str, Any]:
-    """The result as the final answer reads it: rows capped and rounded, the row count kept, the queries left out."""
     shown = [{key: shown_number(value) for key, value in row.items()} for row in result["rows"][:ROWS_FOR_ANSWER]]
     answer = {key: value for key, value in result.items() if key != "queries"}
     return {**answer, "rows": shown, "rows_omitted": result["row_count"] - len(shown)}

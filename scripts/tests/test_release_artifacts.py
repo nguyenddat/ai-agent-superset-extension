@@ -24,7 +24,13 @@ def test_provenance_detects_backend_and_frontend_changes(tmp_path, monkeypatch):
     with zipfile.ZipFile(extension.bundle, "w") as bundle:
         bundle.write(backend, "backend/src/entrypoint.py")
         bundle.write(staged, "frontend/dist/main.js")
-    extension.provenance.write_text(json.dumps({"bundle_sha256": _common.sha256_file(extension.bundle), "sources": _common.source_fingerprint(extension)}), encoding="utf-8")
+    extension.provenance.write_text(
+        json.dumps({
+            "bundle_sha256": _common.sha256_file(extension.bundle),
+            "sources": _common.source_fingerprint(extension),
+        }),
+        encoding="utf-8",
+    )
 
     assert _common.bundle_problems(extension) == []
     backend.write_text("value = 2", encoding="utf-8")
@@ -41,6 +47,8 @@ def test_provenance_detects_replaced_bundle(tmp_path, monkeypatch):
     (directory / "extension.json").write_text('{}', encoding="utf-8")
     extension = _common.Extension(directory, "superset-semantic-layer", "text-to-bi", "0.1.0")
     extension.bundle.write_bytes(b"new bundle")
-    extension.provenance.write_text(json.dumps({"bundle_sha256": "old hash", "sources": _common.source_fingerprint(extension)}), encoding="utf-8")
+    extension.provenance.write_text(
+        json.dumps({"bundle_sha256": "old hash", "sources": _common.source_fingerprint(extension)}), encoding="utf-8",
+    )
 
     assert any("differs from its build record" in problem for problem in _common.bundle_problems(extension))

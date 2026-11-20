@@ -14,7 +14,6 @@ class AgentChatSessionRepository(BaseRepository[AgentChatSession]):
         return self.query().filter_by(id=session_id, user_id=user_id).one_or_none()
 
     def recent_for_user(self, user_id: int, limit: int) -> list[AgentChatSession]:
-        """The user's conversations, most recently active first."""
         return (
             self.query()
             .filter(AgentChatSession.user_id == user_id)

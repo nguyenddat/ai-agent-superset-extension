@@ -11,8 +11,8 @@ metadata database, and two Superset extensions: an AI Agent and a Semantic Layer
 `docs/handbook/` holds what the team agreed on for writing code here. Read it
 before changing code, and follow it over habits from other projects:
 
-- `docs/handbook/quy-uoc-code.md`: code conventions (line length, naming,
-  docstrings, tests) and Conventional Commits messages,
+- `docs/handbook/quy-uoc-code.md`: code conventions (120-character lines,
+  naming, imports, no docstrings, tests) and Conventional Commits messages,
   `<type>(<scope>): <description>`.
 - `docs/handbook/kien-truc.md`: the backend layers (`common`, `core`,
   `modules`), modules split by business area, the `superset` module for
@@ -228,22 +228,27 @@ business domain; datasets not classified in the Data Dictionary stay out of it.
 The full rules are in `docs/handbook/quy-uoc-code.md`. In short, for Python and
 TypeScript alike:
 
-- Lines may be up to 200 characters. Wrap only past that limit; keep a short
-  call, import, object or JSX element on one line instead of splitting it.
+- Lines may be up to 120 characters. Wrap only past that limit, compactly inside
+  the outermost bracket; keep a call, import, object or JSX element that fits on
+  one line. Do not run `ruff format` or Prettier over existing code.
 - Name variables, functions and components for what they mean in the domain,
   such as `metricContract`, `selectedDataset` or `approvedAt`. Do not abbreviate
   (`ds`, `col`, `m`, `tmp`, `res`); single letters are only for short loop
   indexes.
-- Write no module-level docstrings in Python; Ruff rule `D100` is ignored on
-  purpose. Scripts in `scripts/` keep theirs because `argparse` shows `__doc__`
-  as their `--help` text.
+- Write no docstrings in Python: not for modules, classes or functions. Names and
+  type hints carry the meaning; a short comment explains why. Scripts in
+  `scripts/` keep their module docstring because `argparse` shows `__doc__` as
+  their `--help` text.
+- Inside a module import relatively; put the relative imports after the
+  absolute ones (Ruff rule `I`).
+- Store timezone-aware datetimes normalized to UTC.
 - Write commit messages as Conventional Commits:
   `<type>(<scope>): <description>`, for example
   `fix(semantic-layer): answer an expert rule name collision with 400`.
 
 Ruff configuration is in the root `pyproject.toml` and each extension backend's
-`pyproject.toml`, with the 200-character line length. The frontends have no
-formatter; follow the same limit by hand.
+`pyproject.toml`, with the 120-character line length (`E501`) and import order
+(`I`) checked. The frontends have no formatter; follow the same limit by hand.
 
 ## Local configuration and secrets
 

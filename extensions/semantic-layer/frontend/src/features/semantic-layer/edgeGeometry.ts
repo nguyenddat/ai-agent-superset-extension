@@ -13,17 +13,25 @@ export type EdgeStyle = 'orthogonal' | 'straight' | 'curved';
  * - `label` offsets the label's centre from the middle of the edge; null keeps it on the middle.
  * - `ports` move the source and target ends up or down the card side, from the middle of that side.
  */
-export type EdgeGeometry = { style: EdgeStyle; coords: number[]; waypoints: Point[]; label: Point | null; ports: [number, number] };
+export type EdgeGeometry = {
+  style: EdgeStyle; coords: number[]; waypoints: Point[]; label: Point | null; ports: [number, number];
+};
 
-export const EDGE_STYLES: Array<[EdgeStyle, string]> = [['orthogonal', 'Vuông góc'], ['straight', 'Thẳng'], ['curved', 'Cong']];
-export const DEFAULT_GEOMETRY: EdgeGeometry = { style: 'orthogonal', coords: [], waypoints: [], label: null, ports: [0, 0] };
+export const EDGE_STYLES: Array<[EdgeStyle, string]> = [
+  ['orthogonal', 'Vuông góc'], ['straight', 'Thẳng'], ['curved', 'Cong'],
+];
+export const DEFAULT_GEOMETRY: EdgeGeometry = {
+  style: 'orthogonal', coords: [], waypoints: [], label: null, ports: [0, 0],
+};
 
 /** Edited points snap to this step, a twelfth of a canvas cell. */
 export const EDGE_SNAP = 10;
 /** Length of the horizontal stub an orthogonal edge keeps beside a card before it turns. */
 const STUB = 24;
 
-export const snapPoint = (point: Point): Point => ({ x: Math.round(point.x / EDGE_SNAP) * EDGE_SNAP, y: Math.round(point.y / EDGE_SNAP) * EDGE_SNAP });
+export const snapPoint = (point: Point): Point => ({
+  x: Math.round(point.x / EDGE_SNAP) * EDGE_SNAP, y: Math.round(point.y / EDGE_SNAP) * EDGE_SNAP,
+});
 const outward = (side: Position) => (side === Position.Left ? -1 : 1);
 
 /**
@@ -43,10 +51,13 @@ export function defaultCoords(source: Point, target: Point, sourceSide: Position
 }
 
 /** The orthogonal coordinates from `coords`, or the default shape; always an odd number of them. */
-export function effectiveCoords(geometry: EdgeGeometry, source: Point, target: Point, sourceSide: Position, targetSide: Position): number[] {
+export function effectiveCoords(
+  geometry: EdgeGeometry, source: Point, target: Point, sourceSide: Position, targetSide: Position
+): number[] {
   const coords = geometry.coords.length % 2 === 1 ? geometry.coords : geometry.coords.slice(0, -1);
   if (coords.length > 0) return coords;
-  return source.y === target.y && outward(sourceSide) !== outward(targetSide) && (target.x - source.x) * outward(sourceSide) > 0
+  return source.y === target.y && outward(sourceSide) !== outward(targetSide) &&
+      (target.x - source.x) * outward(sourceSide) > 0
     ? []
     : defaultCoords(source, target, sourceSide, targetSide);
 }
@@ -71,7 +82,9 @@ export function orthogonalRoute(source: Point, target: Point, coords: number[]):
  * ELK draws; null when the route does not alternate that way.
  */
 export function coordsFromRoute(route: Point[]): number[] | null {
-  const points = route.filter((point, index) => index === 0 || point.x !== route[index - 1].x || point.y !== route[index - 1].y);
+  const points = route.filter(
+    (point, index) => index === 0 || point.x !== route[index - 1].x || point.y !== route[index - 1].y
+  );
   // Merge consecutive collinear segments.
   const corners = points.filter((point, index) => {
     if (index === 0 || index === points.length - 1) return true;
@@ -92,13 +105,19 @@ export function coordsFromRoute(route: Point[]): number[] | null {
 }
 
 /** All points the edge passes through, ends included, before any curve is applied. */
-export function edgePoints(geometry: EdgeGeometry, source: Point, target: Point, sourceSide: Position, targetSide: Position): Point[] {
-  if (geometry.style === 'orthogonal') return orthogonalRoute(source, target, effectiveCoords(geometry, source, target, sourceSide, targetSide));
+export function edgePoints(
+  geometry: EdgeGeometry, source: Point, target: Point, sourceSide: Position, targetSide: Position
+): Point[] {
+  if (geometry.style === 'orthogonal') return orthogonalRoute(
+    source, target, effectiveCoords(geometry, source, target, sourceSide, targetSide)
+  );
   return [source, ...geometry.waypoints, target];
 }
 
 /** Cubic Bézier segments of a curve through `points`, leaving and entering the cards along their sides. */
-function curveSegments(points: Point[], sourceSide: Position, targetSide: Position): Array<[Point, Point, Point, Point]> {
+function curveSegments(
+  points: Point[], sourceSide: Position, targetSide: Position
+): Array<[Point, Point, Point, Point]> {
   const last = points.length - 1;
   const tangents = points.map((point, index) => {
     if (index === 0 || index === last) {
@@ -128,8 +147,14 @@ function polylinePath(points: Point[], radius: number): string {
     const inLength = Math.hypot(corner.x - previous.x, corner.y - previous.y);
     const outLength = Math.hypot(next.x - corner.x, next.y - corner.y);
     const r = Math.min(radius, inLength / 2, outLength / 2);
-    const before = { x: corner.x - ((corner.x - previous.x) / (inLength || 1)) * r, y: corner.y - ((corner.y - previous.y) / (inLength || 1)) * r };
-    const after = { x: corner.x + ((next.x - corner.x) / (outLength || 1)) * r, y: corner.y + ((next.y - corner.y) / (outLength || 1)) * r };
+    const before = {
+      x: corner.x - ((corner.x - previous.x) / (inLength || 1)) * r,
+      y: corner.y - ((corner.y - previous.y) / (inLength || 1)) * r,
+    };
+    const after = {
+      x: corner.x + ((next.x - corner.x) / (outLength || 1)) * r,
+      y: corner.y + ((next.y - corner.y) / (outLength || 1)) * r,
+    };
     path += ` L ${before.x},${before.y} Q ${corner.x},${corner.y} ${after.x},${after.y}`;
   }
   const last = points[points.length - 1];
@@ -137,10 +162,17 @@ function polylinePath(points: Point[], radius: number): string {
 }
 
 /** The SVG path of an edge, and a polyline that follows it closely enough to place the label on. */
-export function edgePath(geometry: EdgeGeometry, points: Point[], sourceSide: Position, targetSide: Position): { path: string; trace: Point[] } {
-  if (geometry.style !== 'curved') return { path: polylinePath(points, geometry.style === 'orthogonal' ? 8 : 0), trace: points };
+export function edgePath(
+  geometry: EdgeGeometry, points: Point[], sourceSide: Position, targetSide: Position
+): { path: string; trace: Point[] } {
+  if (geometry.style !== 'curved') return {
+    path: polylinePath(points, geometry.style === 'orthogonal' ? 8 : 0), trace: points,
+  };
   const segments = curveSegments(points, sourceSide, targetSide);
-  const path = segments.reduce((text, [, c1, c2, end]) => `${text} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${end.x},${end.y}`, `M ${points[0].x},${points[0].y}`);
+  const path = segments.reduce(
+    (text, [, c1, c2, end]) => `${text} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${end.x},${end.y}`,
+    `M ${points[0].x},${points[0].y}`
+  );
   const trace = [points[0]];
   for (const [p0, p1, p2, p3] of segments) {
     for (let step = 1; step <= 16; step += 1) {
@@ -162,7 +194,10 @@ export function midpoint(trace: Point[]): Point {
   for (const [index, length] of lengths.entries()) {
     if (remaining <= length && length > 0) {
       const ratio = remaining / length;
-      return { x: trace[index].x + (trace[index + 1].x - trace[index].x) * ratio, y: trace[index].y + (trace[index + 1].y - trace[index].y) * ratio };
+      return {
+        x: trace[index].x + (trace[index + 1].x - trace[index].x) * ratio,
+        y: trace[index].y + (trace[index + 1].y - trace[index].y) * ratio,
+      };
     }
     remaining -= length;
   }

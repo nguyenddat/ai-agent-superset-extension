@@ -79,7 +79,6 @@ def _trees() -> list[ast.Module]:
 
 
 def api_methods() -> dict[str, ast.FunctionDef]:
-    """Every method of SemanticLayerAPI and its route mixins, by name; each call returns fresh nodes."""
     return {
         member.name: member
         for tree in _trees()
@@ -91,14 +90,12 @@ def api_methods() -> dict[str, ast.FunctionDef]:
 
 
 def module_function(name: str) -> ast.FunctionDef:
-    """A module-level function of the routes, the shared services, core/security.py, core/database.py or migrations."""
     return next(
         node for tree in _trees() for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name
     )
 
 
 def api_class(names: set[str], class_name: str = "SemanticLayerAPI") -> ast.ClassDef:
-    """A class deriving from RestApi with the named methods, keeping only their @staticmethod and @handle_errors."""
     methods = api_methods()
     body = []
     for name in sorted(names):
@@ -115,7 +112,6 @@ def api_class(names: set[str], class_name: str = "SemanticLayerAPI") -> ast.Clas
 
 
 def compile_into(namespace: dict, *nodes: ast.stmt) -> dict:
-    """Run the given definitions in `namespace`, so they read its fakes as their globals."""
     namespace.setdefault("Any", Any)
     namespace.setdefault("Callable", Callable)
     # The formatters are pure, so the routes use the real ones.

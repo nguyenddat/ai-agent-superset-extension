@@ -64,7 +64,9 @@ function ProposalDetail({ proposal, busy, onSave, onCreate, onReject }: {
           <p>
             <span className={`sl-proposal-status is-${proposal.status}`}>{STATUS_LABELS[proposal.status]}</span>
             AI Agent đề xuất khi trả lời {proposal.proposer_name ?? 'người dùng'} · {formatTime(proposal.created_on)}
-            {proposal.reviewer_name ? <> · xử lý bởi {proposal.reviewer_name}, {formatTime(proposal.reviewed_on)}</> : null}
+            {proposal.reviewer_name
+              ? <> · xử lý bởi {proposal.reviewer_name}, {formatTime(proposal.reviewed_on)}</>
+              : null}
           </p>
         </div>
         {pending ? (
@@ -160,7 +162,9 @@ export function DatasetProposalReview() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setProposals((await requestJson<{ proposals: DatasetProposal[] }>(semanticLayerApi.datasetProposals, 'GET')).proposals);
+      setProposals(
+        (await requestJson<{ proposals: DatasetProposal[] }>(semanticLayerApi.datasetProposals, 'GET')).proposals
+      );
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không tải được đề xuất dataset.');

@@ -66,7 +66,10 @@ export function TransformationFields({
             {sources.map((source, index) => (
               <span key={`${source.dataset_id}.${source.column_name}`} className="sl-transformation-source">
                 {tableName(source.dataset_id)}.{source.column_name}
-                <button type="button" aria-label={`Bỏ ${source.column_name}`} disabled={disabled} onClick={() => removeSource(index)}>
+                <button
+                  type="button" aria-label={`Bỏ ${source.column_name}`} disabled={disabled}
+                  onClick={() => removeSource(index)}
+                >
                   <X size={12} />
                 </button>
               </span>

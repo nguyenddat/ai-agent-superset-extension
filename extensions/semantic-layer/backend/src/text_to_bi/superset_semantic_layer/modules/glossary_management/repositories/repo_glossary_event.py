@@ -20,7 +20,6 @@ class GlossaryEventRepository(BaseRepository[GlossaryTermAuditEvent]):
         return self.query().filter_by(term_id=term_id).order_by(GlossaryTermAuditEvent.id).all()
 
     def read_latest_authoring(self, revision_id: int) -> GlossaryTermAuditEvent | None:
-        """Sự kiện tạo hoặc sửa gần nhất của một bản; người thực hiện là tác giả."""
         return (
             self.query()
             .filter(GlossaryTermAuditEvent.revision_id == revision_id)

@@ -9,14 +9,6 @@ def transformation_edges(
     table_names: Mapping[int, str],
     live_columns: Mapping[int, set[str]],
 ) -> dict[EdgeKey, dict[str, Any]]:
-    """Dataset-level ``transform`` edges from the column transformations administrators declared.
-
-    ``rows`` are (target column, expression, source column) dictionary rows in declared order, ``table_names`` names
-    the datasets on the canvas and ``live_columns`` their Superset columns. One edge joins each source dataset to each
-    target dataset it feeds; it lists every target column it feeds, with the expression and all of that column's input
-    columns. Inputs from the target's own dataset, or from datasets or columns not on the canvas, draw no edge but stay
-    in the column's list of inputs.
-    """
     targets: dict[int, tuple[Any, str | None, list[Any]]] = {}
     for target, expression, source in rows:
         if target.column_name in live_columns.get(target.dataset_id, ()):

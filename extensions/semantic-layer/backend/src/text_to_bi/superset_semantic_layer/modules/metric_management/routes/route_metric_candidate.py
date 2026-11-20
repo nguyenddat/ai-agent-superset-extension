@@ -61,12 +61,6 @@ class MetricCandidateRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def create_agent_metric(self):
-        """Save the metric the AI Agent built on an aggregate dataset as a candidate for review, or reuse one.
-
-        A metric with the same formula already on the dataset is reused: an approved one answers as it is, one the agent
-        proposed earlier answers as provisional again. A new metric gets its business definition and an AI Agent
-        candidate contract, so it answers the asker at once as a provisional figure and waits for an administrator.
-        """
         require_semantic_layer_query()
         ensure_dictionary_tables()
         body = request.get_json(silent=True)
@@ -89,9 +83,13 @@ class MetricCandidateRoutes(RouteMixin):
         if contract is not None:
             state = metric_contract_state(contract, dataset, metric, contracts.query_defaults(dataset, metric))
             if state == ReviewStatus.APPROVED.value:
-                return self.response(200, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': False}))
+                return self.response(
+                    200, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': False})
+                )
             if state == ReviewStatus.DRAFT.value and contract.origin == AGENT_ORIGIN:
-                return self.response(200, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': True}))
+                return self.response(
+                    200, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': True})
+                )
             if state == ReviewStatus.REVOKED.value:
                 raise AgentMetricRevokedError()
             raise AgentMetricPendingError()
@@ -109,10 +107,11 @@ class MetricCandidateRoutes(RouteMixin):
         note = f"AI Agent đề xuất khi trả lời: {question}" if question else "AI Agent đề xuất."
         contracts.propose_for_agent(dataset, metric, draft.definition, draft.unit, note, current_user.id)
         db.session.commit()
-        return self.response(201, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': True}))
+        return self.response(
+            201, **public_payload({'metric': self._agent_metric(dataset, metric), 'provisional': True})
+        )
 
     def _agent_metric(self, dataset: SqlaTable, metric: Any) -> dict[str, Any]:
-        """The metric in the shape of a semantic catalog metric, which the agent queries like an approved one."""
         definition = metric_definition_repository().read_by_metric(metric.id)
         return {
             "dataset_id": dataset.id,

@@ -23,8 +23,9 @@ MAX_FILTERS = 50
 QUERY_FIELDS = {"dimensions", "filters", "time_grain", "apply_defaults"}
 
 
-def build_metric_chart_payload(dataset: Any, metric: Any, query: Any, max_rows: int, defaults: MetricQueryDefaults | None = None) -> dict[str, Any]:
-    """Build the constrained ChartData payload without executing it."""
+def build_metric_chart_payload(
+    dataset: Any, metric: Any, query: Any, max_rows: int, defaults: MetricQueryDefaults | None = None
+) -> dict[str, Any]:
     return planned_metric_chart(dataset, metric, query, max_rows, defaults)[0]
 
 
@@ -39,8 +40,10 @@ def execute_approved_chart_query(
     defaults: MetricQueryDefaults | None = None,
     latest_time: Callable[[list[dict[str, Any]]], Any] | None = None,
 ) -> Any:
-    """Gate ChartData execution on the current approved contract or an explicit candidate preview."""
-    previewable = allow_candidate and contract is not None and metric_contract_state(contract, dataset, metric, defaults) == "candidate"
+    previewable = (
+        allow_candidate and contract is not None
+        and metric_contract_state(contract, dataset, metric, defaults) == "candidate"
+    )
     if not previewable and not contract_is_approved_current(contract, dataset, metric, defaults):
         raise ApprovedMetricContractRequiredError()
     payload, applied = planned_metric_chart(dataset, metric, query, max_rows, defaults, latest_time)
@@ -54,10 +57,6 @@ class MetricExecuteService:
 
     # -------------------------EXECUTE------------------------
     def execute(self, dataset: Any, metric: Any, query: Any, runner: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
-        """Chạy metric đã duyệt qua ChartData; admin chạy thử được bản nháp, bản nháp của AI Agent trả số tạm.
-
-        `runner` nhận payload ChartData và chạy với quyền của người gọi (datasource/RLS do Superset kiểm tra).
-        """
         contract = self.contracts.read(dataset, metric)
         if contract is None:
             raise ApprovedMetricContractRequiredError()
@@ -89,7 +88,6 @@ class MetricExecuteService:
 
 
 def run_chart_query(payload: dict[str, Any]) -> dict[str, Any]:
-    """Chạy một payload ChartData với quyền của người gọi; validate() là cổng datasource/RLS của Superset."""
     from superset.charts.schemas import ChartDataQueryContextSchema
     from superset.commands.chart.data.get_data_command import ChartDataCommand
 
@@ -108,10 +106,6 @@ def planned_metric_chart(
     latest_time: Callable[[list[dict[str, Any]]], Any] | None = None,
     now: datetime | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Payload ChartData duy nhất mà việc chạy metric chấp nhận, kèm các giá trị mặc định đã áp.
-
-    Chỉ nhận tên cột có thật trong dataset; không có SQL, join, biểu thức hay giới hạn dòng do người gọi đặt.
-    """
     if isinstance(query, dict) and "joins" in query:
         raise MetricContractValidationError("Truy vấn metric không nối nhiều dataset.")
     if not isinstance(query, dict) or set(query) - QUERY_FIELDS:

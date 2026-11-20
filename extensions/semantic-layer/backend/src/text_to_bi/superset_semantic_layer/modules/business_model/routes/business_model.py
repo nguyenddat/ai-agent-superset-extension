@@ -60,15 +60,12 @@ logger = logging.getLogger(__name__)
 
 
 class BusinessModelRoutes:
-    """SemanticLayerAPI routes for the Semantic Model: canvases, data layers, business domains and lineage edges."""
-
     @expose("/business-model", methods=("GET",))
     @protect()
     @safe
     @permission_name("read")
     @handle_errors
     def get_business_model(self):
-        """Return business domains, dictionary-derived lineage and metrics for one Superset database."""
         require_admin()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
@@ -100,8 +97,6 @@ class BusinessModelRoutes:
 
     @staticmethod
     def _canvas_layout(payload: Any) -> dict[str, Any]:
-        """Validate a business-view canvas: domain keys with their header and cells, and one cell per table."""
-
         def cell(value: Any) -> list[int]:
             if (
                 not isinstance(value, list)
@@ -147,7 +142,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def save_business_canvas(self):
-        """Store where the business view draws each domain and table for one Superset database."""
         require_admin()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
@@ -170,8 +164,6 @@ class BusinessModelRoutes:
 
     @staticmethod
     def _lineage_layout(payload: Any) -> dict[str, Any]:
-        """Validate a lineage canvas: card positions and edge shapes keyed by their canvas IDs."""
-
         def number(value: Any) -> float:
             if isinstance(value, bool) or not isinstance(value, int | float) or abs(value) > CANVAS_MAX_COORDINATE:
                 raise BusinessModelValidationError("Coordinates must be numbers within the canvas.")
@@ -225,7 +217,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def save_lineage_canvas(self):
-        """Store the lineage cards the user moved and the edges the user shaped for one Superset database."""
         require_admin()
         database_id = request.args.get("database_id", type=int)
         if database_id is None:
@@ -252,7 +243,6 @@ class BusinessModelRoutes:
     @permission_name("read")
     @handle_errors
     def get_data_layers(self):
-        """List admin-defined data layers in flow order."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         layers = data_layer_repository().in_flow_order()
@@ -298,7 +288,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def create_data_layer(self):
-        """Append a data layer after the existing ones."""
         require_admin()
         ensure_dictionary_tables()
         return self._save_layer(None)
@@ -311,7 +300,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def update_data_layer(self, layer_id: int):
-        """Rename or recolour a data layer."""
         require_admin()
         ensure_dictionary_tables()
         layer = data_layer_repository().get(layer_id)
@@ -327,7 +315,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def delete_data_layer(self, layer_id: int):
-        """Delete a data layer; its datasets become unclassified."""
         require_admin()
         ensure_dictionary_tables()
         layer_repository = data_layer_repository()
@@ -347,7 +334,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def reorder_data_layers(self):
-        """Set the levels of all data layers, in flow order, from a list of levels that each list their layer IDs."""
         require_admin()
         ensure_dictionary_tables()
         payload = request.get_json(silent=True)
@@ -423,7 +409,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def create_business_domain(self):
-        """Create a business domain and assign datasets to it."""
         require_admin()
         return self._save_domain(None)
 
@@ -435,7 +420,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def update_business_domain(self, domain_id: int):
-        """Rename a business domain or replace its datasets."""
         require_admin()
         ensure_dictionary_tables()
         domain = business_domain_repository().get(domain_id)
@@ -451,7 +435,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def delete_business_domain(self, domain_id: int):
-        """Delete a business domain; its datasets are kept."""
         require_admin()
         ensure_dictionary_tables()
         domain_repository = business_domain_repository()
@@ -482,7 +465,6 @@ class BusinessModelRoutes:
 
     @staticmethod
     def _edge_override(key: tuple[int, int, str]) -> tuple[LineageEdge | None, bool]:
-        """The override row for an edge and whether the Data Dictionary infers that edge (FK or transformation)."""
         datasets = {
             dataset.id: dataset for dataset in get_datasets(key[:2])
         }
@@ -497,7 +479,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def add_lineage_edge(self):
-        """Add a manual lineage edge, or restore an inferred edge that was hidden."""
         require_admin()
         ensure_dictionary_tables()
         source_id, target_id, kind = self._edge_key(request.get_json(silent=True))
@@ -524,7 +505,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def set_lineage_edge_color(self):
-        """Set or clear the display colour of a lineage edge, whether manual or inferred from the dictionary."""
         require_admin()
         ensure_dictionary_tables()
         payload = request.get_json(silent=True)
@@ -561,10 +541,6 @@ class BusinessModelRoutes:
     @rollback_on_error
     @handle_errors
     def remove_lineage_edge(self):
-        """Remove a manual lineage edge, or hide a reference edge inferred from the data dictionary.
-
-        A declared transformation's edge is not hidden: it goes when the transformation is removed in the dictionary.
-        """
         require_admin()
         ensure_dictionary_tables()
         source_id, target_id, kind = self._edge_key(request.get_json(silent=True))

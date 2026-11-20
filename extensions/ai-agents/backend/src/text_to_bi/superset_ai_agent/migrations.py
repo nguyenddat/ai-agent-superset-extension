@@ -35,11 +35,6 @@ ADDED_COLUMNS_DDL = (
 
 
 def ensure_agent_tables() -> None:
-    """Create and upgrade the AI Agent's tables in Superset's metadata database, once per process.
-
-    ALTER TABLE takes ACCESS EXCLUSIVE locks, so the workers take turns under an advisory lock, and a failed run is not
-    retried for `AGENT_MIGRATION_RETRY_SECONDS`.
-    """
     global _agent_tables_ready, _agent_migration_failed_at
     if _agent_tables_ready:
         return

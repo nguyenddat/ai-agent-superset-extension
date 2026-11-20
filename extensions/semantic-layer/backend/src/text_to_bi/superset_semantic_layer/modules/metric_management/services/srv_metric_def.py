@@ -42,7 +42,6 @@ class MetricDefService:
         return definition
 
     def update_query_defaults(self, dataset: Any, metric: Any, body: Any) -> MetricQueryDefaults:
-        """Lưu grain, mốc thời gian và bộ lọc mặc định sau khi kiểm tra theo dataset và công thức."""
         definition = self.read(dataset, metric)
         if definition is None:
             raise MetricContractValidationError(

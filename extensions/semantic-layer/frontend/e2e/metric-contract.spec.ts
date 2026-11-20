@@ -11,7 +11,10 @@ const metricId = process.env.E2E_METRIC_ID;
 const apiPrefix = '/extensions/text-to-bi/superset-semantic-layer/semantic-layer';
 
 test.describe('metric contract lifecycle (local stack)', () => {
-  test.skip(!username || !password || !datasetId || !metricId, 'Requires explicitly configured local test credentials and IDs.');
+  test.skip(
+    !username || !password || !datasetId || !metricId,
+    'Requires explicitly configured local test credentials and IDs.'
+  );
 
   test('admin creates, approves, executes, and revokes a saved metric contract', async ({ page }) => {
     await page.goto(`${baseURL}/login/`);

@@ -20,21 +20,12 @@ EMBEDDING_FAILURES = (requests.RequestException, ValueError, KeyError, TypeError
 
 @dataclass(frozen=True)
 class TextVectors:
-    """Vectors of some texts and how they were made: `embedding` by `model`, or `tfidf` from the texts' own words."""
-
     method: str
     model: str | None
     vectors: list[Any]
 
 
 def text_vectors(texts: list[str]) -> TextVectors:
-    """Vector của các đoạn văn từ model embedding đã cấu hình, hoặc TF-IDF khi không dùng được model.
-
-    The remote model reads meaning across wording ("mưa to" and "lượng mưa lớn"); TF-IDF only matches shared words,
-    but needs no key or network, so suggestions still work locally and when OpenRouter fails. One method covers all
-    the texts, because similarities from the two are not comparable. Missing vectors stay in memory; existing cache
-    rows are read without changing the session.
-    """
     model = settings.OPENROUTER_EMBEDDING_MODEL.strip()
     if texts and settings.OPENROUTER_API_KEY and model:
         try:
@@ -49,7 +40,6 @@ def text_hash(text: str) -> str:
 
 
 def _embedded_vectors(texts: list[str], model: str) -> list[list[float]]:
-    """Vector đã cache theo hash; phần còn thiếu gọi model và giữ trong bộ nhớ."""
     repository = text_embedding_repository()
     hashes = [text_hash(text) for text in texts]
     vectors = repository.read_vectors(model, sorted(set(hashes)))
@@ -66,7 +56,6 @@ def _embedded_vectors(texts: list[str], model: str) -> list[list[float]]:
 
 
 def _requested_vectors(texts: list[str], model: str) -> list[list[float]]:
-    """Vector từ endpoint embeddings tương thích OpenAI của OpenRouter, theo thứ tự các đoạn văn."""
     response = requests.post(
         f"{settings.OPENROUTER_BASE_URL.rstrip('/')}/embeddings",
         headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},

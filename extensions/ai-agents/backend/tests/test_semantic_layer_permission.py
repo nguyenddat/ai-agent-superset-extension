@@ -12,7 +12,6 @@ SECURITY_MODULE = "text_to_bi.superset_ai_agent.core.security"
 
 @pytest.fixture
 def security(monkeypatch):
-    """core.security with a signed-in user whose roles grant the permissions in `granted`."""
     user = SimpleNamespace(is_authenticated=True, roles=[], granted=set())
     login_module = types.ModuleType("flask_login")
     login_module.current_user = user

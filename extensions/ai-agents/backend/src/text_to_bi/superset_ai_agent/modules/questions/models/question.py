@@ -6,15 +6,6 @@ from ....common.base_model import BaseModel
 
 
 class AgentQuestion(BaseModel):
-    """One question asked to the AI Agent and what the governed semantic layer resolved it to.
-
-    A question is `resolved` when the agent named at least one metric, every business concept it uses is defined (by
-    the Semantic Layer or by the user in this conversation), and a qualitative question (`requires_expert_rule`) has an
-    expert rule; otherwise it is `needs_review` and `missing` lists what was not found. A missing term or rule becomes
-    a draft in `clarifications` for the user to confirm; a missing metric is proposed in `suggestions` for an
-    administrator.
-    """
-
     __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)
@@ -50,12 +41,6 @@ class AgentQuestion(BaseModel):
 
 
 class AgentQuestionHandling(BaseModel):
-    """How an administrator handled a `needs_review` question; a question without a row has not been handled yet.
-
-    `to_create` means the missing glossary term, metric or expert rule should be added, `created` that it was, and
-    `ignored` that the question needs nothing. The row lives apart from the log so the log stays append-only.
-    """
-
     __table_args__ = ({"extend_existing": True},)
 
     question_id = Column(Integer, ForeignKey("text_to_bi_agent_question.id", ondelete="CASCADE"), primary_key=True)

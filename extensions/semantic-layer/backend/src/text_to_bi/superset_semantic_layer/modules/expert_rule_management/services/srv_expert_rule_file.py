@@ -46,17 +46,26 @@ PAIR_SEPARATOR = "=>"
 RULE_COLUMNS = (
     TemplateColumn("name", True, "Tên rule; khớp rule đã có không phân biệt hoa thường.", "Ngày nắng nóng"),
     TemplateColumn("dataset", True, "Tên bảng của dataset; không đổi được sau khi tạo rule.", "tb_gia_tri_quan_sat"),
-    TemplateColumn("group", False, "Tên nhóm; trống là chưa phân nhóm, nhóm chưa có sẽ được tạo.", "Thời tiết cực đoan"),
-    TemplateColumn("glossary_terms", True, "Thuật ngữ đã duyệt, cách nhau bằng ;. Metric của rule lấy từ các thuật ngữ này.", "Nhiệt độ trung bình"),
+    TemplateColumn(
+        "group", False, "Tên nhóm; trống là chưa phân nhóm, nhóm chưa có sẽ được tạo.", "Thời tiết cực đoan"
+    ),
+    TemplateColumn(
+        "glossary_terms", True, "Thuật ngữ đã duyệt, cách nhau bằng ;. Metric của rule lấy từ các thuật ngữ này.",
+        "Nhiệt độ trung bình"
+    ),
     TemplateColumn(
         "conditions",
         True,
         f"Mỗi dòng trong ô là một điều kiện: <cột> {CONDITION_SEPARATOR} <toán tử> {CONDITION_SEPARATOR} <giá trị>. "
-        f"Toán tử: {', '.join(sorted(CONDITION_OPERATORS))}. Giá trị đọc như JSON (35, true, [\"A\", \"B\"]), còn lại là chữ; "
+        f"Toán tử: {', '.join(sorted(CONDITION_OPERATORS))}. "
+        "Giá trị đọc như JSON (35, true, [\"A\", \"B\"]), còn lại là chữ; "
         "is_null và is_not_null không có giá trị.",
         f"gia_tri_so {CONDITION_SEPARATOR} greater_than_or_equal {CONDITION_SEPARATOR} 35",
     ),
-    TemplateColumn("exceptions", False, f"Mỗi dòng trong ô là một ngoại lệ: <khi nào> {PAIR_SEPARATOR} <kết quả>; tối đa 50.", f"Vùng núi cao {PAIR_SEPARATOR} dùng ngưỡng 32"),
+    TemplateColumn(
+        "exceptions", False, f"Mỗi dòng trong ô là một ngoại lệ: <khi nào> {PAIR_SEPARATOR} <kết quả>; tối đa 50.",
+        f"Vùng núi cao {PAIR_SEPARATOR} dùng ngưỡng 32"
+    ),
     TemplateColumn(
         "examples",
         True,
@@ -87,8 +96,6 @@ FIELD_LABELS = {
 
 @dataclass
 class RulePlan:
-    """How a row is applied: the editor payload, the rule it updates and the group the import creates for it."""
-
     payload: dict[str, Any]
     rule_id: int | None = None
     revision: ExpertRuleRevision | None = None
@@ -98,12 +105,12 @@ class RulePlan:
 
 # -------------------------READ---------------------------
 def export_rule_template() -> dict[str, str]:
-    """File Excel mẫu để nhập rule: tiêu đề, một dòng ví dụ và sheet hướng dẫn."""
-    return write_template(RULE_COLUMNS, [[column.example for column in RULE_COLUMNS]], RULE_FILE_NAME, ExpertRuleValidationError)
+    return write_template(
+        RULE_COLUMNS, [[column.example for column in RULE_COLUMNS]], RULE_FILE_NAME, ExpertRuleValidationError
+    )
 
 
 def export_rules() -> dict[str, str]:
-    """Bản hiện tại của mọi rule thành file Excel theo mẫu, import lại được nguyên vẹn."""
     rules, links, terms = expert_rule_repository(), expert_rule_link_repository(), glossary_term_repository()
     rows = []
     for revision in expert_rule_revision_repository().read_all_current():
@@ -129,7 +136,6 @@ def export_rules() -> dict[str, str]:
 
 
 def preview_rule_import(payload: Any) -> list[ImportRow]:
-    """Kết quả import từng dòng của file, kiểm tra như trình soạn; không lưu gì."""
     datasets = business_datasets_by_name()
     first_rows: dict[str, int] = {}
     result = []
@@ -149,11 +155,6 @@ def preview_rule_import(payload: Any) -> list[ImportRow]:
 
 # -------------------------CREATE-------------------------
 def apply_rule_import(payload: Any, actor_id: int) -> list[ImportRow]:
-    """Tạo và cập nhật rule của file thành bản nháp chờ duyệt; một dòng lỗi thì không lưu gì.
-
-    An approved rule is never approved by the import. A row that only changes the group moves the rule without
-    review. The caller commits once.
-    """
     rows = preview_rule_import(payload)
     refusal = refusal_message(rows)
     if refusal:
@@ -265,7 +266,6 @@ def _term_name(term: Any, term_id: int) -> str:
 
 
 def _condition(line: str, column: Callable[[Any], Any], dataset: Any) -> dict[str, Any]:
-    """Điều kiện dạng cũ từ `<cột> | <toán tử> | <giá trị>`; giá trị đọc như JSON nếu được, không thì là chữ."""
     parts = [part.strip() for part in line.split(CONDITION_SEPARATOR, 2)]
     if len(parts) < 2 or not parts[0] or not parts[1]:
         raise ExpertRuleValidationError(f"Điều kiện «{line.strip()}» phải có dạng <cột> | <toán tử> | <giá trị>.")
@@ -313,7 +313,6 @@ def _parses_as_json(text: str) -> bool:
 
 
 def _pairs(cell: str, first: str, second: str, label: str, shape: str) -> list[dict[str, str]]:
-    """Mỗi dòng của ô là một cặp `<first> => <second>`."""
     pairs = []
     for line in cell.splitlines():
         if not line.strip():

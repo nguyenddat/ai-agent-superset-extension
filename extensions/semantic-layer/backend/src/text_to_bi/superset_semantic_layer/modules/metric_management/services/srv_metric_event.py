@@ -23,7 +23,6 @@ class MetricEventService:
         reason: str | None = None,
         contract: MetricContract | None = None,
     ) -> MetricContractEvent:
-        """Ghi một bước trong lịch sử duyệt, kèm ảnh chụp định nghĩa và công thức lúc đó."""
         return self.events.create(
             {
                 "definition_id": definition.id,
@@ -43,5 +42,4 @@ class MetricEventService:
 
     # -------------------------READ---------------------------
     def read_history(self, metric: Any) -> list[MetricContractEvent]:
-        """Lịch sử duyệt của metric, mới nhất trước; còn giữ cả khi định nghĩa đã bị xóa."""
         return self.events.read_history_by_metric(metric.id)

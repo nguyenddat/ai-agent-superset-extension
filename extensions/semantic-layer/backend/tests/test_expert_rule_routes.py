@@ -22,8 +22,12 @@ from text_to_bi.superset_semantic_layer.modules.expert_rule_management.exception
     ExpertRuleSelfApprovalError,
     ExpertRuleValidationError,
 )
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule as expert_rule_service
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_link as rule_links
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule as expert_rule_service,
+)
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule_link as rule_links,
+)
 from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services.srv_expert_rule import ExpertRuleService
 from text_to_bi.superset_semantic_layer.modules.expert_rule_management.utils.util_serializer import (
     serialize_expert_rule,
@@ -161,10 +165,6 @@ class _Query:
 
 
 def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=(), permissions=()):
-    """Load route.py with local stubs; no Superset package or metadata DB is used.
-
-    `permissions` are the Semantic Layer permissions (can_view, can_query) a non-admin user holds through a role.
-    """
     package = "text_to_bi.superset_semantic_layer.modules.expert_rule_management.routes"
     route_name = f"{package}.route_isolated"
     current_user = SimpleNamespace(id=42, is_authenticated=True, roles=[SimpleNamespace(name="Admin")])
@@ -246,7 +246,9 @@ def _load_route(monkeypatch, *, csrf_error=False, allowed_datasets=(), permissio
     metric.__path__ = [str(ROUTE_PATH.parents[1] / ".." / "metric_management" / "models")]
     for name in ("MetricContract", "MetricContractEvent", "MetricDefinition", "RelationshipContract"):
         setattr(metric, name, type(name, (), {}))
-    contracts = types.ModuleType("text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract")
+    contracts = types.ModuleType(
+        "text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract",
+    )
     contracts.contract_is_approved_current = lambda *_: True
     contracts.metric_contract_hash = lambda *_: "live"
     core_models = types.ModuleType("superset.models.core")
@@ -405,11 +407,10 @@ def test_discovery_serializes_rule_links_with_lifecycle_and_group_metadata(monke
     assert [item["name"] for item in body["result"]["rules"]] == ["Final only"]
     assert body["result"]["rules"][0]["lifecycle_version"] == 3
     # Discovery names what the rule links to, so a consumer can join it to catalog metrics and glossary terms.
-    assert (body["result"]["rules"][0]["dataset_id"], body["result"]["rules"][0]["glossary_term_ids"], body["result"]["rules"][0]["metric_ids"]) == (
-        7,
-        [3],
-        [],
-    )
+    assert (
+        body["result"]["rules"][0]["dataset_id"], body["result"]["rules"][0]["glossary_term_ids"],
+        body["result"]["rules"][0]["metric_ids"],
+    ) == (7, [3], [])
     # Rules of one group are alike, so a consumer can read them together.
     assert body["result"]["rules"][0]["group"] == {"id": 5, "name": "Lọc bản ghi"}
 
@@ -592,7 +593,9 @@ def test_review_revisions_prefer_the_current_one_and_fall_back_to_the_latest(mon
     assert [(revision.rule_id, revision.revision_number) for _, revision in chosen] == [(1, 2), (2, 2)]
 def test_an_approved_rule_with_a_changed_link_is_outdated(monkeypatch):
     _load_route(monkeypatch)
-    monkeypatch.setattr(rule_links, "live_fingerprint", lambda link: "dataset" if link.kind == "dataset" else "metric-changed")
+    monkeypatch.setattr(
+        rule_links, "live_fingerprint", lambda link: "dataset" if link.kind == "dataset" else "metric-changed",
+    )
     approved = SimpleNamespace(status="approved", is_current=True)
     links = [
         SimpleNamespace(kind="dataset", target_id=7, dataset_id=7, fingerprint="dataset"),
@@ -609,8 +612,13 @@ def test_a_rule_takes_its_metrics_from_its_glossary_terms(monkeypatch):
         3: [SimpleNamespace(kind="metric", metric_id=17), SimpleNamespace(kind="column", metric_id=None)],
         4: [SimpleNamespace(kind="metric", metric_id=20), SimpleNamespace(kind="metric", metric_id=22)],
     }
-    monkeypatch.setattr(rule_links, "_term_links", lambda term_id, dataset_id: term_links[term_id] if dataset_id == 12 else [])
-    monkeypatch.setattr(rule_links, "approved_metric", lambda metric_id: None if metric_id == 22 else SimpleNamespace(status="approved"))
+    monkeypatch.setattr(
+        rule_links, "_term_links", lambda term_id, dataset_id: term_links[term_id] if dataset_id == 12 else [],
+    )
+    monkeypatch.setattr(
+        rule_links, "approved_metric",
+        lambda metric_id: None if metric_id == 22 else SimpleNamespace(status="approved"),
+    )
 
     payload = {"dataset_id": 12, "glossary_term_ids": [3, 4], "metric_ids": [99]}
 

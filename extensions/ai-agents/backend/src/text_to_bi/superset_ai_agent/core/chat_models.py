@@ -8,7 +8,6 @@ from .exceptions import ChatModelNotConfiguredError
 
 @lru_cache(maxsize=1)
 def get_chat_model() -> ChatOpenAI:
-    """The OpenRouter chat model every agent step uses; raises ChatModelNotConfiguredError without an API key."""
     if not settings.OPENROUTER_API_KEY:
         raise ChatModelNotConfiguredError()
     return ChatOpenAI(

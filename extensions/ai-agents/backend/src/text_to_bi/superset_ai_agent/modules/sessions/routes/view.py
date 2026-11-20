@@ -10,7 +10,6 @@ class AgentChatView(BaseSupersetView):
 
     @expose("/")
     def page(self):
-        """Serve Superset's SPA shell; the extension frontend renders the chat page."""
         if not getattr(current_user, "is_authenticated", False):
             return redirect(appbuilder.get_url_for_login)
         if not security_manager.can_access("can_read", "text_to_bi_chat_api"):

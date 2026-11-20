@@ -28,11 +28,16 @@ import {
   useStore,
   useStoreApi,
 } from '@xyflow/react';
-import { ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripHorizontal, Layers3, LoaderCircle, Network, Pencil, Plus, RotateCcw, Sigma, Table2 } from 'lucide-react';
+import {
+  ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripHorizontal, Layers3, LoaderCircle, Network, Pencil, Plus,
+  RotateCcw, Sigma, Table2,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { requestJson, semanticLayerApi } from './api';
 import { getDatasetName, groupDatasetsByLayer } from './datasets';
 import { DOMAIN_COLORS, DomainDialog } from './DomainDialog';
@@ -93,7 +98,9 @@ import {
   validGrid,
 } from './modelLayout';
 import type { CanvasGrid, Cell, Direction, DomainGrid, MembershipChange, Point, Size } from './modelLayout';
-import type { BusinessDomain, BusinessModel, DashboardDataset, DatasetDictionary, LineageEdge, ModelMetric, ThemeMode } from './types';
+import type {
+  BusinessDomain, BusinessModel, DashboardDataset, DatasetDictionary, LineageEdge, ModelMetric, ThemeMode,
+} from './types';
 
 type ViewMode = 'business' | 'lineage';
 /** Membership changes the canvas is waiting for the user to confirm, and the canvas to go back to otherwise. */
@@ -123,7 +130,9 @@ type TableData = {
 
 /** The badge that sets an aggregate table apart from the base tables it is built from. */
 function AggregateBadge({ data }: { data: TableData }) {
-  return data.datasetType === 'aggregate' ? <span className="sl-model-aggregate" title="Bảng Aggregate">Agg</span> : null;
+  return data.datasetType === 'aggregate'
+    ? <span className="sl-model-aggregate" title="Bảng Aggregate">Agg</span>
+    : null;
 }
 /** A lineage card: the table, its lane, the columns it lists (see lineageCard) and the dataset's metrics. */
 type LineageCardData = TableData & {
@@ -142,7 +151,9 @@ type LineageCardData = TableData & {
  */
 type MetricArrowData = { start: number; sources: number[]; lane: number; end: Point; card: string };
 /** A metric beside its card, and the shape of the arrow to it. */
-type MetricData = { metric: ModelMetric; card: string; lane: string; dimmed?: boolean; arrow: Omit<MetricArrowData, 'card'> };
+type MetricData = {
+  metric: ModelMetric; card: string; lane: string; dimmed?: boolean; arrow: Omit<MetricArrowData, 'card'>,
+};
 /** The metric being looked at, hovered itself or through one of its arrows: its card and the roles of its columns. */
 type MetricFocus = { metricNodeId: string; card: string; roles: Map<string, 'measure' | 'filter'> };
 const MetricFocusContext = createContext<{ focus: MetricFocus | null; hover: (metricNodeId: string | null) => void }>({
@@ -175,7 +186,8 @@ function DomainGroupNode({ data }: NodeProps<Node<DomainGroupData>>) {
         const isHeader = key === headerKey;
         const outer = CELL_SIDES.filter(([direction]) => !members.has(cellKey(stepCell(cell, direction))));
         const sides = outer.map(([, side]) => side);
-        const corners = ['tl', 'tr', 'br', 'bl'].filter(corner => sides.includes(corner[0]) && sides.includes(corner[1]));
+        const corners = ['tl', 'tr', 'br', 'bl']
+          .filter(corner => sides.includes(corner[0]) && sides.includes(corner[1]));
         return (
           <div
             key={key}
@@ -192,14 +204,18 @@ function DomainGroupNode({ data }: NodeProps<Node<DomainGroupData>>) {
             {isHeader ? (
               <div className="sl-domain-group-header">
                 {domain ? (
-                  <button className="sl-domain-group-label nodrag" type="button" aria-pressed={data.selected} title={`${domain.name}\nChọn nghiệp vụ để xem data lineage`} onClick={() => data.onToggle(domain.id)}>
+                  <button className="sl-domain-group-label nodrag" type="button" aria-pressed={data.selected}
+                    title={`${domain.name}\nChọn nghiệp vụ để xem data lineage`}
+                    onClick={() => data.onToggle(domain.id)}>
                     {domain.name}
                   </button>
                 ) : <span className="sl-domain-group-label">Chưa phân nghiệp vụ</span>}
                 <span className="sl-domain-group-footer">
                   <span className="sl-domain-group-count">{data.count} bảng</span>
                   {domain ? (
-                    <button className="sl-domain-group-edit nodrag" type="button" aria-label={`Sửa nghiệp vụ ${domain.name}`} onClick={() => data.onEdit(domain)}><Pencil /></button>
+                    <button className="sl-domain-group-edit nodrag" type="button"
+                      aria-label={`Sửa nghiệp vụ ${domain.name}`}
+                      onClick={() => data.onEdit(domain)}><Pencil /></button>
                   ) : null}
                 </span>
               </div>
@@ -219,7 +235,9 @@ function DomainGroupNode({ data }: NodeProps<Node<DomainGroupData>>) {
   );
 }
 
-const HANDLE_SIDES: Array<[string, Position]> = [['t', Position.Top], ['b', Position.Bottom], ['l', Position.Left], ['r', Position.Right]];
+const HANDLE_SIDES: Array<[string, Position]> = [
+  ['t', Position.Top], ['b', Position.Bottom], ['l', Position.Left], ['r', Position.Right],
+];
 
 /**
  * Lineage table card: a header naming the table, one fixed-height row per listed column with a hidden handle on each
@@ -234,7 +252,9 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
   return (
     <div
       className={`sl-lineage-card${data.active ? '' : ' is-inactive'}`}
-      style={{ height: cardHeight(data.content), ...(data.layerColor ? { '--layer-color': data.layerColor } : {}) } as React.CSSProperties}
+      style={{
+        height: cardHeight(data.content), ...(data.layerColor ? { '--layer-color': data.layerColor } : {}),
+      } as React.CSSProperties}
     >
       {HANDLE_SIDES.map(([id, position]) => (
         <Handle
@@ -243,25 +263,33 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
           type="source"
           position={position}
           className="sl-model-handle"
-          style={position === Position.Left || position === Position.Right ? { top: CARD_BORDER + CARD_HEADER / 2 } : undefined}
+          style={position === Position.Left || position === Position.Right
+            ? { top: CARD_BORDER + CARD_HEADER / 2 }
+            : undefined}
         />
       ))}
-      <div className="sl-lineage-card-header" title={`${data.title}\n${data.tableName} · ${data.layerName ?? 'Chưa phân tầng'}`}>
+      <div className="sl-lineage-card-header"
+        title={`${data.title}\n${data.tableName} · ${data.layerName ?? 'Chưa phân tầng'}`}>
         <span className="sl-model-table-icon"><Table2 /></span>
         <span className="sl-model-table-copy">
           <strong>{data.title}</strong>
           <code>{data.tableName}</code>
         </span>
         <AggregateBadge data={data} />
-        {data.sharedCount > 1 ? <span className="sl-model-shared" title={`Dùng chung cho ${data.sharedCount} nghiệp vụ`}>×{data.sharedCount}</span> : null}
+        {data.sharedCount > 1
+          ? <span className="sl-model-shared"
+              title={`Dùng chung cho ${data.sharedCount} nghiệp vụ`}>×{data.sharedCount}</span>
+          : null}
       </div>
       {columns.map(column => (
         <div
           key={column.name}
-          className={`sl-lineage-column${focus?.card === id && focus.roles.has(column.name) ? ` is-${focus.roles.get(column.name)}` : ''}`}
+          className={'sl-lineage-column'
+            + (focus?.card === id && focus.roles.has(column.name) ? ` is-${focus.roles.get(column.name)}` : '')}
           title={column.title}
         >
-          <Handle id={`c:${column.name}:l`} type="source" position={Position.Left} isConnectable={false} className="sl-column-handle" />
+          <Handle id={`c:${column.name}:l`} type="source" position={Position.Left} isConnectable={false}
+            className="sl-column-handle" />
           <span className="sl-lineage-column-keys">
             {column.pk ? <span className="sl-model-key is-pk">PK</span> : null}
             {column.fk ? <span className="sl-model-key is-fk">FK</span> : null}
@@ -269,7 +297,8 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
           </span>
           <code>{column.name}</code>
           <span className="sl-lineage-column-type">{column.type}</span>
-          <Handle id={`c:${column.name}:r`} type="source" position={Position.Right} isConnectable={false} className="sl-column-handle" />
+          <Handle id={`c:${column.name}:r`} type="source" position={Position.Right} isConnectable={false}
+            className="sl-column-handle" />
         </div>
       ))}
       {hidden > 0 ? <div className="sl-lineage-more">+{hidden} cột khác</div> : null}
@@ -290,7 +319,8 @@ function LineageTableNode({ id, data }: NodeProps<Node<LineageCardData>>) {
             <span>{data.metrics.length} chỉ số</span>
             <ChevronRight />
           </button>
-          <Handle id="metrics" type="source" position={Position.Right} isConnectable={false} className="sl-column-handle" />
+          <Handle id="metrics" type="source" position={Position.Right} isConnectable={false}
+            className="sl-column-handle" />
         </div>
       ) : null}
     </div>
@@ -323,7 +353,8 @@ function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
   return (
     <div
       ref={metricRef}
-      className={`sl-lineage-metric-node${data.dimmed ? ' is-dimmed' : ''}${focus?.metricNodeId === id ? ' is-focused' : ''}`}
+      className={'sl-lineage-metric-node' + (data.dimmed ? ' is-dimmed' : '')
+        + (focus?.metricNodeId === id ? ' is-focused' : '')}
       onMouseEnter={() => hover(id)}
       onMouseLeave={() => hover(null)}
     >
@@ -351,8 +382,10 @@ function MetricNode({ id, data }: NodeProps<Node<MetricData>>) {
 /** A lineage lane band; its header is the handle that drags the band with all its cards. */
 function LaneNode({ data }: NodeProps<Node<LaneData>>) {
   return (
-    <div className="sl-model-lane" style={data.color ? { '--lane-color': data.color } as React.CSSProperties : undefined}>
-      <span className="sl-model-lane-label" title={`${data.label}${data.hint ? `\n${data.hint}` : ''}\nKéo để di chuyển cả tầng`}>
+    <div className="sl-model-lane"
+      style={data.color ? { '--lane-color': data.color } as React.CSSProperties : undefined}>
+      <span className="sl-model-lane-label"
+        title={`${data.label}${data.hint ? `\n${data.hint}` : ''}\nKéo để di chuyển cả tầng`}>
         <strong>{data.label}<GripHorizontal className="sl-model-lane-grip" aria-hidden="true" /></strong>
         {data.hint ? <small>{data.hint}</small> : null}
       </span>
@@ -375,14 +408,18 @@ function TableTile({ data }: NodeProps<Node<TableData>>) {
   return (
     <div
       className={`sl-model-tile${data.datasetType === 'aggregate' ? ' is-aggregate' : ''}`}
-      title={`${data.title}\n${data.tableName} · ${data.layerName ?? 'Chưa phân tầng'} · ${data.datasetType === 'aggregate' ? 'Aggregate' : 'Base'}`}
+      title={`${data.title}\n${data.tableName} · ${data.layerName ?? 'Chưa phân tầng'}`
+        + ` · ${data.datasetType === 'aggregate' ? 'Aggregate' : 'Base'}`}
       style={data.layerColor ? { '--layer-color': data.layerColor } as React.CSSProperties : undefined}
     >
       <span className="sl-model-tile-top">
         <span className="sl-model-table-icon"><Table2 /></span>
         <span className="sl-model-tile-marks">
           <AggregateBadge data={data} />
-          {data.sharedCount > 1 ? <span className="sl-model-shared" title={`Dùng chung cho ${data.sharedCount} nghiệp vụ`}>×{data.sharedCount}</span> : null}
+          {data.sharedCount > 1
+            ? <span className="sl-model-shared"
+                title={`Dùng chung cho ${data.sharedCount} nghiệp vụ`}>×{data.sharedCount}</span>
+            : null}
         </span>
       </span>
       <strong>{data.title}</strong>
@@ -420,10 +457,15 @@ function applyGrid(nodes: Node[], grid: CanvasGrid): Node[] {
         ...node,
         position: frame.position,
         style: { ...node.style, width: frame.size.width, height: frame.size.height },
-        data: { ...node.data, cells: domain.cells, header: domain.header, origin: frame.origin, count: tableCount(grid, domain) },
+        data: {
+          ...node.data, cells: domain.cells, header: domain.header, origin: frame.origin,
+          count: tableCount(grid, domain),
+        },
       };
     }
-    const cell = node.type === 'tableTile' ? grid.tables.get((node.data as { datasetId: number }).datasetId) : undefined;
+    const cell = node.type === 'tableTile'
+      ? grid.tables.get((node.data as { datasetId: number }).datasetId)
+      : undefined;
     return cell ? { ...node, position: tilePosition(cell) } : node;
   });
 }
@@ -435,13 +477,17 @@ function applyGrid(nodes: Node[], grid: CanvasGrid): Node[] {
 function blockedCells(grid: CanvasGrid, key: string): Set<string> {
   const others = grid.domains.filter(domain => domain.key !== key);
   if (key === UNASSIGNED_DOMAIN) return new Set(others.flatMap(domain => domain.cells.map(cellKey)));
-  return new Set(others.flatMap(domain => (domain.key === UNASSIGNED_DOMAIN ? domain.cells : [domain.header]).map(cellKey)));
+  return new Set(
+    others.flatMap(domain => (domain.key === UNASSIGNED_DOMAIN ? domain.cells : [domain.header]).map(cellKey))
+  );
 }
 
 /** Tables of a domain that no other domain covers: they move along when the domain is dragged. */
 function ownTables(grid: CanvasGrid, key: string): number[] {
   const own = new Set(grid.domains.find(domain => domain.key === key)?.cells.map(cellKey));
-  const others = new Set(grid.domains.filter(domain => domain.key !== key).flatMap(domain => domain.cells.map(cellKey)));
+  const others = new Set(
+    grid.domains.filter(domain => domain.key !== key).flatMap(domain => domain.cells.map(cellKey))
+  );
   return [...grid.tables].filter(([, cell]) => own.has(cellKey(cell)) && !others.has(cellKey(cell))).map(([id]) => id);
 }
 
@@ -472,11 +518,14 @@ const cardBox = (node: Node, position = node.position): Box => ({
   width: CARD_WIDTH,
   height: cardHeight((node.data as LineageCardData).content),
 });
-const overlap = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const overlap = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 /** The column of a card's metrics, while they stand beside it. */
 const metricBox = (node: Node, position = node.position): Box | null => {
   const data = node.data as LineageCardData;
-  return data.metricsOpen && data.metrics.length > 0 ? metricColumn(position, metricSlots(data.content, data.metrics)) : null;
+  return data.metricsOpen && data.metrics.length > 0
+    ? metricColumn(position, metricSlots(data.content, data.metrics))
+    : null;
 };
 /** What a card takes up on the canvas: the card, and its metrics beside it. */
 const cardFootprint = (node: Node, position = node.position): Box => {
@@ -572,7 +621,9 @@ const TRANSFORM_INTERACTION_WIDTH = 28;
 function routedGeometry(
   source: Point, target: Point, anchors: [EdgeAnchor, EdgeAnchor], obstacles: Box[], kind?: LineageEdge['kind'],
 ): EdgeGeometry {
-  const route = routeOrthogonal(anchorPoint(source, anchors[0]), anchors[0].side, anchorPoint(target, anchors[1]), anchors[1].side, obstacles);
+  const route = routeOrthogonal(
+    anchorPoint(source, anchors[0]), anchors[0].side, anchorPoint(target, anchors[1]), anchors[1].side, obstacles
+  );
   const coords = route ? coordsFromRoute(route) : null;
   if (!coords) return DEFAULT_GEOMETRY;
   const offset = kind === 'transform' ? TRANSFORM_CHANNEL_OFFSET : 0;
@@ -582,14 +633,20 @@ function routedGeometry(
 const sidePosition = (side: CardSide) => (side === 'right' ? Position.Right : Position.Left);
 
 /** Whether an edge, drawn with its geometry between cards at these positions, runs through any of `boxes`. */
-function edgeCrosses(geometry: EdgeGeometry, source: Point, target: Point, anchors: [EdgeAnchor, EdgeAnchor], boxes: Box[]): boolean {
+function edgeCrosses(
+  geometry: EdgeGeometry, source: Point, target: Point, anchors: [EdgeAnchor, EdgeAnchor], boxes: Box[],
+): boolean {
   const [start, end] = [anchorPoint(source, anchors[0]), anchorPoint(target, anchors[1])];
-  return routeCrosses(edgePoints(geometry, start, end, sidePosition(anchors[0].side), sidePosition(anchors[1].side)), boxes);
+  return routeCrosses(
+    edgePoints(geometry, start, end, sidePosition(anchors[0].side), sidePosition(anchors[1].side)), boxes
+  );
 }
 
 /** Lineage nodes and edges joined to `nodeId` through any chain of edges, read left to right along the layout. */
 function tracedLineage(nodeId: string, edges: Edge[]): { nodes: Set<string>; edges: Set<string> } {
-  const flows = edges.map(edge => ({ id: edge.id, flow: (edge.data as RoutedEdgeData | undefined)?.flow ?? [edge.source, edge.target] }));
+  const flows = edges.map(edge => ({
+    id: edge.id, flow: (edge.data as RoutedEdgeData | undefined)?.flow ?? [edge.source, edge.target],
+  }));
   const nodes = new Set([nodeId]);
   const traced = new Set<string>();
   // Upstream follows edges backwards from the card, downstream forwards, so siblings of the card stay faded.
@@ -672,7 +729,8 @@ function readHiddenFlows(): Set<FlowKind> {
 /** A transformation as one line: the target column and the expression, or its inputs when no expression was written. */
 const transformationLine = (item: NonNullable<LineageEdge['transformations']>[number]) => {
   const formula = item.expression ?? item.sources.join(', ');
-  return `${item.target_column} ← ${formula.length > LABEL_MAX_EXPRESSION ? `${formula.slice(0, LABEL_MAX_EXPRESSION)}…` : formula}`;
+  return `${item.target_column} ← `
+    + `${formula.length > LABEL_MAX_EXPRESSION ? `${formula.slice(0, LABEL_MAX_EXPRESSION)}…` : formula}`;
 };
 
 /** The label of a lineage edge; `reversed` is set when the edge's target sits on the left. */
@@ -680,7 +738,9 @@ function edgeLabel(edge: LineageEdge, reversed: boolean): EdgeLabel | undefined 
   if (edge.kind === 'transform' && edge.transformations?.length) {
     const lines = [
       ...edge.transformations.slice(0, LABEL_MAX_PAIRS).map(transformationLine),
-      ...(edge.transformations.length > LABEL_MAX_PAIRS ? [`+${edge.transformations.length - LABEL_MAX_PAIRS} cột`] : []),
+      ...(edge.transformations.length > LABEL_MAX_PAIRS
+        ? [`+${edge.transformations.length - LABEL_MAX_PAIRS} cột`]
+        : []),
     ];
     const width = Math.ceil(Math.max(...lines.map(line => line.length)) * LABEL_CHAR_WIDTH) + LABEL_PADDING * 2;
     return { lines, width, height: lines.length * LABEL_LINE_HEIGHT + 8 };
@@ -688,7 +748,9 @@ function edgeLabel(edge: LineageEdge, reversed: boolean): EdgeLabel | undefined 
   const [left, right] = reversed
     ? [edge.target_cardinality, edge.source_cardinality]
     : [edge.source_cardinality, edge.target_cardinality];
-  const pairs = (edge.column_links ?? []).map(pair => (reversed ? `${pair.target} → ${pair.source}` : `${pair.source} → ${pair.target}`));
+  const pairs = (edge.column_links ?? []).map(
+    pair => (reversed ? `${pair.target} → ${pair.source}` : `${pair.source} → ${pair.target}`)
+  );
   const lines = [
     ...(left && right ? [`${left} : ${right}`] : edge.label ? [edge.label] : []),
     ...pairs.slice(0, LABEL_MAX_PAIRS),
@@ -728,7 +790,9 @@ function EdgeMarkers({ strokes }: { strokes: string[] }) {
             refY="7"
             orient="auto-start-reverse"
           >
-            <path d={MARKER_PATHS[kind]} style={kind === 'arrow' ? { fill: stroke, stroke: 'none' } : { fill: 'none', stroke, strokeWidth: 1.6 }} />
+            <path d={MARKER_PATHS[kind]}
+              style={kind === 'arrow' ? { fill: stroke, stroke: 'none' } : { fill: 'none', stroke, strokeWidth: 1.6 }}
+            />
           </marker>
         )))}
       </defs>
@@ -795,7 +859,10 @@ function RoutedEdge({
             title="Kéo lên xuống để uốn cạnh"
             onPointerDown={event => drag(event, pointer => {
               const quarter = (target.x - source.x) / 4;
-              return { ...geometry, coords: [snapValue(source.x + quarter), snapValue(pointer.y), snapValue(target.x - quarter)] };
+              return {
+                ...geometry,
+                coords: [snapValue(source.x + quarter), snapValue(pointer.y), snapValue(target.x - quarter)],
+              };
             })}
           />,
         );
@@ -828,7 +895,9 @@ function RoutedEdge({
             ...geometry,
             waypoints: geometry.waypoints.map((other, at) => (at === index ? snapPoint(pointer) : other)),
           }))}
-          onDoubleClick={() => editing?.update(id, { ...geometry, waypoints: geometry.waypoints.filter((_, at) => at !== index) }, true)}
+          onDoubleClick={() => editing?.update(
+            id, { ...geometry, waypoints: geometry.waypoints.filter((_, at) => at !== index) }, true
+          )}
         />,
       ));
       points.slice(1).forEach((point, index) => {
@@ -948,7 +1017,9 @@ function MetricArrow({ id, target, data, markerEnd, style }: EdgeProps<Edge<Metr
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={shown} interactionWidth={14} />
-      {sources.map(y => <circle key={y} cx={start} cy={y} r={focused ? 3.5 : 2.5} fill={METRIC_EDGE_COLOR} opacity={shown.opacity} />)}
+      {sources.map(y => (
+        <circle key={y} cx={start} cy={y} r={focused ? 3.5 : 2.5} fill={METRIC_EDGE_COLOR} opacity={shown.opacity} />
+      ))}
     </>
   );
 }
@@ -965,7 +1036,9 @@ type BusinessCanvasProps = {
   revision: number;
 };
 
-function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusDatasetId, revision }: BusinessCanvasProps) {
+function BusinessFlow(
+  { themeMode, databaseId, datasets, dictionaries, focusDatasetId, revision }: BusinessCanvasProps,
+) {
   const [model, setModel] = useState<BusinessModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -989,7 +1062,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       await fitView({ padding: 0.12, duration: 250, maxZoom: 1 });
       return;
     }
-    await fitView({ padding: { top: '32px', bottom: '32px', left: '32px', right: '200px' }, duration: 250, maxZoom: 1 });
+    await fitView({
+      padding: { top: '32px', bottom: '32px', left: '32px', right: '200px' }, duration: 250, maxZoom: 1,
+    });
     if (getZoom() >= LINEAGE_MIN_FIT_ZOOM) return;
     const bounds = getNodesBounds(getNodes());
     const { width } = flowStore.getState();
@@ -1092,7 +1167,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     saveLineage();
   }, [setEdges, saveLineage]);
   const edgeEditing = useMemo<EdgeEditing>(
-    () => ({ selectedId: selectedEdgeKey, hoveredId: hoveredEdgeId, select: setSelectedEdgeKey, update: updateEdgeGeometry }),
+    () => ({
+      selectedId: selectedEdgeKey, hoveredId: hoveredEdgeId, select: setSelectedEdgeKey, update: updateEdgeGeometry,
+    }),
     [selectedEdgeKey, hoveredEdgeId, updateEdgeGeometry],
   );
   const chooseDetailLevel = (level: DetailLevel) => {
@@ -1111,14 +1188,18 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   const datasetById = useMemo(() => new Map(datasets.map(dataset => [dataset.id, dataset])), [datasets]);
   const domains = model?.domains ?? [];
   const layers = model?.layers ?? [];
-  const layerIdOf = useCallback((datasetId: number) => model?.classifications[String(datasetId)]?.layer_id ?? null, [model]);
+  const layerIdOf = useCallback(
+    (datasetId: number) => model?.classifications[String(datasetId)]?.layer_id ?? null, [model]
+  );
   const datasetTypeOf = useCallback(
     (datasetId: number) => model?.classifications[String(datasetId)]?.dataset_type ?? null,
     [model],
   );
   // The business view groups the base tables and the aggregate tables built from them; tables not classified yet in
   // the Data Dictionary stay out of the domains.
-  const modelDatasets = useMemo(() => datasets.filter(dataset => datasetTypeOf(dataset.id) !== null), [datasets, datasetTypeOf]);
+  const modelDatasets = useMemo(
+    () => datasets.filter(dataset => datasetTypeOf(dataset.id) !== null), [datasets, datasetTypeOf]
+  );
   const modelIds = useMemo(() => new Set(modelDatasets.map(dataset => dataset.id)), [modelDatasets]);
   const domainCountByDataset = useMemo(() => {
     const counts = new Map<number, number>();
@@ -1128,7 +1209,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
 
   const metricsByDataset = useMemo(() => {
     const result = new Map<number, ModelMetric[]>();
-    for (const metric of model?.metrics ?? []) result.set(metric.dataset_id, [...(result.get(metric.dataset_id) ?? []), metric]);
+    for (const metric of model?.metrics ?? [])
+      result.set(metric.dataset_id, [...(result.get(metric.dataset_id) ?? []), metric]);
     return result;
   }, [model]);
 
@@ -1142,7 +1224,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       for (const column of dictionary.columns) {
         if (column.referenced_dataset_id == null || !column.referenced_column_name) continue;
         const key = `${column.referenced_dataset_id}.${column.referenced_column_name}`;
-        referencedBy.set(key, [...(referencedBy.get(key) ?? []), `${tableLabel(dictionary.dataset_id)}.${column.column_name}`]);
+        referencedBy.set(
+          key, [...(referencedBy.get(key) ?? []), `${tableLabel(dictionary.dataset_id)}.${column.column_name}`]
+        );
       }
     }
     const result = new Map<number, CardContent>();
@@ -1152,7 +1236,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       // Columns a metric arrow leaves from are listed with the keys, so the arrow has a row to leave.
       const feeds = new Map<string, string[]>();
       for (const metric of datasetMetrics) {
-        for (const name of metricSources(metric)) feeds.set(name, [...(feeds.get(name) ?? []), metric.verbose_name || metric.metric_name]);
+        for (const name of metricSources(metric))
+          feeds.set(name, [...(feeds.get(name) ?? []), metric.verbose_name || metric.metric_name]);
       }
       const metricNote = (name: string) => (feeds.has(name) ? `Σ ${(feeds.get(name) as string[]).join(', ')}` : null);
       const dictionaryColumns = dictionaries[dataset.id]?.columns;
@@ -1163,7 +1248,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           const metric = feeds.has(column.column_name);
           const notes = [
             column.display_name && column.display_name !== column.column_name ? column.display_name : null,
-            fk && column.referenced_dataset_id != null ? `→ ${tableLabel(column.referenced_dataset_id)}.${column.referenced_column_name}` : null,
+            fk && column.referenced_dataset_id != null
+              ? `→ ${tableLabel(column.referenced_dataset_id)}.${column.referenced_column_name}`
+              : null,
             ...sources.map(source => `← ${source}`),
             metricNote(column.column_name),
           ].filter(Boolean);
@@ -1180,7 +1267,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         : (dataset.columns ?? []).map(column => {
           const metric = feeds.has(column.column_name);
           const title = [column.column_name, metricNote(column.column_name)].filter(Boolean).join('\n');
-          return { name: column.column_name, type: column.type ?? '', pk: false, fk: false, metric, title, key: metric };
+          return {
+            name: column.column_name, type: column.type ?? '', pk: false, fk: false, metric, title, key: metric,
+          };
         });
       const listed = detailLevel === 'all' ? all : detailLevel === 'keys' ? all.filter(column => column.key) : [];
       // Name-only cards stay one header tall instead of counting the columns they leave out.
@@ -1195,7 +1284,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   );
 
   const toggleDomain = useCallback((domainId: number) => {
-    setSelectedDomainIds(current => current.includes(domainId) ? current.filter(id => id !== domainId) : [...current, domainId]);
+    setSelectedDomainIds(
+      current => current.includes(domainId) ? current.filter(id => id !== domainId) : [...current, domainId]
+    );
   }, []);
   const editDomain = useCallback((domain: BusinessDomain | null) => setDialog({ open: true, domain }), []);
 
@@ -1249,7 +1340,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       const offset = { x: point.x / GRID_CELL - start.col - 0.5, y: point.y / GRID_CELL - start.row - 0.5 };
       if (!direction) {
         if (Math.max(Math.abs(offset.x), Math.abs(offset.y)) < 0.6) return;
-        direction = Math.abs(offset.x) >= Math.abs(offset.y) ? (offset.x > 0 ? 'right' : 'left') : (offset.y > 0 ? 'down' : 'up');
+        direction = Math.abs(offset.x) >= Math.abs(offset.y)
+          ? (offset.x > 0 ? 'right' : 'left')
+          : (offset.y > 0 ? 'down' : 'up');
       }
       const heading = direction;
       const along = { left: -offset.x, right: offset.x, up: -offset.y, down: offset.y }[heading];
@@ -1305,12 +1398,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     }
     setSavingMembers(true);
     try {
-      await Promise.all([...updates.values()].map(({ domain, ids }) => requestJson(semanticLayerApi.businessDomain(domain.id), 'PUT', {
-        name: domain.name,
-        description: domain.description,
-        color: domain.color,
-        dataset_ids: [...ids],
-      })));
+      await Promise.all([...updates.values()].map(({ domain, ids }) =>
+        requestJson(semanticLayerApi.businessDomain(domain.id), 'PUT', {
+          name: domain.name,
+          description: domain.description,
+          color: domain.color,
+          dataset_ids: [...ids],
+        })));
       setPending(null);
       await loadModel();
     } catch (reason) {
@@ -1353,7 +1447,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         savedLayoutRef.current = canvasSignature(model.canvas);
       }
       const kept = gridRef.current.domains.length > 0 ? reconcileGrid(gridRef.current, model.domains, ids) : null;
-      const grid = kept && validGrid(kept) ? kept : reconcileGrid(layoutDomainGroups(model.domains, ids), model.domains, ids);
+      const grid = kept && validGrid(kept)
+        ? kept
+        : reconcileGrid(layoutDomainGroups(model.domains, ids), model.domains, ids);
       gridRef.current = grid;
       saveGrid(grid);
       const nextNodes: Node[] = grid.domains.map(domain => {
@@ -1407,7 +1503,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     const activeIds = new Set(items.filter(item => item.active).map(item => item.id));
     const contentByNode = new Map(items.map(item => [item.id, contentOf(item.datasetId)]));
     const heightOf = (nodeId: string) => cardHeight(contentByNode.get(nodeId) as CardContent);
-    const tableEdges = model.edges.filter(edge => itemIds.has(`table-${edge.source}`) && itemIds.has(`table-${edge.target}`));
+    const tableEdges = model.edges.filter(
+      edge => itemIds.has(`table-${edge.source}`) && itemIds.has(`table-${edge.target}`)
+    );
     // ELK places an edge's source left of its target. Relation edges run from the referencing ("n") table to the
     // referenced ("1") table, so they are laid out reversed to keep the "1" side on the left, as flow edges already do.
     const layoutReversed = (edge: LineageEdge) => edge.kind === 'relation';
@@ -1463,7 +1561,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           positions.set(item.id, { x: box.x, y: box.y });
           boxes.push(box);
         }
-        const levelNames = new Map(lanes.map(lane => [lane.level, lane.key === UNCLASSIFIED_LANE ? null : `Cấp ${lane.level + 1}`]));
+        const levelNames = new Map(
+          lanes.map(lane => [lane.level, lane.key === UNCLASSIFIED_LANE ? null : `Cấp ${lane.level + 1}`])
+        );
         // A card settled lower stretches its lane band; the lanes it would cover move down under it (edges route from
         // the moved positions).
         const cardNodes: Node[] = separateLaneBands(items.map(item => ({
@@ -1484,7 +1584,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           deletable: false,
         })));
         cardNodes.forEach(node => positions.set(node.id, node.position));
-        // Lane bands and level headers are drawn around the cards as they lie (see shownNodes); these give their labels.
+        // Lane bands and level headers are drawn around the cards as they lie (see shownNodes); these give their
+        // labels.
         const nextNodes: Node[] = [
           ...layout.levels.flatMap(level => {
             const label = levelNames.get(level.level);
@@ -1493,7 +1594,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
               type: 'level',
               position: { x: level.left, y: 0 },
               style: { width: level.right - level.left },
-              data: { label, count: layout.lanes.filter(lane => lane.level === level.level).length, level: level.level },
+              data: {
+                label, count: layout.lanes.filter(lane => lane.level === level.level).length, level: level.level,
+              },
               draggable: false,
               selectable: false,
               deletable: false,
@@ -1553,18 +1656,24 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           const active = activeIds.has(`table-${edge.source}`) && activeIds.has(`table-${edge.target}`);
           // A user-chosen colour wins; edges outside the selected domains fade instead of turning grey. Transformation
           // edges have a colour of their own, so the two kinds of flow read apart.
-          const defaultStroke = edge.kind === 'transform' ? TRANSFORM_EDGE_COLOR : edge.origin === 'manual' ? '#d97706' : 'var(--sl-accent)';
+          const defaultStroke = edge.kind === 'transform'
+            ? TRANSFORM_EDGE_COLOR
+            : edge.origin === 'manual' ? '#d97706' : 'var(--sl-accent)';
           const stroke = edge.color ?? (active ? defaultStroke : 'var(--sl-border)');
-          // Crow's feet mark the "n" side of a relationship and bars the "1" side. Manual edges carry no cardinality and
-          // keep a single arrow on their target.
+          // Crow's feet mark the "n" side of a relationship and bars the "1" side. Manual edges carry no cardinality
+          // and keep a single arrow on their target.
           const manual = !edge.source_cardinality && !edge.target_cardinality;
           return {
             id,
             source: sourceEnd.node,
             target: targetEnd.node,
             deletable: !isDeclaredTransform(edge),
-            sourceHandle: handleId(contentByNode.get(sourceEnd.node) as CardContent, sourceEnd.column, sideOf(sourceEnd)),
-            targetHandle: handleId(contentByNode.get(targetEnd.node) as CardContent, targetEnd.column, sideOf(targetEnd)),
+            sourceHandle: handleId(
+              contentByNode.get(sourceEnd.node) as CardContent, sourceEnd.column, sideOf(sourceEnd)
+            ),
+            targetHandle: handleId(
+              contentByNode.get(targetEnd.node) as CardContent, targetEnd.column, sideOf(targetEnd)
+            ),
             type: 'routed',
             markerStart: cardinalityMarker(edge.source_cardinality, stroke),
             markerEnd: manual ? markerId('arrow', stroke) : cardinalityMarker(edge.target_cardinality, stroke),
@@ -1596,10 +1705,15 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         window.requestAnimationFrame(() => { if (!cancelled) void fitCanvas(); });
       })
       .catch(reason => {
-        if (!cancelled) setError(reason instanceof Error ? `Không dựng được sơ đồ lineage: ${reason.message}` : 'Không dựng được sơ đồ lineage.');
+        if (!cancelled) setError(reason instanceof Error
+          ? `Không dựng được sơ đồ lineage: ${reason.message}`
+          : 'Không dựng được sơ đồ lineage.');
       });
     return () => { cancelled = true; };
-  }, [model, mode, selectedDomainIds, datasets, dictionaries, domainCountByDataset, contentOf, metricsByDataset, lineageRevision]);
+  }, [
+    model, mode, selectedDomainIds, datasets, dictionaries, domainCountByDataset, contentOf, metricsByDataset,
+    lineageRevision,
+  ]);
 
   // The header dataset picker highlights the dataset's cards and brings them into view.
   const previousFocusRef = useRef(focusDatasetId);
@@ -1607,29 +1721,40 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     if (previousFocusRef.current === focusDatasetId) return;
     previousFocusRef.current = focusDatasetId;
     const matches = (node: Node) => (node.data as { datasetId?: number }).datasetId === focusDatasetId;
-    setNodes(current => current.map(node => node.type === 'modelTable' || node.type === 'tableTile' ? { ...node, className: matches(node) ? 'is-focused' : undefined } : node));
+    setNodes(current => current.map(node => (
+      node.type === 'modelTable' || node.type === 'tableTile'
+        ? { ...node, className: matches(node) ? 'is-focused' : undefined }
+        : node
+    )));
     const focused = nodes.filter(matches).map(node => ({ id: node.id }));
     if (focused.length > 0) void fitView({ nodes: focused, duration: 350, maxZoom: 1.1, padding: 0.4 });
   }, [focusDatasetId]);
 
-  // Business-view dragging snaps domains and tiles to the canvas grid; a dragged domain carries the tables only it holds.
+  // Business-view dragging snaps domains and tiles to the canvas grid; a dragged domain carries the tables only it
+  // holds.
   const snapPosition = useCallback((node: Node | undefined, position: Point) => {
     if (node?.type === 'domainGroup') {
       return { x: Math.round(position.x / GRID_CELL) * GRID_CELL, y: Math.round(position.y / GRID_CELL) * GRID_CELL };
     }
-    if (node?.type === 'modelTable') return { x: snapToUnit(position.x, LINEAGE_SNAP), y: snapToUnit(position.y, LINEAGE_SNAP) };
+    if (node?.type === 'modelTable')
+      return { x: snapToUnit(position.x, LINEAGE_SNAP), y: snapToUnit(position.y, LINEAGE_SNAP) };
     return node?.type === 'tableTile' ? tilePosition(tileCell(position)) : position;
   }, []);
   const domainShift = (key: string, position: Point): Cell | null => {
     const domain = gridRef.current.domains.find(item => item.key === key);
     if (!domain) return null;
     const { origin } = domainFrame(domain);
-    return { col: Math.round(position.x / GRID_CELL) - origin.col, row: Math.round(position.y / GRID_CELL) - origin.row };
+    return {
+      col: Math.round(position.x / GRID_CELL) - origin.col, row: Math.round(position.y / GRID_CELL) - origin.row,
+    };
   };
   // Routes again, around the cards at their current positions or at `moves`, every lineage edge `pick` chooses, and
   // returns the IDs of the edges it routed.
-  const rerouteEdges = useCallback((moves: Map<string, Point>, pick: (edge: Edge, crosses: (boxes: Box[]) => boolean) => boolean) => {
-    const cards = getNodes().filter(isCard).map(node => (moves.has(node.id) ? { ...node, position: moves.get(node.id) as Point } : node));
+  const rerouteEdges = useCallback((
+    moves: Map<string, Point>, pick: (edge: Edge, crosses: (boxes: Box[]) => boolean) => boolean,
+  ) => {
+    const cards = getNodes().filter(isCard)
+      .map(node => (moves.has(node.id) ? { ...node, position: moves.get(node.id) as Point } : node));
     const positionOf = new Map(cards.map(node => [node.id, node.position]));
     const obstacles = edgeObstacles(cards);
     const routed = new Set<string>();
@@ -1657,7 +1782,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     dragFrameRef.current = window.requestAnimationFrame(() => {
       dragFrameRef.current = null;
       const moving = new Set(lineageDragRef.current.keys());
-      if (moving.size > 0) rerouteEdges(dragMovesRef.current, edge => moving.has(edge.source) || moving.has(edge.target));
+      if (moving.size > 0)
+        rerouteEdges(dragMovesRef.current, edge => moving.has(edge.source) || moving.has(edge.target));
     });
   }, [rerouteEdges]);
 
@@ -1677,7 +1803,10 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       // A dragged lane band carries its cards by the same snapped offset; the band itself is drawn around them.
       const laneDrag = laneDragRef.current;
       if (mode === 'lineage' && laneDrag?.id === change.id) {
-        const shift = { x: snapToUnit(position.x - laneDrag.start.x, LINEAGE_SNAP), y: snapToUnit(position.y - laneDrag.start.y, LINEAGE_SNAP) };
+        const shift = {
+          x: snapToUnit(position.x - laneDrag.start.x, LINEAGE_SNAP),
+          y: snapToUnit(position.y - laneDrag.start.y, LINEAGE_SNAP),
+        };
         for (const [id, start] of lineageDragRef.current) {
           const moved = { x: start.x + shift.x, y: start.y + shift.y };
           next.push({ id, type: 'position', position: moved });
@@ -1701,7 +1830,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       // all its cards.
       const lane = dragged.find(node => node.type === 'lane');
       const laneKey = lane ? (lane.data as LaneData).key : null;
-      const moving = getNodes().filter(node => isCard(node) && (dragged.some(item => item.id === node.id) || (node.data as LineageCardData).lane === laneKey));
+      const moving = getNodes().filter(node => (
+        isCard(node) && (dragged.some(item => item.id === node.id) || (node.data as LineageCardData).lane === laneKey)
+      ));
       lineageDragRef.current = new Map(moving.map(node => [node.id, node.position]));
       laneDragRef.current = lane ? { id: lane.id, start: lane.position } : null;
       dragMovesRef.current = new Map();
@@ -1725,11 +1856,15 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       const after = placed(moves);
       const movedBoxes = after.filter(node => moves.has(node.id)).map(node => cardFootprint(node));
       // A card may not land on another card, nor stretch its lane band over another band.
-      const stacked = after.some(node => !moves.has(node.id) && movedBoxes.some(box => overlap(box, cardFootprint(node))));
+      const stacked = after.some(
+        node => !moves.has(node.id) && movedBoxes.some(box => overlap(box, cardFootprint(node)))
+      );
       const clashesBefore = clashingBands(laneBands(placed(starts)));
       const clashes = [...clashingBands(laneBands(after))].some(pair => !clashesBefore.has(pair));
       if (stacked || clashes) {
-        setNodes(current => current.map(node => (starts.has(node.id) ? { ...node, position: starts.get(node.id) as Point } : node)));
+        setNodes(current => current.map(
+          node => (starts.has(node.id) ? { ...node, position: starts.get(node.id) as Point } : node)
+        ));
         if (edgesBeforeDragRef.current) setEdges(edgesBeforeDragRef.current);
         edgesBeforeDragRef.current = null;
         return;
@@ -1738,7 +1873,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       for (const [id, position] of moves) lineageLayoutRef.current.nodes.set(id, position);
       // The moved cards' edges, and every edge they now lie across, are routed around the cards; the shape a user gave
       // such an edge no longer fits, so it is dropped.
-      const routed = rerouteEdges(moves, (edge, crosses) => moves.has(edge.source) || moves.has(edge.target) || crosses(movedBoxes));
+      const routed = rerouteEdges(
+        moves, (edge, crosses) => moves.has(edge.source) || moves.has(edge.target) || crosses(movedBoxes)
+      );
       for (const id of routed) lineageLayoutRef.current.edges.delete(id);
       saveLineage();
       return;
@@ -1752,7 +1889,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         const shift = domainShift(node.id, position);
         if (!shift) continue;
         domains = domains.map(domain => (domain.key === node.id
-          ? { ...domain, cells: domain.cells.map(cell => shiftCell(cell, shift)), header: shiftCell(domain.header, shift) }
+          ? {
+            ...domain, cells: domain.cells.map(cell => shiftCell(cell, shift)), header: shiftCell(domain.header, shift),
+          }
           : domain));
         const followers = followersRef.current?.key === node.id ? followersRef.current.ids : [];
         for (const id of followers) tables.set(id, shiftCell(before.tables.get(id) as Cell, shift));
@@ -1764,7 +1903,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     settleGrid({ domains, tables }, before);
   }, [mode, snapPosition, settleGrid, getNodes, setNodes, setEdges, saveLineage, rerouteEdges]);
 
-  const datasetIdOf = (nodeId: string | null | undefined) => (nodeId?.startsWith('table-') ? Number(nodeId.slice('table-'.length)) : null);
+  const datasetIdOf = (nodeId: string | null | undefined) => (
+    nodeId?.startsWith('table-') ? Number(nodeId.slice('table-'.length)) : null
+  );
 
   const addEdge = async (sourceNode: string, targetNode: string) => {
     const source = datasetIdOf(sourceNode);
@@ -1778,7 +1919,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     }
   };
 
-  const selectedEdge = model?.edges.find(edge => `${edge.kind}-${edge.source}-${edge.target}` === selectedEdgeKey) ?? null;
+  const selectedEdge = model?.edges.find(
+    edge => `${edge.kind}-${edge.source}-${edge.target}` === selectedEdgeKey
+  ) ?? null;
   const selectedFlowEdge = edges.find(edge => edge.id === selectedEdgeKey) ?? null;
   const selectedGeometry = (selectedFlowEdge?.data as RoutedEdgeData | undefined)?.geometry ?? null;
   const nodeLabel = (nodeId: string) => {
@@ -1786,13 +1929,16 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     return data?.tableName ?? data?.title ?? nodeId;
   };
   const setEdgeStyle = (style: EdgeStyle) => {
-    if (selectedFlowEdge && selectedGeometry) updateEdgeGeometry(selectedFlowEdge.id, withStyle(selectedGeometry, style), true);
+    if (selectedFlowEdge && selectedGeometry)
+      updateEdgeGeometry(selectedFlowEdge.id, withStyle(selectedGeometry, style), true);
   };
   const resetEdgeShape = () => {
     if (!selectedFlowEdge) return;
     lineageLayoutRef.current.edges.delete(selectedFlowEdge.id);
     const geometry = autoGeometryRef.current.get(selectedFlowEdge.id) ?? DEFAULT_GEOMETRY;
-    setEdges(current => current.map(edge => (edge.id === selectedFlowEdge.id ? { ...edge, data: { ...edge.data, geometry } } : edge)));
+    setEdges(current => current.map(
+      edge => (edge.id === selectedFlowEdge.id ? { ...edge, data: { ...edge.data, geometry } } : edge)
+    ));
     saveLineage();
   };
   // Drops every card position and edge shape the user set, and lays the lineage out afresh.
@@ -1816,7 +1962,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
   }), [edges, hiddenFlows]);
   // A traced card lights its upstream and downstream tables and the edges between them; the rest of the lineage fades.
   const traced = useMemo(
-    () => (mode === 'lineage' && traceNodeId && nodes.some(node => node.id === traceNodeId) ? tracedLineage(traceNodeId, visibleEdges) : null),
+    () => (mode === 'lineage' && traceNodeId && nodes.some(node => node.id === traceNodeId)
+      ? tracedLineage(traceNodeId, visibleEdges)
+      : null),
     [mode, traceNodeId, nodes, visibleEdges],
   );
   const toggleMetrics = useCallback((nodeId: string) => {
@@ -1867,7 +2015,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     if (mode !== 'lineage') return nodes;
     const bands = laneBands(cards);
     const clashing = new Set([...clashingBands(bands)].flatMap(pair => pair.split('|')));
-    const laneLevels = new Map(nodes.filter(node => node.type === 'lane').map(node => [(node.data as LaneData).key, (node.data as LaneData).level]));
+    const laneLevels = new Map(nodes.filter(node => node.type === 'lane')
+      .map(node => [(node.data as LaneData).key, (node.data as LaneData).level]));
     const top = Math.min(...[...bands.values()].map(band => band.y)) - LEVEL_HEADER;
     const cardById = new Map(cards.map(card => [card.id, card]));
     return [...nodes.map(node => {
@@ -1883,7 +2032,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         };
       }
       if (node.type === 'level') {
-        const spans = [...bands].filter(([key]) => laneLevels.get(key) === (node.data as LevelData).level).map(([, band]) => band);
+        const spans = [...bands].filter(([key]) => laneLevels.get(key) === (node.data as LevelData).level)
+          .map(([, band]) => band);
         if (spans.length === 0) return { ...node, hidden: true };
         const left = Math.min(...spans.map(band => band.x));
         const right = Math.max(...spans.map(band => band.x + band.width));
@@ -1892,7 +2042,10 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       const card = cardById.get(node.id);
       if (!card) return node;
       if (!traced) return card;
-      return { ...card, className: [card.className, traced.nodes.has(card.id) ? 'is-traced' : 'is-dimmed'].filter(Boolean).join(' ') };
+      return {
+        ...card,
+        className: [card.className, traced.nodes.has(card.id) ? 'is-traced' : 'is-dimmed'].filter(Boolean).join(' '),
+      };
     }), ...metricNodes];
   }, [mode, nodes, cards, metricNodes, traced]);
   const shownEdges = useMemo(() => {
@@ -1921,13 +2074,20 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     });
     return [...lineage, ...arrows];
   }, [mode, visibleEdges, traced, metricNodes]);
-  const markerStrokes = useMemo(() => [...new Set(shownEdges.map(edge => String(edge.style?.stroke ?? '')).filter(Boolean))], [shownEdges]);
+  const markerStrokes = useMemo(
+    () => [...new Set(shownEdges.map(edge => String(edge.style?.stroke ?? '')).filter(Boolean))], [shownEdges]
+  );
   const metricFocus = useMemo(() => {
-    const arrowTarget = hoveredEdgeId?.startsWith('metric-edge-') ? shownEdges.find(edge => edge.id === hoveredEdgeId)?.target : undefined;
+    const arrowTarget = hoveredEdgeId?.startsWith('metric-edge-')
+      ? shownEdges.find(edge => edge.id === hoveredEdgeId)?.target
+      : undefined;
     const node = metricNodes.find(item => item.id === (hoveredMetricId ?? arrowTarget));
     if (!node) return null;
     const data = node.data as MetricData;
-    return { metricNodeId: node.id, card: data.card, roles: new Map((data.metric.columns ?? []).map(column => [column.name, column.role])) };
+    return {
+      metricNodeId: node.id, card: data.card,
+      roles: new Map((data.metric.columns ?? []).map(column => [column.name, column.role])),
+    };
   }, [hoveredEdgeId, hoveredMetricId, shownEdges, metricNodes]);
   const metricFocusValue = useMemo(() => ({ focus: metricFocus, hover: setHoveredMetricId }), [metricFocus]);
   // Metrics shown beside a card may now lie across other edges; once drawn, those edges are routed around them.
@@ -1944,7 +2104,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
 
   const setEdgeColor = async (edge: LineageEdge, color: string | null) => {
     try {
-      await requestJson(semanticLayerApi.lineageEdgeColor, 'PUT', { source: edge.source, target: edge.target, kind: edge.kind, color });
+      await requestJson(semanticLayerApi.lineageEdgeColor, 'PUT', {
+        source: edge.source, target: edge.target, kind: edge.kind, color,
+      });
       await loadModel();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không đổi được màu cạnh.');
@@ -1959,7 +2121,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
     }
     const lineage = [...byKey.values()];
     try {
-      await Promise.all(lineage.map(edge => requestJson(semanticLayerApi.lineageEdges, 'DELETE', { source: edge.source, target: edge.target, kind: edge.kind })));
+      await Promise.all(lineage.map(edge => requestJson(
+        semanticLayerApi.lineageEdges, 'DELETE', { source: edge.source, target: edge.target, kind: edge.kind }
+      )));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không xóa được cạnh lineage.');
     }
@@ -1976,15 +2140,18 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
       <aside className="sl-model-panel" aria-label="Nghiệp vụ">
         <div className="sl-model-panel-heading">
           {panelCollapsed ? (
-            <Button size="icon-sm" variant="ghost" aria-label="Mở rộng thanh Nghiệp vụ" title="Mở rộng thanh Nghiệp vụ" onClick={() => setPanelCollapsed(false)}>
+            <Button size="icon-sm" variant="ghost" aria-label="Mở rộng thanh Nghiệp vụ" title="Mở rộng thanh Nghiệp vụ"
+              onClick={() => setPanelCollapsed(false)}>
               <ChevronRight />
             </Button>
           ) : (
             <>
               <span><Layers3 /> Nghiệp vụ <Badge variant="secondary">{domains.length}</Badge></span>
               <div className="sl-model-panel-actions">
-                <Button size="sm" variant="outline" onClick={() => editDomain(null)}><Plus data-icon="inline-start" /> Thêm</Button>
-                <Button size="icon-sm" variant="ghost" aria-label="Thu gọn thanh Nghiệp vụ" title="Thu gọn thanh Nghiệp vụ" onClick={() => setPanelCollapsed(true)}>
+                <Button size="sm" variant="outline"
+                  onClick={() => editDomain(null)}><Plus data-icon="inline-start" /> Thêm</Button>
+                <Button size="icon-sm" variant="ghost" aria-label="Thu gọn thanh Nghiệp vụ"
+                  title="Thu gọn thanh Nghiệp vụ" onClick={() => setPanelCollapsed(true)}>
                   <ChevronLeft />
                 </Button>
               </div>
@@ -1995,17 +2162,25 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         <p className="sl-palette-hint">Chọn một hoặc nhiều nghiệp vụ để xem dữ liệu đi qua các bảng.</p>
         <div className="sl-model-domain-list">
           {domains.map(domain => (
-            <div key={domain.id} className={`sl-model-domain${selectedDomainIds.includes(domain.id) ? ' is-selected' : ''}`}>
-              <Checkbox aria-label={`Chọn ${domain.name}`} checked={selectedDomainIds.includes(domain.id)} onCheckedChange={() => toggleDomain(domain.id)} />
+            <div key={domain.id}
+              className={`sl-model-domain${selectedDomainIds.includes(domain.id) ? ' is-selected' : ''}`}>
+              <Checkbox aria-label={`Chọn ${domain.name}`} checked={selectedDomainIds.includes(domain.id)}
+                onCheckedChange={() => toggleDomain(domain.id)} />
               <span className="sl-model-domain-dot" style={{ background: domain.color || UNASSIGNED_COLOR }} />
-              <button type="button" className="sl-model-domain-name" title={domain.description ?? domain.name} onClick={() => toggleDomain(domain.id)}>{domain.name}</button>
+              <button type="button" className="sl-model-domain-name" title={domain.description ?? domain.name}
+                onClick={() => toggleDomain(domain.id)}>{domain.name}</button>
               <span className="sl-model-domain-count">{domain.dataset_ids.filter(id => modelIds.has(id)).length}</span>
-              <Button size="icon-xs" variant="ghost" aria-label={`Sửa ${domain.name}`} onClick={() => editDomain(domain)}><Pencil /></Button>
+              <Button size="icon-xs" variant="ghost" aria-label={`Sửa ${domain.name}`}
+                onClick={() => editDomain(domain)}><Pencil /></Button>
             </div>
           ))}
-          {!loading && domains.length === 0 ? <p className="sl-empty">Chưa có nghiệp vụ. Bấm Thêm để gom các bảng theo nghiệp vụ.</p> : null}
+          {!loading && domains.length === 0
+            ? <p className="sl-empty">Chưa có nghiệp vụ. Bấm Thêm để gom các bảng theo nghiệp vụ.</p>
+            : null}
         </div>
-        {unassignedCount > 0 ? <p className="sl-model-unassigned">{unassignedCount} bảng chưa thuộc nghiệp vụ nào</p> : null}
+        {unassignedCount > 0
+          ? <p className="sl-model-unassigned">{unassignedCount} bảng chưa thuộc nghiệp vụ nào</p>
+          : null}
         {model && unclassifiedCount > 0 ? (
           <p className="sl-model-unassigned">
             View nghiệp vụ hiện bảng Base và bảng Aggregate. Đang ẩn {unclassifiedCount} bảng chưa phân loại
@@ -2013,9 +2188,14 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           </p>
         ) : null}
         <div className="sl-model-panel-footer">
-          <Button className="w-full" variant={mode === 'lineage' ? 'outline' : 'default'} onClick={() => setMode(mode === 'lineage' ? 'business' : 'lineage')}>
+          <Button className="w-full" variant={mode === 'lineage' ? 'outline' : 'default'}
+            onClick={() => setMode(mode === 'lineage' ? 'business' : 'lineage')}>
             {mode === 'lineage' ? <Network data-icon="inline-start" /> : <GitBranch data-icon="inline-start" />}
-            {mode === 'lineage' ? 'Quay lại view nghiệp vụ' : selectedDomains.length > 0 ? `Xem lineage (${selectedDomains.length} nghiệp vụ)` : 'Xem lineage toàn bộ'}
+            {mode === 'lineage'
+              ? 'Quay lại view nghiệp vụ'
+              : selectedDomains.length > 0
+                ? `Xem lineage (${selectedDomains.length} nghiệp vụ)`
+                : 'Xem lineage toàn bộ'}
           </Button>
         </div>
         </> : null}
@@ -2042,7 +2222,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           onNodeDragStop={(_, __, dragged) => handleDragStop(dragged)}
           onEdgesChange={onEdgesChange}
           connectionMode={ConnectionMode.Loose}
-          isValidConnection={connection => datasetIdOf(connection.source) !== null && datasetIdOf(connection.target) !== null && connection.source !== connection.target}
+          isValidConnection={connection => datasetIdOf(connection.source) !== null
+            && datasetIdOf(connection.target) !== null && connection.source !== connection.target}
           onConnect={connection => void addEdge(connection.source, connection.target)}
           onBeforeDelete={async ({ nodes: deletedNodes, edges: deletedEdges }) => (
             deletedNodes.length === 0
@@ -2054,7 +2235,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           onEdgeMouseEnter={(_, hovered) => setHoveredEdgeId(hovered.id)}
           onEdgeMouseLeave={() => setHoveredEdgeId(null)}
           onNodeClick={(_, clicked) => {
-            if (mode === 'lineage' && clicked.type === 'modelTable') setTraceNodeId(current => (current === clicked.id ? null : clicked.id));
+            if (mode === 'lineage' && clicked.type === 'modelTable')
+              setTraceNodeId(current => (current === clicked.id ? null : clicked.id));
           }}
           onPaneClick={() => {
             setSelectedEdgeKey(null);
@@ -2069,7 +2251,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         >
           {mode === 'lineage'
             ? <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="var(--sl-grid-line)" />
-            : <Background variant={BackgroundVariant.Lines} gap={GRID_CELL} lineWidth={1} color="var(--sl-grid-line)" />}
+            : <Background variant={BackgroundVariant.Lines} gap={GRID_CELL} lineWidth={1}
+              color="var(--sl-grid-line)" />}
           <Controls position="bottom-right" showInteractive={false} />
           {mode === 'lineage' ? (
             // The lineage tools stand in a column at the top right; a selected edge's panel opens under them.
@@ -2077,12 +2260,14 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
               <div className="sl-lineage-tools">
                 <div className="sl-lineage-detail" role="group" aria-label="Mức chi tiết của bảng">
                   {DETAIL_LEVELS.map(([level, name]) => (
-                    <Button key={level} size="sm" variant={detailLevel === level ? 'default' : 'ghost'} aria-pressed={detailLevel === level} onClick={() => chooseDetailLevel(level)}>
+                    <Button key={level} size="sm" variant={detailLevel === level ? 'default' : 'ghost'}
+                      aria-pressed={detailLevel === level} onClick={() => chooseDetailLevel(level)}>
                       {name}
                     </Button>
                   ))}
                 </div>
-                <Button size="sm" variant="outline" onClick={resetLineageLayout}><RotateCcw data-icon="inline-start" /> Sắp xếp lại tự động</Button>
+                <Button size="sm" variant="outline"
+                  onClick={resetLineageLayout}><RotateCcw data-icon="inline-start" /> Sắp xếp lại tự động</Button>
                 <div className="sl-lineage-flows" role="group" aria-label="Luồng hiển thị">
                   {FLOW_KINDS.map(([kind, name]) => (
                     <label key={kind} className="sl-lineage-flow">
@@ -2114,7 +2299,8 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                   ) : null}
                   <div className="sl-edge-panel-styles" role="group" aria-label="Kiểu cạnh">
                     {EDGE_STYLES.map(([style, name]) => (
-                      <Button key={style} size="sm" variant={selectedGeometry.style === style ? 'default' : 'outline'} aria-pressed={selectedGeometry.style === style} onClick={() => setEdgeStyle(style)}>
+                      <Button key={style} size="sm" variant={selectedGeometry.style === style ? 'default' : 'outline'}
+                        aria-pressed={selectedGeometry.style === style} onClick={() => setEdgeStyle(style)}>
                         {name}
                       </Button>
                     ))}
@@ -2141,9 +2327,12 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                     </div>
                   ) : null}
                   <div className="sl-edge-panel-actions">
-                    <Button size="sm" variant="outline" disabled={!lineageLayoutRef.current.edges.has(selectedFlowEdge.id)} onClick={resetEdgeShape}>Đặt lại đường</Button>
+                    <Button size="sm" variant="outline"
+                      disabled={!lineageLayoutRef.current.edges.has(selectedFlowEdge.id)}
+                      onClick={resetEdgeShape}>Đặt lại đường</Button>
                     {selectedEdge ? (
-                      <Button size="sm" variant="outline" disabled={!selectedEdge.color} onClick={() => void setEdgeColor(selectedEdge, null)}>Màu mặc định</Button>
+                      <Button size="sm" variant="outline" disabled={!selectedEdge.color}
+                        onClick={() => void setEdgeColor(selectedEdge, null)}>Màu mặc định</Button>
                     ) : null}
                   </div>
                   {selectedEdge && isDeclaredTransform(selectedEdge) ? (
@@ -2157,7 +2346,9 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
                       onClick={() => {
                         if (!window.confirm('Xóa cạnh này? Cạnh suy ra từ Data Dictionary sẽ được ẩn.')) return;
                         setSelectedEdgeKey(null);
-                        void removeEdges([{ id: selectedEdgeKey ?? '', source: '', target: '', data: { lineage: selectedEdge } }]);
+                        void removeEdges([
+                          { id: selectedEdgeKey ?? '', source: '', target: '', data: { lineage: selectedEdge } },
+                        ]);
                       }}
                     >
                       Xóa cạnh
@@ -2170,18 +2361,22 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
           {mode === 'business' && selectedDomains.length > 0 ? (
             <Panel position="bottom-center" className="sl-model-selection">
               <span>Đã chọn {selectedDomains.length} nghiệp vụ</span>
-              <Button size="sm" onClick={() => setMode('lineage')}><GitBranch data-icon="inline-start" /> Xem data lineage</Button>
+              <Button size="sm"
+                onClick={() => setMode('lineage')}><GitBranch data-icon="inline-start" /> Xem data lineage</Button>
               <Button size="sm" variant="ghost" onClick={() => setSelectedDomainIds([])}>Bỏ chọn</Button>
             </Panel>
           ) : null}
         </ReactFlow>
         </MetricFocusContext.Provider>
         </EdgeEditingContext.Provider>
-        {loading && !model ? <div className="sl-model-overlay"><LoaderCircle className="sl-spin" /> Đang tải mô hình nghiệp vụ…</div> : null}
+        {loading && !model
+          ? <div className="sl-model-overlay"><LoaderCircle className="sl-spin" /> Đang tải mô hình nghiệp vụ…</div>
+          : null}
         {error ? (
           <div className="sl-model-error" role="alert">
             <span>{error}</span>
-            <Button size="xs" variant="outline" onClick={() => void loadModel()}><RotateCcw data-icon="inline-start" /> Thử lại</Button>
+            <Button size="xs" variant="outline"
+              onClick={() => void loadModel()}><RotateCcw data-icon="inline-start" /> Thử lại</Button>
           </div>
         ) : null}
       </section>
@@ -2190,9 +2385,13 @@ function BusinessFlow({ themeMode, databaseId, datasets, dictionaries, focusData
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {pending?.changes.every(change => change.add) ? 'Thêm bảng vào nghiệp vụ?' : pending?.changes.every(change => !change.add) ? 'Bỏ bảng khỏi nghiệp vụ?' : 'Cập nhật nghiệp vụ?'}
+              {pending?.changes.every(change => change.add)
+                ? 'Thêm bảng vào nghiệp vụ?'
+                : pending?.changes.every(change => !change.add) ? 'Bỏ bảng khỏi nghiệp vụ?' : 'Cập nhật nghiệp vụ?'}
             </DialogTitle>
-            <DialogDescription>Một bảng có thể thuộc nhiều nghiệp vụ. Chọn Hủy để đưa canvas về như trước.</DialogDescription>
+            <DialogDescription>
+              Một bảng có thể thuộc nhiều nghiệp vụ. Chọn Hủy để đưa canvas về như trước.
+            </DialogDescription>
           </DialogHeader>
           <ul className="sl-member-changes">
             {pending?.changes.map(change => (

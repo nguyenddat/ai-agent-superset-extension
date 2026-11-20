@@ -26,8 +26,6 @@ LINK_KINDS = "kind IN ('dataset', 'glossary', 'metric')"
 
 
 class ExpertRuleGroup(AuditedModel):
-    """Similar rules, kept together for administrators and the AI Agent."""
-
     __table_args__ = (
         UniqueConstraint("normalized_name", name="uq_text_to_bi_expert_rule_group_name"),
         {"extend_existing": True},
@@ -41,8 +39,6 @@ class ExpertRuleGroup(AuditedModel):
 
 
 class ExpertRule(AuditedModel):
-    """The root of an expert rule: its unique name, its dataset and its group; its content lives in revisions."""
-
     __table_args__ = (
         UniqueConstraint("normalized_name", name="uq_text_to_bi_expert_rule_name"),
         {"extend_existing": True},
@@ -62,8 +58,6 @@ class ExpertRule(AuditedModel):
 
 
 class ExpertRuleRevision(AuditedModel):
-    """Versioned rule content; only one current revision exists per rule."""
-
     __table_args__ = (
         UniqueConstraint("rule_id", "revision_number", name="uq_text_to_bi_expert_rule_revision"),
         CheckConstraint(ReviewStatus.check(), name="ck_text_to_bi_expert_rule_status"),
@@ -99,8 +93,6 @@ class ExpertRuleRevision(AuditedModel):
 
 
 class ExpertRuleLink(BaseModel):
-    """A revision's link to its dataset, a glossary term or a metric, with a fingerprint of the target."""
-
     __table_args__ = (
         CheckConstraint(LINK_KINDS, name="ck_text_to_bi_expert_rule_link_kind"),
         UniqueConstraint("revision_id", "kind", "target_id", name="uq_text_to_bi_expert_rule_link"),
@@ -121,8 +113,6 @@ class ExpertRuleLink(BaseModel):
 
 
 class ExpertRuleAuditEvent(BaseModel):
-    """Append-only lifecycle evidence. Application code creates, never mutates, these rows."""
-
     __table_args__ = (
         CheckConstraint(AUDIT_EVENT_TYPES, name="ck_text_to_bi_expert_rule_audit"),
         {"extend_existing": True},

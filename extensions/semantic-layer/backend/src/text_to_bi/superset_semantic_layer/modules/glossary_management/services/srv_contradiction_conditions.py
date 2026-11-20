@@ -42,8 +42,6 @@ def _tighter(first: Bound | None, second: Bound | None, lower: bool) -> Bound | 
 
 @dataclass(frozen=True)
 class Interval:
-    """The numbers between two optional bounds; no bound on a side leaves that side open."""
-
     lower: Bound | None = None
     upper: Bound | None = None
 
@@ -64,12 +62,10 @@ class Interval:
         return not self.intersect(Interval(Bound(value, True), Bound(value, True))).is_empty()
 
     def contains(self, other: "Interval") -> bool:
-        """Every number of `other` is also one of this interval."""
         return other.is_empty() or self.intersect(other) == other
 
 
 def member(value: Any) -> tuple[str, Any]:
-    """A condition value tagged with its type, so 1, 1.0 and True stay apart and 50 equals 50.0."""
     if value is None:
         return NULL
     if isinstance(value, bool):
@@ -94,13 +90,6 @@ def _sort_key(item: tuple[str, Any]) -> tuple[str, str]:
 
 @dataclass(frozen=True)
 class ColumnDomain:
-    """The values of one column a set of conditions allows.
-
-    A comparison narrows `interval`, which only bounds numbers; `equals` and `in` keep a finite set of `members`;
-    `not_equals`, `not_in` and `is_not_null` add `excluded` values. Text matching (`contains`) is not reasoned about and
-    allows every value, so a check never claims a contradiction it cannot show.
-    """
-
     interval: Interval = field(default_factory=Interval)
     members: frozenset | None = None
     excluded: frozenset = frozenset()
@@ -144,11 +133,9 @@ class ColumnDomain:
         return self.members == frozenset() or (self.members is None and self.interval.is_empty())
 
     def is_threshold(self) -> bool:
-        """The column is bounded by comparisons alone, as a numeric threshold is."""
         return self.members is None and not self.interval.is_unbounded()
 
     def overlaps(self, other: "ColumnDomain") -> bool:
-        """Some value satisfies both domains."""
         if self.is_empty() or other.is_empty():
             return False
         if self.members is not None:
@@ -165,7 +152,6 @@ class ColumnDomain:
         return self.admits(point) and other.admits(point)
 
     def contains(self, other: "ColumnDomain") -> bool:
-        """Every value `other` allows is one this domain allows."""
         if other.is_empty():
             return True
         if other.members is not None:
@@ -175,7 +161,6 @@ class ColumnDomain:
         return self.interval.contains(other.interval) and not any(other.admits(item) for item in self.excluded)
 
     def describe(self, label: str) -> str:
-        """The domain in words, such as "Tổng mưa (mm) ≥ 50 và < 100"."""
         if self.members is not None:
             values = sorted(self.members, key=_sort_key)
             if not values:
@@ -202,7 +187,6 @@ class ColumnDomain:
 
 
 def _domain(interval: Interval, members: frozenset | None, excluded: frozenset) -> ColumnDomain:
-    """A domain in one canonical form, so equal domains compare equal: a finite set keeps only its allowed members."""
     if members is None:
         return ColumnDomain(interval, None, frozenset(excluded))
     allowed = ColumnDomain(interval, None, frozenset(excluded))
@@ -213,7 +197,6 @@ UNCONSTRAINED = ColumnDomain()
 
 
 def rule_domains(conditions: Iterable[dict[str, Any]]) -> dict[int, ColumnDomain]:
-    """What a rule's conditions, all of which must hold, allow on each column it constrains, by column dictionary ID."""
     domains: dict[int, ColumnDomain] = {}
     for condition in conditions:
         column_id = condition["field_ref"]["column_dictionary_id"]
@@ -223,7 +206,6 @@ def rule_domains(conditions: Iterable[dict[str, Any]]) -> dict[int, ColumnDomain
 
 
 def regions_overlap(first: dict[int, ColumnDomain], second: dict[int, ColumnDomain]) -> bool:
-    """Some row satisfies both rules: their domains overlap on every column either constrains."""
     columns = first.keys() | second.keys()
     return all(first.get(column, UNCONSTRAINED).overlaps(second.get(column, UNCONSTRAINED)) for column in columns)
 
@@ -234,7 +216,6 @@ def region_contains(outer: dict[int, ColumnDomain], inner: dict[int, ColumnDomai
 
 
 def condition_phrase(condition: dict[str, Any], label: str) -> str:
-    """One condition in words, such as "Tổng mưa (mm) ≥ 50"."""
     operator = condition["operator"]
     words = OPERATOR_WORDS.get(operator, operator)
     if operator in ("is_null", "is_not_null"):
@@ -246,7 +227,6 @@ def condition_phrase(condition: dict[str, Any], label: str) -> str:
 
 
 def bound_differences(stated: Interval, actual: Interval) -> list[str]:
-    """Where an actual interval departs from the bounds a text states; a side the text leaves open is not compared."""
     differences = []
     for lower, stated_bound, actual_bound in ((True, stated.lower, actual.lower), (False, stated.upper, actual.upper)):
         if stated_bound is not None and stated_bound != actual_bound:

@@ -62,11 +62,6 @@ class SemanticLayerAPI(
     @permission_name("read")
     @handle_errors
     def get_access(self):
-        """What the signed-in user may do in the Semantic Layer.
-
-        Every page asks, so a user without the view permission gets 200 with `can_view` false rather than a 403 the
-        browser logs as an error; the page and every other route still refuse them.
-        """
         can_view = can_view_semantic_layer()
         if can_view:
             ensure_dictionary_tables()
@@ -78,7 +73,6 @@ class SemanticLayerView(BaseSupersetView):
 
     @expose_view("/")
     def page(self):
-        """Serve Superset's SPA shell; the extension frontend renders the page content."""
         if not getattr(current_user, "is_authenticated", False):
             return redirect(appbuilder.get_url_for_login)
         if not can_view_semantic_layer():

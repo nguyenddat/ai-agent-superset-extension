@@ -15,8 +15,13 @@ from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions i
     ContradictionNotFoundError,
     ContradictionValidationError,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_contradiction_judgement as judgement
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_detection import Candidate, ItemReference
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import (
+    srv_contradiction_judgement as judgement,
+)
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_detection import (
+    Candidate,
+    ItemReference,
+)
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_judgement import (
     PairVerdicts,
     SemanticOutcome,
@@ -128,7 +133,10 @@ def test_the_judgement_model_gives_up_before_the_worker_timeout(monkeypatch):
         model = chat_models.get_judgement_chat_model()
     finally:
         chat_models.get_judgement_chat_model.cache_clear()
-    assert model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS and model.max_retries == chat_models.JUDGEMENT_MAX_RETRIES
+    assert (
+        model.request_timeout == chat_models.JUDGEMENT_TIMEOUT_SECONDS
+        and model.max_retries == chat_models.JUDGEMENT_MAX_RETRIES
+    )
     assert chat_models.JUDGEMENT_TIMEOUT_SECONDS * (1 + model.max_retries) < 120
 
 
@@ -236,7 +244,6 @@ def _condition(column_id, operator, value):
 
 @pytest.fixture
 def world(monkeypatch):
-    """The service with the glossary, expert rules, data dictionary and Superset faked in memory."""
     terms = {
         5: SimpleNamespace(id=5, canonical_name="Lượng mưa", group_id=None),
         6: SimpleNamespace(id=6, canonical_name="Mưa lớn", group_id=None),
@@ -282,7 +289,9 @@ def world(monkeypatch):
         "modules.expert_rule_management.dependencies",
         expert_rule_repository=lambda: SimpleNamespace(read=lambda rule_id: SimpleNamespace(id=rule_id, dataset_id=12)),
         expert_rule_revision_repository=lambda: SimpleNamespace(read_all_current=lambda: [rule_revision]),
-        expert_rule_link_repository=lambda: SimpleNamespace(read_by_revision=lambda revision_id: rule_links[revision_id]),
+        expert_rule_link_repository=lambda: SimpleNamespace(
+            read_by_revision=lambda revision_id: rule_links[revision_id],
+        ),
     )
     module(
         "modules.data_dictionary.dependencies",
@@ -292,7 +301,9 @@ def world(monkeypatch):
     )
     module("modules.superset.services.srv_dataset", get_dataset=lambda dataset_id: SimpleNamespace(metrics=[metric]))
     module("modules.glossary_management.models", Contradiction=_Row, ContradictionJudgement=_Row)
-    monkeypatch.delitem(sys.modules, f"{PACKAGE}.modules.glossary_management.services.srv_contradiction_review", raising=False)
+    monkeypatch.delitem(
+        sys.modules, f"{PACKAGE}.modules.glossary_management.services.srv_contradiction_review", raising=False,
+    )
     review = importlib.import_module(f"{PACKAGE}.modules.glossary_management.services.srv_contradiction_review")
     return SimpleNamespace(
         review=review, term_revisions=term_revisions, contradictions=contradictions, judgements=judgements,
@@ -417,8 +428,10 @@ def test_contradiction_routes_are_admin_writes_in_the_handbook_order():
         assert _decorator_names(method) == [
             "expose", "protect", "safe", "permission_name", "csrf_protected", "rollback_on_error", "handle_errors"
         ]
-        assert ast.unparse(method.decorator_list[0]) == f"expose(f'{{prefix}}{route.removeprefix('/contradictions')}', methods=('POST',))"
-        assert ast.unparse(method.body[1].value) == "require_admin()"
+        assert ast.unparse(method.decorator_list[0]) == (
+            f"expose(f'{{prefix}}{route.removeprefix('/contradictions')}', methods=('POST',))"
+        )
+        assert ast.unparse(method.body[0].value) == "require_admin()"
         assert ast.unparse(method).count("db.session.commit()") == 1
 
 

@@ -4,12 +4,6 @@ from ....common.base_model import AuditedModel
 
 
 class DataLayer(AuditedModel):
-    """Admin-defined warehouse layer (e.g. staging, core, mart) that datasets are classified into.
-
-    ``level`` is the direction data flows: a layer feeds the layers on higher levels, while layers on one level (such as
-    reference data and technical metadata) sit side by side. ``sort_order`` orders all layers, level by level.
-    """
-
     __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)

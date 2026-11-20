@@ -25,7 +25,10 @@ def main(argv: list[str] | None = None) -> None:
         agent = extensions()[0]
         for name, command, directory in (
             ("AI Agent Ruff", [sys.executable, "-m", "ruff", "check", str(agent.directory / "backend")], ROOT),
-            ("AI Agent pytest", [sys.executable, "-m", "pytest", str(agent.directory / "backend" / "tests"), "-q"], ROOT),
+            (
+                "AI Agent pytest",
+                [sys.executable, "-m", "pytest", str(agent.directory / "backend" / "tests"), "-q"], ROOT,
+            ),
             ("AI Agent TypeScript typecheck", ["npm", "run", "typecheck"], agent.directory / "frontend"),
         ):
             step(name)

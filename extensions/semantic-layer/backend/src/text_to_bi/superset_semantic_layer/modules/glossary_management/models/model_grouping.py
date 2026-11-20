@@ -13,11 +13,6 @@ SUGGESTION_KINDS = "kind IN ('glossary', 'expert_rule')"
 
 
 class TextEmbedding(BaseModel):
-    """A text's vector from a remote embedding model, kept by the text's hash so unchanged text is not embedded again.
-
-    Glossary terms and expert rules share it: the key is the text itself, not the term or rule it describes.
-    """
-
     __table_args__ = (
         UniqueConstraint("model", "content_hash", name="uq_text_to_bi_text_embedding"),
         {"extend_existing": True},
@@ -31,11 +26,6 @@ class TextEmbedding(BaseModel):
 
 
 class GroupSuggestionDismissal(BaseModel):
-    """A grouping suggestion an administrator dismissed, by its fingerprint: the target group and the members.
-
-    The same suggestion is not offered again; one that gains or loses a member has another fingerprint and is.
-    """
-
     __table_args__ = (
         CheckConstraint(SUGGESTION_KINDS, name="ck_text_to_bi_group_suggestion_dismissal_kind"),
         UniqueConstraint("kind", "fingerprint", name="uq_text_to_bi_group_suggestion_dismissal"),

@@ -4,14 +4,6 @@ from ....common.base_model import AuditedModel
 
 
 class LineageEdge(AuditedModel):
-    """Manual lineage override between two datasets.
-
-    Edges inferred from the data dictionary (FK declarations and column transformations) are not stored. A row here
-    adds an edge the dictionary does not describe (``is_manual``), suppresses an inferred edge (``is_hidden``), or only
-    carries a display ``color`` for an inferred edge — such a row disappears from the diagram along with the FK or
-    transformation that produced the edge.
-    """
-
     __table_args__ = (
         UniqueConstraint("source_dataset_id", "target_dataset_id", "kind", name="uq_text_to_bi_lineage_edge"),
         {"extend_existing": True},

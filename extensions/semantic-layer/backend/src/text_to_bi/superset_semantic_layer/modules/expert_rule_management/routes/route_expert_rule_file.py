@@ -23,7 +23,6 @@ class ExpertRuleFileRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def export_expert_rule_file(self):
-        """Mọi rule thành file Excel theo mẫu, import đọc lại được."""
         require_admin()
         return self.response(200, **export_rules())
 
@@ -33,7 +32,6 @@ class ExpertRuleFileRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def export_expert_rule_template(self):
-        """File Excel mẫu để nhập rule, có dòng ví dụ và sheet hướng dẫn."""
         require_admin()
         return self.response(200, **export_rule_template())
 
@@ -45,7 +43,6 @@ class ExpertRuleFileRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def preview_expert_rule_file(self):
-        """Kết quả import từng dòng của file; không lưu gì."""
         require_admin()
         return self.response(200, **import_report(preview_rule_import(request.get_json(silent=True))))
 
@@ -58,7 +55,6 @@ class ExpertRuleFileRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def import_expert_rule_file(self):
-        """Tạo và cập nhật rule của file thành bản nháp trong một transaction; một dòng lỗi thì không lưu gì."""
         require_admin()
         # Repositories flush as they add rows, so a unique-name collision can surface inside the import too.
         try:

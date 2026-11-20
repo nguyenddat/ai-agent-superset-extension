@@ -73,7 +73,9 @@ const LANE_PADDING = `[top=${LANE_HEADER},left=${LANE_INSET},bottom=${LANE_INSET
  * an edge joins is a port fixed at its row, so ELK orders and routes the edges by the rows they meet instead of
  * crossing them on the card.
  */
-export async function layoutLineageWithElk(laneDefinitions: Lane[], cards: LineageCardBox[], links: LineageLink[]): Promise<ElkLineageLayout> {
+export async function layoutLineageWithElk(
+  laneDefinitions: Lane[], cards: LineageCardBox[], links: LineageLink[]
+): Promise<ElkLineageLayout> {
   // Links that meet a card at the same row and side share one port.
   const ports = new Map<string, Map<string, ElkPort>>(cards.map(card => [card.id, new Map()]));
   const portOf = (cardId: string, y: number, side: 'EAST' | 'WEST') => {
@@ -113,12 +115,16 @@ export async function layoutLineageWithElk(laneDefinitions: Lane[], cards: Linea
     edges,
   });
 
-  const place = (point: { x?: number; y?: number }): Point => ({ x: Math.round(point.x ?? 0), y: Math.round(point.y ?? 0) + LEVEL_HEADER });
+  const place = (point: { x?: number; y?: number }): Point => ({
+    x: Math.round(point.x ?? 0), y: Math.round(point.y ?? 0) + LEVEL_HEADER,
+  });
   const positions = new Map<string, Point>();
   const lanes: ElkLineageLayout['lanes'] = [];
   for (const group of graph.children ?? []) {
     const lane = usedLanes.find(item => `lane:${item.key}` === group.id);
-    if (lane) lanes.push({ ...lane, ...place(group), width: Math.round(group.width ?? 0), height: Math.round(group.height ?? 0) });
+    if (lane) lanes.push({
+      ...lane, ...place(group), width: Math.round(group.width ?? 0), height: Math.round(group.height ?? 0),
+    });
     for (const child of group.children ?? []) positions.set(child.id, place(child));
   }
   const routes = new Map<string, Point[]>();
@@ -130,7 +136,9 @@ export async function layoutLineageWithElk(laneDefinitions: Lane[], cards: Linea
   const levels: ElkLineageLayout['levels'] = [];
   for (const level of [...new Set(lanes.map(lane => lane.level))].sort((a, b) => a - b)) {
     const bands = lanes.filter(lane => lane.level === level);
-    levels.push({ level, left: Math.min(...bands.map(band => band.x)), right: Math.max(...bands.map(band => band.x + band.width)) });
+    levels.push({
+      level, left: Math.min(...bands.map(band => band.x)), right: Math.max(...bands.map(band => band.x + band.width)),
+    });
   }
   const bottoms = lanes.map(lane => lane.y + lane.height);
   return { positions, routes, lanes, levels, height: Math.max(LEVEL_HEADER, ...bottoms) };

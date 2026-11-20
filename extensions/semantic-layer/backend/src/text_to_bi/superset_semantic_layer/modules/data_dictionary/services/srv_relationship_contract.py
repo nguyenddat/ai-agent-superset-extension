@@ -19,12 +19,14 @@ class RelationshipEnd:
 
 
 def relationship_cardinality(source: RelationshipEnd, target: RelationshipEnd) -> str:
-    """Kiểm tra quan hệ khóa ngoại không thể sinh join nhiều-nhiều; trả lực lượng của nó."""
     if getattr(source.dataset, "id", None) == getattr(target.dataset, "id", None):
         raise RelationshipValidationError("A relationship cannot connect a dataset to itself.")
     if getattr(source.dataset, "sql", None) or getattr(target.dataset, "sql", None):
         raise RelationshipValidationError("Relationship contracts require physical datasets.")
-    if getattr(getattr(source.dataset, "database", None), "id", None) != getattr(getattr(target.dataset, "database", None), "id", None):
+    if (
+        getattr(getattr(source.dataset, "database", None), "id", None)
+        != getattr(getattr(target.dataset, "database", None), "id", None)
+    ):
         raise RelationshipValidationError("Relationship contracts require datasets on the same database.")
     _live_column(source)
     _live_column(target)
@@ -36,7 +38,6 @@ def relationship_cardinality(source: RelationshipEnd, target: RelationshipEnd) -
 
 
 def relationship_contract_hash(source: RelationshipEnd, target: RelationshipEnd, cardinality: str) -> str:
-    """Hash mọi thuộc tính hiện tại quyết định quan hệ có an toàn không, trừ thông tin đăng nhập."""
     if cardinality not in CARDINALITIES:
         raise RelationshipValidationError("Unsupported relationship cardinality.")
     payload = {"source": _end_hash_payload(source), "target": _end_hash_payload(target), "cardinality": cardinality}
@@ -44,7 +45,6 @@ def relationship_contract_hash(source: RelationshipEnd, target: RelationshipEnd,
 
 
 def relationship_is_approved_current(contract: Any, source: RelationshipEnd, target: RelationshipEnd) -> bool:
-    """Contract còn là bản chụp đã duyệt của khóa ngoại hiện tại hay không."""
     try:
         cardinality = relationship_cardinality(source, target)
     except ValueError:
@@ -63,7 +63,13 @@ def relationship_is_approved_current(contract: Any, source: RelationshipEnd, tar
 
 
 def _live_column(end: RelationshipEnd) -> Any:
-    column = next((item for item in getattr(end.dataset, "columns", []) if getattr(item, "column_name", None) == end.entry.column_name), None)
+    column = next(
+        (
+            item for item in getattr(end.dataset, "columns", [])
+            if getattr(item, "column_name", None) == end.entry.column_name
+        ),
+        None
+    )
     if column is None or getattr(column, "is_active", None) is not True or getattr(column, "expression", None):
         raise RelationshipValidationError("Relationship columns must be active live physical columns.")
     return column

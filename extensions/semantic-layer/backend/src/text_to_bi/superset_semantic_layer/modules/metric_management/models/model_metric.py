@@ -13,11 +13,6 @@ EVENT_ACTIONS = "action IN ('candidate', 'approve', 'revoke', 'definition')"
 
 
 class MetricDefinition(BaseModel):
-    """The root of a metric in the Semantic Layer: what a Superset metric means and how it is read by default.
-
-    It is written before the metric is proposed; its contract and review history hang from it.
-    """
-
     __table_args__ = (
         UniqueConstraint("metric_id", name="uq_text_to_bi_metric_definition_metric"),
         {"extend_existing": True},
@@ -47,8 +42,6 @@ class MetricDefinition(BaseModel):
 
 
 class MetricContract(AuditedModel):
-    """The approval a metric needs before it runs: the latest decision on a snapshot of its formula and defaults."""
-
     __table_args__ = (
         UniqueConstraint("definition_id", name="uq_text_to_bi_metric_contract_definition"),
         CheckConstraint(ReviewStatus.check(), name="ck_text_to_bi_metric_contract_status"),
@@ -96,8 +89,6 @@ class MetricContract(AuditedModel):
 
 
 class MetricContractEvent(BaseModel):
-    """Append-only history of a metric's review; each row keeps a snapshot, so it outlives the metric."""
-
     __table_args__ = (
         CheckConstraint(EVENT_ACTIONS, name="ck_text_to_bi_metric_event_action"),
         {"extend_existing": True},

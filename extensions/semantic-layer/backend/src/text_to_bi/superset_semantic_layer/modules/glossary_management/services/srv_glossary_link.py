@@ -29,7 +29,6 @@ def read_links(revision_id: int) -> list[GlossaryTermLink]:
 
 
 def link_target(link: GlossaryTermLink, dataset: SqlaTable) -> Any | None:
-    """Cột hoặc metric mà liên kết trỏ tới; None với liên kết tới cả dataset."""
     if link.kind == "dataset":
         return None
     if link.kind == "column":
@@ -38,7 +37,6 @@ def link_target(link: GlossaryTermLink, dataset: SqlaTable) -> Any | None:
 
 
 def metric_approved(dataset: SqlaTable, metric: Any) -> bool:
-    """Thuật ngữ chỉ dựa trên metric có bản duyệt còn khớp công thức hiện tại."""
     contracts = MetricContractService()
     contract = contracts.read(dataset, metric)
     return contract is not None and contract_is_approved_current(
@@ -47,7 +45,6 @@ def metric_approved(dataset: SqlaTable, metric: Any) -> bool:
 
 
 def link_options() -> list[dict[str, Any]]:
-    """Những gì thuật ngữ được liên kết: từng dataset với cột vật lý đang dùng và metric đã duyệt."""
     datasets = []
     for dataset in datasets_by_name():
         if is_internal_dataset(dataset) or not can_access_dataset(dataset):
@@ -75,7 +72,6 @@ def link_options() -> list[dict[str, Any]]:
 
 # -------------------------CHECK--------------------------
 def link_fingerprint(dataset: Any, kind: str, target: Any | None = None) -> str:
-    """Hash siêu dữ liệu an toàn của đối tượng được liên kết, không gồm thông tin đăng nhập."""
     if kind not in LINK_KINDS:
         raise GlossaryValidationError("Unsupported glossary link kind.")
     payload = {
@@ -99,7 +95,6 @@ def link_fingerprint(dataset: Any, kind: str, target: Any | None = None) -> str:
 
 
 def live_fingerprint(link: GlossaryTermLink) -> str | None:
-    """Fingerprint hiện tại của đối tượng được liên kết; None khi nó không còn."""
     dataset = get_dataset(link.dataset_id)
     if dataset is None:
         return None
@@ -110,7 +105,6 @@ def live_fingerprint(link: GlossaryTermLink) -> str | None:
 
 
 def link_is_live(link: GlossaryTermLink) -> bool:
-    """Đối tượng được liên kết chưa đổi từ khi lưu, và metric được liên kết vẫn còn duyệt."""
     if live_fingerprint(link) != link.fingerprint:
         return False
     if link.kind != "metric":
@@ -124,7 +118,6 @@ def validated_links(
     dataset_resolver: Callable[[int], Any],
     metric_is_approved: Callable[[Any, Any], bool],
 ) -> list[dict[str, Any]]:
-    """Gắn liên kết vào đối tượng đang có: cột vật lý đang dùng, hoặc metric đã duyệt."""
     result = []
     seen = set()
     for raw in links:
@@ -165,7 +158,6 @@ def validated_links(
 
 # -------------------------ACCESS-------------------------
 def revision_readable(revision_id: int) -> bool:
-    """Mọi dataset còn tồn tại mà bản liên kết tới đều là dataset người gọi được đọc."""
     for link in read_links(revision_id):
         dataset = get_dataset(link.dataset_id)
         if dataset is not None and not can_access_dataset(dataset):
@@ -174,13 +166,11 @@ def revision_readable(revision_id: int) -> bool:
 
 
 def term_readable(term_id: int) -> bool:
-    """Thuật ngữ chỉ hiện khi bản hiện tại không liên kết tới dataset bị ẩn với người gọi."""
     revision = glossary_revision_repository().read_current(term_id)
     return revision is None or revision_readable(revision.id)
 
 
 def discoverable_glossary_terms() -> list[dict[str, Any]]:
-    """Bản đang dùng của mỗi thuật ngữ, chỉ với liên kết còn mới tới dataset người gọi được đọc."""
     terms = []
     for revision in glossary_revision_repository().read_all_serving():
         visible_links = []

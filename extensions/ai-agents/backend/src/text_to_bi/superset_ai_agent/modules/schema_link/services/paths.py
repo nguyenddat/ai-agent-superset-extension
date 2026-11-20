@@ -33,7 +33,6 @@ class JoinTree:
 
 
 def _shortest_paths(graph: SchemaGraph, source: int, allow_fanout: bool):
-    """Dijkstra from `source`: the cost of each table, the step that reached it, and how many cheapest paths do."""
     cost = {source: 0}
     reached_by: dict[int, Step] = {}
     paths = {source: 1}
@@ -65,7 +64,6 @@ def _path_to(reached_by: dict[int, Step], source: int, target: int) -> list[Step
 
 
 def _alternatives(graph: SchemaGraph, root: int, target: int, cost: dict[int, float], allow_fanout: bool):
-    """Up to `MAX_ALTERNATIVES` cheapest paths from the root to `target`, as edge IDs."""
     found: list[list[int]] = []
 
     def walk(table: int, path: list[int]) -> None:
@@ -83,7 +81,6 @@ def _alternatives(graph: SchemaGraph, root: int, target: int, cost: dict[int, fl
 
 
 def _ordered(root: int, steps: list[Step]) -> list[Step]:
-    """Distinct steps in an order where each starts at a table already joined."""
     unique = list({(step.edge.id, step.forward): step for step in steps}.values())
     joined, ordered = {root}, []
     while unique:
@@ -99,7 +96,6 @@ def _ordered(root: int, steps: list[Step]) -> list[Step]:
 
 
 def shortest_path_tree(graph: SchemaGraph, root: int, terminals: list[int]) -> JoinTree | None:
-    """The union of Dijkstra's paths from the root along steps that repeat no row; None if some table is unreachable."""
     cost, reached_by, paths = _shortest_paths(graph, root, allow_fanout=False)
     targets = [table for table in dict.fromkeys(terminals) if table != root]
     if any(table not in cost for table in targets):
@@ -116,7 +112,6 @@ def shortest_path_tree(graph: SchemaGraph, root: int, terminals: list[int]) -> J
 
 
 def steiner_tree(graph: SchemaGraph, root: int, terminals: list[int]) -> JoinTree:
-    """A directed Steiner tree from the root over every step, fan-out ones included. Raises NoJoinPathError."""
     targets = [table for table in dict.fromkeys(terminals) if table != root]
     tables = sorted(graph.tables)
     searches: dict[int, tuple] = {}
@@ -144,7 +139,6 @@ def steiner_tree(graph: SchemaGraph, root: int, terminals: list[int]) -> JoinTre
 
 
 def _dreyfus_wagner(root, targets, tables, distance, path) -> list[Step]:
-    """Exact: `best[mask][v]` is the cheapest tree rooted at `v` reaching the targets in `mask`."""
     full = (1 << len(targets)) - 1
     best: dict[int, dict[int, float]] = {}
     split: dict[int, dict[int, int | None]] = {}
@@ -185,7 +179,6 @@ def _dreyfus_wagner(root, targets, tables, distance, path) -> list[Step]:
 
 
 def _takahashi_matsuyama(root, targets, distance, path) -> list[Step]:
-    """Heuristic: grow the tree by the cheapest path from any table in it to a target not reached yet."""
     in_tree, remaining, steps = {root}, set(targets), []
     while remaining:
         _cost, start, target = min(
@@ -199,5 +192,4 @@ def _takahashi_matsuyama(root, targets, distance, path) -> list[Step]:
 
 
 def join_tree(graph: SchemaGraph, root: int, terminals: list[int]) -> JoinTree:
-    """Dijkstra from the root when it reaches every table without repeating rows, a Steiner tree otherwise."""
     return shortest_path_tree(graph, root, terminals) or steiner_tree(graph, root, terminals)

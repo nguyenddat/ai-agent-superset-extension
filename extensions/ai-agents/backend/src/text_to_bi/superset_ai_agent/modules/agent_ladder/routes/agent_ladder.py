@@ -30,7 +30,9 @@ class AgentLadderAPI(RestApi):
         proposals = DatasetProposalService().proposals.newest_first()
         proposals.sort(key=lambda proposal: proposal.status != "pending")
         sources = dataset_sources(request.headers.get("Cookie", ""))
-        return self.response(200, **public_payload({'proposals': [serialize_proposal(proposal, sources) for proposal in proposals]}))
+        return self.response(
+            200, **public_payload({'proposals': [serialize_proposal(proposal, sources) for proposal in proposals]}),
+        )
 
     @expose("/dataset-proposals", methods=("POST",))
     @protect()
@@ -42,10 +44,15 @@ class AgentLadderAPI(RestApi):
     def propose_dataset(self):
         require_semantic_layer_query()
         ensure_agent_tables()
-        proposal, created = DatasetProposalService().propose(request.get_json(silent=True), current_user.id, request.headers.get("Cookie", ""), request.headers.get("X-CSRFToken", ""))
+        proposal, created = DatasetProposalService().propose(
+            request.get_json(silent=True), current_user.id, request.headers.get("Cookie", ""),
+            request.headers.get("X-CSRFToken", ""),
+        )
         sources = dataset_sources(request.headers.get("Cookie", ""))
         db.session.commit()
-        return self.response(201 if created else 200, **public_payload({'proposal': serialize_proposal(proposal, sources)}))
+        return self.response(
+            201 if created else 200, **public_payload({'proposal': serialize_proposal(proposal, sources)}),
+        )
 
     @expose("/dataset-proposals/<int:proposal_id>", methods=("PUT",))
     @protect()
@@ -57,7 +64,10 @@ class AgentLadderAPI(RestApi):
     def update_proposal(self, proposal_id: int):
         require_admin()
         ensure_agent_tables()
-        proposal = DatasetProposalService().update(proposal_id, request.get_json(silent=True), request.headers.get("Cookie", ""), request.headers.get("X-CSRFToken", ""))
+        proposal = DatasetProposalService().update(
+            proposal_id, request.get_json(silent=True), request.headers.get("Cookie", ""),
+            request.headers.get("X-CSRFToken", ""),
+        )
         sources = dataset_sources(request.headers.get("Cookie", ""))
         db.session.commit()
         return self.response(200, **public_payload({'proposal': serialize_proposal(proposal, sources)}))
@@ -87,7 +97,9 @@ class AgentLadderAPI(RestApi):
     def create_proposal(self, proposal_id: int):
         require_admin()
         ensure_agent_tables()
-        proposal = DatasetProposalService().create(proposal_id, current_user.id, request.headers.get("Cookie", ""), request.headers.get("X-CSRFToken", ""))
+        proposal = DatasetProposalService().create(
+            proposal_id, current_user.id, request.headers.get("Cookie", ""), request.headers.get("X-CSRFToken", ""),
+        )
         sources = dataset_sources(request.headers.get("Cookie", ""))
         db.session.commit()
         return self.response(200, **public_payload({'proposal': serialize_proposal(proposal, sources)}))

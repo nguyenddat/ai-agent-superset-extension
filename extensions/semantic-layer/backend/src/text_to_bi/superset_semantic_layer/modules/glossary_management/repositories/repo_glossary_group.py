@@ -20,7 +20,6 @@ class GlossaryGroupRepository(BaseRepository[GlossaryTermGroup]):
         return self.get(group_id)
 
     def read_all(self) -> list[GlossaryTermGroup]:
-        """Mọi nhóm, theo tên."""
         return self.query().order_by(GlossaryTermGroup.name).all()
 
     def read_by_normalized_name(self, normalized_name: str) -> GlossaryTermGroup | None:

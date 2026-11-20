@@ -17,7 +17,6 @@ class TextEmbeddingRepository(BaseRepository[TextEmbedding]):
 
     # -------------------------READ---------------------------
     def read_vectors(self, model: str, content_hashes: list[str]) -> dict[str, list[float]]:
-        """Vector đã lưu của model theo từng hash có trong cache."""
         if not content_hashes:
             return {}
         rows = self.query().filter(TextEmbedding.model == model, TextEmbedding.content_hash.in_(content_hashes)).all()

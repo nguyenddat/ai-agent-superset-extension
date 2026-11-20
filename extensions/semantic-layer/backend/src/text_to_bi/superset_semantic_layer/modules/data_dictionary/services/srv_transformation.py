@@ -9,12 +9,9 @@ TRANSFORMATION_MAX_SOURCES = 20
 TRANSFORMATION_EXPRESSION_LIMIT = 4000
 
 
-def checked_transformation(value: Any, field: str, target: tuple[int, str], columns_of: Callable[[int], set[str] | None]) -> dict[str, Any] | None:
-    """Phép biến đổi của một cột gửi từ Data Dictionary: các cột đầu vào và biểu thức tự do.
-
-    `target` là (ID dataset, tên cột) đang mô tả; `columns_of` trả tên cột hiện có của một dataset, None nếu không
-    có dataset. Biểu thức giữ nguyên, không phân tích; trả None để bỏ phép biến đổi.
-    """
+def checked_transformation(
+    value: Any, field: str, target: tuple[int, str], columns_of: Callable[[int], set[str] | None]
+) -> dict[str, Any] | None:
     if value is None:
         return None
     if not isinstance(value, dict) or set(value) - {"expression", "sources"}:
@@ -49,20 +46,18 @@ def checked_transformation(value: Any, field: str, target: tuple[int, str], colu
 
 
 def stored_transformations(column_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
-    """Phép biến đổi đã khai báo của các cột từ điển này, như Data Dictionary hiển thị."""
     repository = column_transformation_repository()
-    transformations = {row.column_id: {"expression": row.expression, "sources": []} for row in repository.read_by_columns(column_ids)}
+    transformations = {
+        row.column_id: {"expression": row.expression, "sources": []} for row in repository.read_by_columns(column_ids)
+    }
     for link, source in repository.read_sources(transformations):
-        transformations[link.column_id]["sources"].append({"dataset_id": source.dataset_id, "column_name": source.column_name})
+        transformations[link.column_id]["sources"].append(
+            {"dataset_id": source.dataset_id, "column_name": source.column_name}
+        )
     return transformations
 
 
 def save_transformation(column_id: int, value: dict[str, Any] | None) -> None:
-    """Lưu phép biến đổi đã kiểm tra lên một cột từ điển, hoặc xóa nó khi `value` là None.
-
-    Phép biến đổi không đổi thì giữ nguyên. Cột đầu vào chưa có dòng từ điển thì ném TransformationSourceMissingError;
-    người gọi seed các dataset nguồn trước.
-    """
     repository = column_transformation_repository()
     stored = repository.read(column_id)
     if value is None:

@@ -23,8 +23,6 @@ _FALSE_WORDS = {"false", "0", "", "no", "không", "sai"}
 
 @dataclass(frozen=True)
 class TemplateColumn:
-    """Một cột của file Excel: tên tiêu đề, có bắt buộc không, giá trị hoặc định dạng cho phép và ví dụ."""
-
     name: str
     required: bool
     description: str
@@ -33,12 +31,6 @@ class TemplateColumn:
 
 @dataclass
 class ImportRow:
-    """What importing one row of a file does: `create`, `update`, `unchanged` or `error`, with a Vietnamese note.
-
-    `row` is the spreadsheet row number (the header is row 1). `plan` holds what the module needs to apply the row
-    and is never sent to the client.
-    """
-
     row: int
     key: str
     action: str = "error"
@@ -53,7 +45,6 @@ class ImportRow:
 
 
 def import_report(rows: list[ImportRow]) -> dict[str, Any]:
-    """The preview or result of an import: every row, and how many rows of each action."""
     summary = {action: 0 for action in ("create", "update", "unchanged", "error")}
     for item in rows:
         summary[item.action] += 1
@@ -61,7 +52,6 @@ def import_report(rows: list[ImportRow]) -> dict[str, Any]:
 
 
 def refusal_message(rows: list[ImportRow]) -> str | None:
-    """Why an import saves nothing: some rows fail. None when every row can be applied."""
     failed = sum(item.action == "error" for item in rows)
     if not failed:
         return None
@@ -69,7 +59,6 @@ def refusal_message(rows: list[ImportRow]) -> str | None:
 
 
 def dataset_named(name: str, datasets: dict[str, list[Any]], error: type[Exception]) -> Any:
-    """The one dataset with this table name among `datasets` (table name → datasets), as a file names a dataset."""
     matches = datasets.get(name, [])
     if not matches:
         raise error(f"Không có dataset «{name}».")
@@ -79,7 +68,6 @@ def dataset_named(name: str, datasets: dict[str, list[Any]], error: type[Excepti
 
 
 def split_list(cell: str) -> list[str]:
-    """The items of a cell that lists several values separated by `;`, trimmed, blanks dropped."""
     return [part.strip() for part in cell.split(LIST_SEPARATOR) if part.strip()]
 
 
@@ -88,7 +76,6 @@ def join_list(values: Iterable[str]) -> str:
 
 
 def parse_flag(cell: str) -> bool | None:
-    """A yes/no cell (`true`/`false`, `1`/`0`, `x`, `có`/`không`); None when it is neither. Blank reads as no."""
     word = cell.strip().casefold()
     if word in _TRUE_WORDS:
         return True
@@ -101,13 +88,9 @@ def flag_text(value: Any) -> str:
     return "true" if value else "false"
 
 
-def read_table(payload: Any, columns: Sequence[TemplateColumn], error: type[Exception]) -> list[tuple[int, dict[str, str]]]:
-    """Các dòng dữ liệu của file Excel tải lên, mỗi dòng kèm số dòng trong bảng tính và ô theo tên cột.
-
-    `payload` là thân request `{"filename": ..., "content": <base64>}`. Đọc sheet "Dữ liệu", không có thì sheet đầu.
-    Tên cột so khớp không phân biệt hoa thường và khoảng trắng; thiếu hẳn một cột không bắt buộc thì giữ nguyên trường
-    đó. Ném `error` với thông điệp tiếng Việt khi file quá lớn, không phải Excel, trống, hoặc sai cột.
-    """
+def read_table(
+    payload: Any, columns: Sequence[TemplateColumn], error: type[Exception]
+) -> list[tuple[int, dict[str, str]]]:
     if not isinstance(payload, dict) or not isinstance(payload.get("content"), str) or not payload["content"]:
         raise error("Chọn một file Excel (.xlsx) để tải lên.")
     too_large = f"File vượt quá {MAX_FILE_BYTES // 1_000_000} MB."
@@ -147,7 +130,10 @@ def read_table(payload: Any, columns: Sequence[TemplateColumn], error: type[Exce
         raise error(f"File thiếu cột: {', '.join(missing)}.")
     rows = []
     for number, line in enumerate(lines[1:], start=2):
-        cells = {name: (line[index].strip() if index < len(line) else "") for index, name in enumerate(present_columns) if name}
+        cells = {
+            name: (line[index].strip() if index < len(line) else "")
+            for index, name in enumerate(present_columns) if name
+        }
         if any(cells.values()):
             rows.append((number, cells))
     if not rows:
@@ -157,17 +143,16 @@ def read_table(payload: Any, columns: Sequence[TemplateColumn], error: type[Exce
     return rows
 
 
-def write_table(columns: Sequence[TemplateColumn], rows: Iterable[Sequence[str]], name: str, error: type[Exception]) -> dict[str, str]:
-    """File Excel theo mẫu chung: sheet "Dữ liệu" chứa `rows`, sheet "Hướng dẫn" mô tả từng cột.
-
-    Trả `{"filename", "media_type", "content": <base64>}`; import đọc lại được đúng file này.
-    """
+def write_table(
+    columns: Sequence[TemplateColumn], rows: Iterable[Sequence[str]], name: str, error: type[Exception]
+) -> dict[str, str]:
     content = base64.b64encode(_xlsx_bytes(columns, rows, error)).decode("ascii")
     return {"filename": f"{name}.xlsx", "media_type": XLSX_MEDIA_TYPE, "content": content}
 
 
-def write_template(columns: Sequence[TemplateColumn], example_rows: Iterable[Sequence[str]], name: str, error: type[Exception]) -> dict[str, str]:
-    """File mẫu để điền: cùng bố cục với file xuất, chứa vài dòng ví dụ."""
+def write_template(
+    columns: Sequence[TemplateColumn], example_rows: Iterable[Sequence[str]], name: str, error: type[Exception]
+) -> dict[str, str]:
     return write_table(columns, example_rows, f"{name}-mau", error)
 
 
@@ -212,7 +197,9 @@ def _xlsx_bytes(columns: Sequence[TemplateColumn], rows: Iterable[Sequence[str]]
     data_sheet = workbook.active
     data_sheet.title = DATA_SHEET
     _fill_sheet(data_sheet, [column.name for column in columns], rows)
-    guide_rows = [[column.name, "Có" if column.required else "Không", column.description, column.example] for column in columns]
+    guide_rows = [
+        [column.name, "Có" if column.required else "Không", column.description, column.example] for column in columns
+    ]
     _fill_sheet(workbook.create_sheet(GUIDE_SHEET), GUIDE_HEADERS, guide_rows)
     buffer = io.BytesIO()
     workbook.save(buffer)
@@ -220,7 +207,6 @@ def _xlsx_bytes(columns: Sequence[TemplateColumn], rows: Iterable[Sequence[str]]
 
 
 def _fill_sheet(sheet: Any, headers: Sequence[str], rows: Iterable[Sequence[str]]) -> None:
-    """Ghi tiêu đề in đậm có nền, cố định dòng tiêu đề, xuống dòng trong ô và đặt độ rộng cột theo nội dung."""
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 

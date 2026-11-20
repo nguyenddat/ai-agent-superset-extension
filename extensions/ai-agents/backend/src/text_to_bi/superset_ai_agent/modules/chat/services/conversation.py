@@ -20,7 +20,6 @@ def _is_id(value: Any) -> bool:
 
 
 def parse_chat_request(body: Any) -> dict[str, Any]:
-    """`{question, session_id, dashboard_id, retry_of}` checked for type; the IDs are not looked up yet."""
     body = body if isinstance(body, dict) else {}
     session_id, retry_of, dashboard_id = body.get("session_id"), body.get("retry_of"), body.get("dashboard_id")
     if retry_of is not None and (not _is_id(retry_of) or session_id is None):
@@ -36,7 +35,6 @@ def parse_chat_request(body: Any) -> dict[str, Any]:
 
 
 def asked_question(question: Any, session_id: int | None, retry_of: int | None) -> str:
-    """The question to answer: the one sent, or with `retry_of`, the conversation's earlier question asked again."""
     if retry_of is not None:
         earlier = question_repository().one_in_session(retry_of, session_id)
         if earlier is None:
@@ -48,10 +46,6 @@ def asked_question(question: Any, session_id: int | None, retry_of: int | None) 
 
 
 def session_history(session_id: int, excluded_question_id: int | None) -> list[dict[str, str]]:
-    """The conversation's last answered turns, which the agent uses to rewrite a follow-up question.
-
-    A question answered again after the user confirmed definitions leaves out its first answer.
-    """
     answered = question_repository().answered_in_session(session_id, excluded_question_id, MAX_HISTORY_TURNS)
     return recent_history([
         message
@@ -61,7 +55,6 @@ def session_history(session_id: int, excluded_question_id: int | None) -> list[d
 
 
 def record_tool_call(tool_calls: list[dict[str, Any]], name: str, data: dict[str, Any]) -> None:
-    """Keep each step as the browser shows it: the start's arguments merged with the end's status and result."""
     if name == "tool_start":
         tool_calls.append({**data, "status": "running"})
     elif name == "tool_end":
@@ -83,7 +76,6 @@ def log_question(
     started: float,
     error: str | None,
 ) -> AgentQuestion:
-    """Add the question to the log as the conversation's next turn; a failed turn keeps only its error."""
     record = AgentQuestion(
         user_id=user_id,
         session_id=session_id,

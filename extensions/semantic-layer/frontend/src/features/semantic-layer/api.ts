@@ -37,21 +37,34 @@ export const semanticLayerApi = {
   ),
   grainProfile: (datasetId: number, timeColumn: string, temporalKind: string, rowKindColumn: string | null) => {
     const query = new URLSearchParams({
-      time_column: timeColumn, temporal_kind: temporalKind, ...(rowKindColumn ? { row_kind_column: rowKindColumn } : {}),
+      time_column: timeColumn, temporal_kind: temporalKind,
+      ...(rowKindColumn ? { row_kind_column: rowKindColumn } : {}),
     });
     return `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/grain-profile?${query}`;
   },
   relationships: (datasetId: number, suggest = false) => (
     `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships${suggest ? '?suggest=1' : ''}`
   ),
-  relationshipApply: (datasetId: number) => `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships/apply`,
-  relationshipAction: (datasetId: number, columnId: number, action: 'contract/candidate' | 'verify' | 'contract/approve' | 'contract/revoke') => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships/${encodeURIComponent(columnId)}/${action}`
+  relationshipApply: (datasetId: number) => (
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships/apply`
+  ),
+  relationshipAction: (
+    datasetId: number, columnId: number,
+    action: 'contract/candidate' | 'verify' | 'contract/approve' | 'contract/revoke'
+  ) => (
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/relationships/` +
+    `${encodeURIComponent(columnId)}/${action}`
   ),
   referenceOptions: `${SEMANTIC_LAYER_API}/datasets/reference-options`,
-  businessModel: (databaseId: number) => `${SEMANTIC_LAYER_API}/business-model?database_id=${encodeURIComponent(databaseId)}`,
-  businessCanvas: (databaseId: number) => `${SEMANTIC_LAYER_API}/business-canvas?database_id=${encodeURIComponent(databaseId)}`,
-  lineageCanvas: (databaseId: number) => `${SEMANTIC_LAYER_API}/lineage-canvas?database_id=${encodeURIComponent(databaseId)}`,
+  businessModel: (databaseId: number) => (
+    `${SEMANTIC_LAYER_API}/business-model?database_id=${encodeURIComponent(databaseId)}`
+  ),
+  businessCanvas: (databaseId: number) => (
+    `${SEMANTIC_LAYER_API}/business-canvas?database_id=${encodeURIComponent(databaseId)}`
+  ),
+  lineageCanvas: (databaseId: number) => (
+    `${SEMANTIC_LAYER_API}/lineage-canvas?database_id=${encodeURIComponent(databaseId)}`
+  ),
   businessDomains: `${SEMANTIC_LAYER_API}/business-domains`,
   businessDomain: (domainId: number) => `${SEMANTIC_LAYER_API}/business-domains/${encodeURIComponent(domainId)}`,
   lineageEdges: `${SEMANTIC_LAYER_API}/lineage-edges`,
@@ -59,27 +72,35 @@ export const semanticLayerApi = {
   dataLayers: `${SEMANTIC_LAYER_API}/data-layers`,
   dataLayer: (layerId: number) => `${SEMANTIC_LAYER_API}/data-layers/${encodeURIComponent(layerId)}`,
   dataLayersOrder: `${SEMANTIC_LAYER_API}/data-layers/order`,
-  metricContracts: (databaseId: number) => `${SEMANTIC_LAYER_API}/metric-contracts?database_id=${encodeURIComponent(databaseId)}`,
+  metricContracts: (databaseId: number) => (
+    `${SEMANTIC_LAYER_API}/metric-contracts?database_id=${encodeURIComponent(databaseId)}`
+  ),
   metricContractCandidate: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/contract/candidate`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/contract/candidate'
   ),
   metricContractApprove: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/contract/approve`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/contract/approve'
   ),
   metricContractRevoke: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/contract/revoke`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/contract/revoke'
   ),
   metricContractEvents: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/contract/events`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/contract/events'
   ),
   metricDefinition: (datasetId: number, metricId: number) => (
     `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/definition`
   ),
   metricQueryDefaults: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/query-defaults`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/query-defaults'
   ),
   metricContractExecute: (datasetId: number, metricId: number) => (
-    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}/semantic-query/execute`
+    `${SEMANTIC_LAYER_API}/dataset/${encodeURIComponent(datasetId)}/metrics/${encodeURIComponent(metricId)}` +
+    '/semantic-query/execute'
   ),
   glossary: `${SEMANTIC_LAYER_API}/glossary`,
   glossaryOptions: `${SEMANTIC_LAYER_API}/glossary/options`,
@@ -100,7 +121,9 @@ export const semanticLayerApi = {
   ),
   dictionaryFile: `${SEMANTIC_LAYER_API}/dictionary/file`,
   datasetProposals: `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals`,
-  datasetProposal: (proposalId: number) => `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}`,
+  datasetProposal: (proposalId: number) => (
+    `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}`
+  ),
   datasetProposalCreate: (proposalId: number) => (
     `/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals/${encodeURIComponent(proposalId)}/create`
   ),
@@ -127,7 +150,9 @@ async function errorMessage(response: Response, fallback: string): Promise<strin
 }
 
 /** Sends a JSON request to the extension API with Superset's CSRF token and returns the parsed body. */
-export async function requestJson<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
+export async function requestJson<T>(
+  url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown
+): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (method !== 'GET') {
     const csrfResponse = await fetch(supersetApi.csrfToken, { credentials: 'same-origin', headers });
@@ -148,7 +173,10 @@ export async function requestJson<T>(url: string, method: 'GET' | 'POST' | 'PUT'
   const payload: unknown = await response.json();
   if (payload !== null && typeof payload === 'object' && 'schema_version' in payload) {
     const publicResponse = payload as { schema_version: unknown; result?: unknown };
-    if (publicResponse.schema_version !== 1 || publicResponse.result === null || typeof publicResponse.result !== 'object' || Array.isArray(publicResponse.result)) {
+    if (
+      publicResponse.schema_version !== 1 || publicResponse.result === null ||
+      typeof publicResponse.result !== 'object' || Array.isArray(publicResponse.result)
+    ) {
       throw new Error('Response public không đúng schema được hỗ trợ.');
     }
     return publicResponse.result as T;

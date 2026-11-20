@@ -16,7 +16,10 @@ from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv
     detect,
     semantic_candidates,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_thresholds import main_clause, stated_interval
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_contradiction_thresholds import (
+    main_clause,
+    stated_interval,
+)
 
 RAIN = 96
 TEMPERATURE = 92

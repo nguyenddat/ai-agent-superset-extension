@@ -23,7 +23,9 @@ from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services 
 from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_file as rule_file
 from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions import GlossaryValidationError
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_file as glossary_file
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_term import GlossaryTermService
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_term import (
+    GlossaryTermService,
+)
 
 TERM_FILE_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_file.py"
 DICTIONARY_FILE_PATH = MODULES_PATH / "data_dictionary" / "services" / "srv_dictionary_file.py"
@@ -59,7 +61,10 @@ def _module_nodes(path) -> list[ast.stmt]:
 def test_excel_table_reads_headers_case_insensitively_and_preserves_multiline_cells():
     columns = [TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", ""),
                TemplateColumn("links", False, "", ""), TemplateColumn("group", False, "", "")]
-    payload = write_table(columns, [["Revenue", "Recognized\nrevenue.", "dataset:sales", ""], ["Cost", "Spent", "", ""]], "terms", FileError)
+    payload = write_table(
+        columns, [["Revenue", "Recognized\nrevenue.", "dataset:sales", ""], ["Cost", "Spent", "", ""]], "terms",
+        FileError,
+    )
     from openpyxl import load_workbook
 
     workbook = load_workbook(io.BytesIO(base64.b64decode(payload["content"])))
@@ -81,14 +86,28 @@ def test_excel_table_reads_headers_case_insensitively_and_preserves_multiline_ce
         (_file(("name", "color"), [["A", "red"]]), "cột không hỗ trợ"),
         (_file(("definition",), [["A"]]), "File thiếu cột: name"),
         (_file(("name", "Name"), [["A", "B"]]), "bị lặp tên"),
-        (write_table([TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")], [], "empty", FileError), "File không có dòng dữ liệu"),
-        (write_table([TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")], [[str(index), "x"] for index in range(1_001)], "many", FileError), "hơn 1000 dòng"),
+        (
+            write_table(
+                [TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")], [], "empty",
+                FileError,
+            ),
+            "File không có dòng dữ liệu",
+        ),
+        (
+            write_table(
+                [TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")],
+                [[str(index), "x"] for index in range(1_001)], "many", FileError,
+            ),
+            "hơn 1000 dòng",
+        ),
         ({"filename": "a.csv", "content": "A" * 1_400_000}, "vượt quá 1 MB"),
     ],
 )
 def test_a_file_that_cannot_be_imported_is_refused_with_a_vietnamese_reason(payload, message):
     with pytest.raises(FileError, match=message):
-        read_table(payload, [TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")], FileError)
+        read_table(
+            payload, [TemplateColumn("name", True, "", ""), TemplateColumn("definition", True, "", "")], FileError,
+        )
 
 
 def test_a_written_excel_file_reads_back_the_same_rows():
@@ -154,7 +173,10 @@ def _glossary(monkeypatch):
             return revision
 
         def read_current(self, term_id):
-            return next((revision for revision in revisions.values() if revision.term_id == term_id and revision.is_current), None)
+            return next(
+                (revision for revision in revisions.values() if revision.term_id == term_id and revision.is_current),
+                None,
+            )
 
         def read_current_for_update(self, term_id):
             return self.read_current(term_id)
@@ -163,7 +185,13 @@ def _glossary(monkeypatch):
             return [revision for revision in revisions.values() if revision.term_id == term_id]
 
         def read_serving(self, term_id):
-            return next((revision for revision in revisions.values() if revision.term_id == term_id and revision.status == "approved"), None)
+            return next(
+                (
+                    revision for revision in revisions.values()
+                    if revision.term_id == term_id and revision.status == "approved"
+                ),
+                None,
+            )
 
     class LinkRepository:
         def create(self, values, flush=True):
@@ -199,10 +227,22 @@ def _glossary(monkeypatch):
             events.append(SimpleNamespace(**values))
 
         def read_author_id(self, revision):
-            return next((event.actor_id for event in events if event.revision_id == revision.id and event.event_type in {"created", "updated"}), None)
+            return next(
+                (
+                    event.actor_id for event in events
+                    if event.revision_id == revision.id and event.event_type in {"created", "updated"}
+                ),
+                None,
+            )
 
         def read_latest_authoring(self, revision_id):
-            return next((event for event in reversed(events) if event.revision_id == revision_id and event.event_type in {"created", "updated"}), None)
+            return next(
+                (
+                    event for event in reversed(events)
+                    if event.revision_id == revision_id and event.event_type in {"created", "updated"}
+                ),
+                None,
+            )
 
         def read_history(self, term_id):
             return [event for event in events if event.term_id == term_id]
@@ -213,7 +253,9 @@ def _glossary(monkeypatch):
         srv_glossary_group,
         srv_glossary_term,
     )
-    monkeypatch.setattr(srv_glossary_term, "GlossaryTerm", lambda **values: SimpleNamespace(id=None, group_id=None, **values))
+    monkeypatch.setattr(
+        srv_glossary_term, "GlossaryTerm", lambda **values: SimpleNamespace(id=None, group_id=None, **values),
+    )
     monkeypatch.setattr(srv_glossary_group, "GlossaryTermGroup", lambda **values: SimpleNamespace(id=None, **values))
 
     for module in (srv_glossary_event, srv_glossary_term, srv_glossary_group, glossary_file):
@@ -230,7 +272,12 @@ def _glossary(monkeypatch):
     monkeypatch.setattr(glossary_file, "metric_approved", lambda _dataset, _metric: True)
     monkeypatch.setattr(glossary_file, "business_datasets_by_name", lambda: {"daily_weather": [dataset]})
     monkeypatch.setattr(glossary_file, "get_dataset", lambda dataset_id: dataset if dataset_id == 7 else None)
-    monkeypatch.setattr(glossary_file, "security_manager", SimpleNamespace(find_user=lambda username: next((user for user in users.values() if user.username == username), None)))
+    monkeypatch.setattr(
+        glossary_file, "security_manager",
+        SimpleNamespace(
+            find_user=lambda username: next((user for user in users.values() if user.username == username), None),
+        ),
+    )
     monkeypatch.setattr(glossary_file, "get_user", lambda user_id: users.get(user_id))
 
     class AuditRepository:
@@ -259,7 +306,9 @@ def _glossary(monkeypatch):
         preview_term_import=glossary_file.preview_term_import,
         apply_term_import=glossary_file.apply_term_import,
         export_terms=glossary_file.export_terms,
-        approve_revision=lambda term_id, expected, actor, reason, second: GlossaryTermService().approve(term_id, expected, actor, reason, second),
+        approve_revision=lambda term_id, expected, actor, reason, second: GlossaryTermService().approve(
+            term_id, expected, actor, reason, second,
+        ),
         glossary_term_repository=lambda: CurrentTermRepository(),
         glossary_term_revision_repository=lambda: CurrentRevisionRepository(),
         glossary_term_audit_event_repository=lambda: AuditRepository(),
@@ -306,7 +355,9 @@ def test_a_term_file_creates_drafts_with_their_group_and_steward_and_reads_back_
 
     exported = service.export_terms()
     preview = service.preview_term_import(exported)
-    assert {item.action for item in preview} == {"unchanged"}, [(item.action, item.changes, item.message) for item in preview]
+    assert {item.action for item in preview} == {"unchanged"}, [
+        (item.action, item.changes, item.message) for item in preview
+    ]
 
 
 def test_a_term_file_edit_of_an_approved_term_adds_a_draft_and_keeps_the_approved_revision_serving(monkeypatch):
@@ -609,7 +660,9 @@ def test_a_rule_file_cannot_move_a_rule_to_another_dataset(monkeypatch):
     rule_file.apply_rule_import(_rule_file(RULE_ROW), 11)
     rules.session.commit()
     other = SimpleNamespace(id=8, table_name="daily_rain")
-    monkeypatch.setattr(rule_file, "business_datasets_by_name", lambda: {"daily_weather": [rules.dataset], "daily_rain": [other]})
+    monkeypatch.setattr(
+        rule_file, "business_datasets_by_name", lambda: {"daily_weather": [rules.dataset], "daily_rain": [other]},
+    )
     upload = _rule_file([RULE_ROW[0], "daily_rain", *RULE_ROW[2:]])
     [item] = rule_file.preview_rule_import(upload)
     assert item.action == "error"
@@ -807,9 +860,12 @@ def test_the_file_routes_are_admin_only_and_only_the_import_writes_and_commits_o
         decorators = [_decorator_name(item) for item in method.decorator_list]
         expose = method.decorator_list[0]
         route = expose.args[0]
-        route_path = route.value if isinstance(route, ast.Constant) else prefix if isinstance(route, ast.Name) else "".join(
-            part.value if isinstance(part, ast.Constant) else prefix if isinstance(part.value, ast.Name) else ""
-            for part in route.values
+        route_path = (
+            route.value if isinstance(route, ast.Constant) else prefix if isinstance(route, ast.Name)
+            else "".join(
+                part.value if isinstance(part, ast.Constant) else prefix if isinstance(part.value, ast.Name) else ""
+                for part in route.values
+            )
         )
         assert route_path == base + suffix
         assert verb in ast.unparse(expose.keywords[0].value)

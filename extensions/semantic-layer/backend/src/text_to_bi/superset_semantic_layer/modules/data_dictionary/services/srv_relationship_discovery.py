@@ -20,8 +20,6 @@ _TYPE_FAMILIES = (
 
 @dataclass(frozen=True)
 class TableKeys:
-    """A physical table as relationship discovery sees it: its columns with their types, and its key columns."""
-
     dataset_id: int
     schema: str | None
     table: str
@@ -32,20 +30,17 @@ class TableKeys:
 
 # -------------------------TYPE---------------------------
 def type_family(data_type: Any) -> str | None:
-    """Họ kiểu của cột (timestamp, date, number, text, boolean); None nếu không nhận ra."""
     text = str(data_type or "")
     return next((family for family, pattern in _TYPE_FAMILIES if pattern.search(text)), None)
 
 
 def types_match(source_type: Any, target_type: Any) -> bool:
-    """Hai cột so sánh được mà không cần ép kiểu: cùng một họ kiểu, như BIGINT và INTEGER."""
     source_family, target_family = type_family(source_type), type_family(target_type)
     return source_family is not None and source_family == target_family
 
 
 # -------------------------SUGGESTION---------------------
 def naming_suggestions(tables: list[TableKeys]) -> list[dict[str, Any]]:
-    """Cột tên `<x>_id` hoặc `<x>_key` khớp tên và kiểu với một cột khóa của bảng khác."""
     suggestions = []
     for source in tables:
         for name, data_type in source.column_types.items():
@@ -59,12 +54,9 @@ def naming_suggestions(tables: list[TableKeys]) -> list[dict[str, Any]]:
     return suggestions
 
 
-def database_suggestions(tables: list[TableKeys], foreign_keys: dict[int, list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """Khóa ngoại một cột của database giữa các bảng đã cho, đọc bằng inspector của SQLAlchemy.
-
-    `foreign_keys` ánh xạ ID dataset sang các mục của inspector (`constrained_columns`, `referred_schema`,
-    `referred_table`, `referred_columns`). Khóa nhiều cột hoặc bảng ngoài danh sách bị bỏ qua.
-    """
+def database_suggestions(
+    tables: list[TableKeys], foreign_keys: dict[int, list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
     by_name = {(item.schema, item.table): item for item in tables}
     by_id = {item.dataset_id: item for item in tables}
     suggestions = []
@@ -84,7 +76,6 @@ def database_suggestions(tables: list[TableKeys], foreign_keys: dict[int, list[d
 
 
 def merged_suggestions(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Một gợi ý cho mỗi cặp cột, liệt kê mọi nguồn đưa ra nó, nguồn mạnh nhất trước."""
     merged: dict[tuple, dict[str, Any]] = {}
     for group in groups:
         for item in group:
@@ -106,12 +97,9 @@ def _suggestion(source: TableKeys, source_column: str, target: TableKeys, target
 
 # -------------------------VERIFICATION-------------------
 def verification_queries(
-    source_schema: str | None, source_table: str, source_column: str, target_schema: str | None, target_table: str, target_column: str
+    source_schema: str | None, source_table: str, source_column: str,
+    target_schema: str | None, target_table: str, target_column: str
 ) -> dict[str, Any]:
-    """Ba truy vấn chỉ đọc của một lần kiểm tra: tính duy nhất của đích, số dòng mồ côi và vài giá trị mồ côi.
-
-    Truy vấn mồ côi join với đích nên chỉ có nghĩa khi đích đã được biết là duy nhất.
-    """
     target = table(target_table, column(target_column), schema=target_schema)
     uniqueness = select(
         func.count().label("target_rows"),
@@ -127,15 +115,16 @@ def verification_queries(
         .select_from(outer)
         .where(reference.isnot(None))
     )
-    samples = select(reference.label("value")).distinct().select_from(outer).where(reference.isnot(None), key.is_(None)).limit(MAX_ORPHAN_SAMPLES)
+    samples = (
+        select(reference.label("value")).distinct().select_from(outer).where(reference.isnot(None), key.is_(None))
+        .limit(MAX_ORPHAN_SAMPLES)
+    )
     return {"uniqueness": uniqueness, "orphans": orphans, "samples": samples}
 
 
-def verification_result(uniqueness_row: dict[str, Any], orphan_row: dict[str, Any] | None, samples: list[Any], type_match: bool) -> dict[str, Any]:
-    """Kết quả kiểm tra và quan hệ có được duyệt không: đích duy nhất và kiểu so sánh được.
-
-    Dòng mồ côi không chặn duyệt; chúng được hiển thị vì inner join bỏ mất các dòng đó.
-    """
+def verification_result(
+    uniqueness_row: dict[str, Any], orphan_row: dict[str, Any] | None, samples: list[Any], type_match: bool
+) -> dict[str, Any]:
     target_values = int(uniqueness_row.get("target_values") or 0)
     target_unique = target_values > 0 and target_values == int(uniqueness_row.get("target_distinct") or 0)
     references = int((orphan_row or {}).get("references") or 0)
@@ -153,7 +142,6 @@ def verification_result(uniqueness_row: dict[str, Any], orphan_row: dict[str, An
 
 
 def current_verification(contract: Any) -> dict[str, Any] | None:
-    """Kết quả kiểm tra của contract, chỉ khi nó được làm trên bản chụp hiện tại."""
     verified_hash = getattr(contract, "verified_hash", None)
     if not verified_hash or verified_hash != getattr(contract, "contract_hash", None):
         return None
@@ -161,7 +149,6 @@ def current_verification(contract: Any) -> dict[str, Any] | None:
 
 
 def stored_verification(value: Any) -> dict[str, Any] | None:
-    """Kết quả kiểm tra lưu trên contract dạng JSON; không đọc được thì coi như chưa kiểm tra."""
     if not value:
         return None
     try:

@@ -52,7 +52,6 @@ class ExpertRuleGroupRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def delete_expert_rule_group(self, group_id: int):
-        """Xóa nhóm; rule trong nhóm thành chưa phân nhóm và giữ trạng thái duyệt."""
         require_admin()
         moved_rule_ids = ExpertRuleGroupService().delete(group_id, current_user.id)
         db.session.commit()
@@ -65,7 +64,6 @@ class ExpertRuleGroupRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_expert_rule_group_suggestions(self):
-        """Gợi ý nhóm cho rule chưa phân nhóm có nghĩa gần nhau; embedding mới được cache lại."""
         require_admin()
         suggestions = ExpertRuleGroupService().suggest()
         return self.response(200, **suggestions)
@@ -78,7 +76,6 @@ class ExpertRuleGroupRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def apply_expert_rule_group_suggestion(self):
-        """Chuyển các rule quản trị viên giữ lại vào nhóm có sẵn hoặc nhóm mới; không cần duyệt."""
         require_admin()
         payload = request.get_json(silent=True)
         group, moved_rule_ids = ExpertRuleGroupService().apply_suggestion(payload, current_user.id)

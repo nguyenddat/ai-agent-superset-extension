@@ -8,6 +8,9 @@ def public_payload(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def public_result(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int or payload["schema_version"] != PUBLIC_SCHEMA_VERSION or not isinstance(payload.get("result"), dict):
+    if (
+        not isinstance(payload, dict) or type(payload.get("schema_version")) is not int
+        or payload["schema_version"] != PUBLIC_SCHEMA_VERSION or not isinstance(payload.get("result"), dict)
+    ):
         raise ValueError("Unsupported public API response schema.")
     return payload["result"]

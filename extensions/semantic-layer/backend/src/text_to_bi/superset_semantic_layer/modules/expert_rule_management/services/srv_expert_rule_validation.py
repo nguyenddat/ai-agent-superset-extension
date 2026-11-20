@@ -37,7 +37,6 @@ _SECRET = re.compile(
 
 # -------------------------FIELDS-------------------------
 def checked_text(value: Any, field: str, limit: int = MAX_TEXT) -> str:
-    """Văn bản mô tả của rule, đã gom khoảng trắng; từ chối SQL, đường dẫn và thông tin bí mật."""
     if not isinstance(value, str) or not (clean := " ".join(value.split())) or len(clean) > limit:
         raise ExpertRuleValidationError(f"Invalid {field}.")
     # Rule values are declarative prose, never a transport for executable SQL, links or credentials. URLs are
@@ -48,14 +47,12 @@ def checked_text(value: Any, field: str, limit: int = MAX_TEXT) -> str:
 
 
 def review_reason(value: Any) -> str | None:
-    """Lý do duyệt hoặc thu hồi, kiểm tra như văn bản của rule trước khi thành bằng chứng."""
     if value is None:
         return None
     return checked_text(value, "reason", MAX_REASON)
 
 
 def expected_revision_of(payload: Any) -> int:
-    """Phiên bản vòng đời client đã đọc; thay đổi phải còn khớp với nó."""
     value = payload.get("expected_revision") if isinstance(payload, dict) else None
     if isinstance(value, bool) or not isinstance(value, int):
         raise ExpertRuleValidationError("expected_revision is required.")
@@ -63,7 +60,6 @@ def expected_revision_of(payload: Any) -> int:
 
 
 def group_id_of(payload: Any) -> int | None:
-    """Nhóm request đặt rule vào; null là bỏ khỏi mọi nhóm."""
     group_id = payload.get("group_id") if isinstance(payload, dict) else None
     if group_id is not None and (isinstance(group_id, bool) or not isinstance(group_id, int)):
         raise ExpertRuleValidationError("Nhóm rule không hợp lệ.")
@@ -76,7 +72,6 @@ def normalized_name(value: str) -> str:
 
 # -------------------------PAYLOADS-----------------------
 def normalize_group_payload(payload: Any) -> dict[str, Any]:
-    """Tên và mô tả nhóm, kiểm tra như văn bản của rule."""
     if not isinstance(payload, dict) or set(payload) - {"name", "description"}:
         raise ExpertRuleValidationError("Nhóm rule chỉ có tên và mô tả.")
     if not isinstance(payload.get("name"), str) or not payload["name"].strip():
@@ -90,7 +85,6 @@ def normalize_group_payload(payload: Any) -> dict[str, Any]:
 
 
 def normalize_rule_payload(payload: Any, column_resolver: Callable[[Any], Any] | None = None) -> dict[str, Any]:
-    """Nội dung rule đã chuẩn hóa về schema 2; điều kiện trỏ tới cột Data Dictionary của dataset."""
     if not isinstance(payload, dict) or set(payload) - CONTENT_FIELDS:
         raise ExpertRuleValidationError("Unsupported expert-rule fields.")
     dataset_id = payload.get("dataset_id")
@@ -114,7 +108,6 @@ def normalize_rule_payload(payload: Any, column_resolver: Callable[[Any], Any] |
 
 
 def without_group(payload: Any) -> Any:
-    """Nội dung rule không gồm nhóm: nhóm nằm trên rule, ngoài bản được duyệt và hash."""
     return {key: value for key, value in payload.items() if key != "group_id"} if isinstance(payload, dict) else payload
 
 

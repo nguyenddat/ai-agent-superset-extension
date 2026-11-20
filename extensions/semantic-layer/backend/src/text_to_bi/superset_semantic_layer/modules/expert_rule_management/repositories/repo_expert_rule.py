@@ -23,7 +23,6 @@ class ExpertRuleRepository(BaseRepository[ExpertRule]):
         return self.get(rule_id)
 
     def read_fresh(self, rule_id: int) -> ExpertRule | None:
-        """Đọc bằng query thay vì identity map, để thấy đúng dòng vừa khóa."""
         return self.query().filter(ExpertRule.id == rule_id).one_or_none()
 
     def read_by_normalized_name(self, normalized_name: str) -> ExpertRule | None:
@@ -33,5 +32,4 @@ class ExpertRuleRepository(BaseRepository[ExpertRule]):
         return self.query().filter_by(group_id=group_id).order_by(ExpertRule.id).all()
 
     def read_for_update(self, rule_id: int) -> ExpertRule | None:
-        """Đọc lại rule và giữ khóa dòng tới hết transaction."""
         return self.query().filter(ExpertRule.id == rule_id).populate_existing().with_for_update().one_or_none()

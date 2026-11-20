@@ -58,10 +58,6 @@ _dictionary_tables_lock = threading.Lock()
 
 
 def ensure_dictionary_tables():
-    """Run the dictionary table migration once per process.
-
-    The migration takes ACCESS EXCLUSIVE locks, so concurrent dictionary requests must not run it in parallel.
-    """
     global _dictionary_tables_ready, _dictionary_migration_failed_at
     if _dictionary_tables_ready:
         return
@@ -95,11 +91,6 @@ def ensure_dictionary_tables():
 
 
 def _migrate_dictionary_tables():
-    """Create extension tables and upgrade the earlier column dictionary schema.
-
-    Creating tables, adding columns and seeding are portable. Upgrading installs that predate the current column
-    dictionary schema renames and alters constraints, which only PostgreSQL installations ever needed.
-    """
     postgres = db.engine.dialect.name == "postgresql"
     # The Semantic Layer's Superset roles are bootstrapped with its tables, under the same lock.
     ensure_semantic_layer_roles()
@@ -170,7 +161,9 @@ def _migrate_dictionary_tables():
             column["name"] for column in inspect(connection).get_columns(RelationshipContract.__tablename__)
         }
         if "version" not in relationship_columns:
-            connection.execute(text("ALTER TABLE text_to_bi_relationship_contract ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+            connection.execute(text(
+                "ALTER TABLE text_to_bi_relationship_contract ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
+            ))
         contract_columns = {column["name"] for column in inspect(connection).get_columns(MetricContract.__tablename__)}
         if "revoker_id" not in contract_columns:
             revoker_column = "INTEGER REFERENCES ab_user (id) ON DELETE SET NULL" if postgres else "INTEGER"
@@ -283,7 +276,8 @@ def _migrate_dictionary_tables():
             ("layer_id", "INTEGER REFERENCES text_to_bi_data_layer (id) ON DELETE SET NULL"),
             ("time_column", "VARCHAR(255)"),
             ("row_kind_column", "VARCHAR(255)"),
-            # No longer mapped since the indicator feature was removed; still added so every database has the same columns.
+            # No longer mapped since the indicator feature was removed; still added so every database has the same
+            # columns.
             ("indicator_model", "TEXT"),
         )
         for column_name, column_type in dataset_columns_to_add:
@@ -448,12 +442,6 @@ def _migrate_dictionary_tables():
 
 
 def _root_metrics_on_definition(postgres: bool) -> None:
-    """Move an install from contracts keyed by (dataset, metric) to contracts and events hanging from a definition.
-
-    Old contracts and events keep their dataset_id and metric_id columns, made nullable, because dropping a column
-    drops its foreign key, which waits on the Superset tables the calling request has read. A contract proposed
-    before definitions were required gets a placeholder definition, so no approval is lost.
-    """
     with db.engine.begin() as connection:
         inspector = inspect(connection)
         contract_columns = {column["name"] for column in inspector.get_columns(MetricContract.__tablename__)}
@@ -538,7 +526,10 @@ def _root_metrics_on_definition(postgres: bool) -> None:
             for foreign_key in inspect(connection).get_foreign_keys(event_table):
                 if foreign_key.get("constrained_columns") not in (["dataset_id"], ["metric_id"]):
                     continue
-                connection.execute(text(f"ALTER TABLE {event_table} DROP CONSTRAINT {connection.dialect.identifier_preparer.quote(foreign_key['name'])}"))
+                connection.execute(text(
+                    f"ALTER TABLE {event_table} DROP CONSTRAINT "
+                    f"{connection.dialect.identifier_preparer.quote(foreign_key['name'])}"
+                ))
             event_columns = {column["name"]: column for column in inspect(connection).get_columns(event_table)}
             for column_name in ("dataset_id", "metric_id"):
                 if not event_columns[column_name]["nullable"]:
@@ -546,7 +537,6 @@ def _root_metrics_on_definition(postgres: bool) -> None:
 
 
 def _sync_rule_name_keys() -> None:
-    """Give a rule renamed before renames moved its unique name key the key of its current name, unless it is taken."""
     rule_table, revision_table = ExpertRule.__tablename__, ExpertRuleRevision.__tablename__
     with db.engine.begin() as connection:
         rows = connection.execute(
@@ -569,7 +559,6 @@ def _sync_rule_name_keys() -> None:
 
 
 def _add_group_columns(postgres: bool) -> None:
-    """Give terms and rules created before groups existed a group column, and let their audit trails record moves."""
     with db.engine.begin() as connection:
         for member, group, audit_event, event_types, check_name in (
             (
@@ -607,7 +596,8 @@ def _add_group_columns(postgres: bool) -> None:
                     target_table = quote(foreign_key["referred_table"])
                     connection.execute(text(f"ALTER TABLE {table_name} DROP CONSTRAINT {constraint_name}"))
                     connection.execute(text(
-                        f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} FOREIGN KEY ({column_name}) REFERENCES {target_table} (id) ON DELETE CASCADE"
+                        f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} FOREIGN KEY ({column_name}) "
+                        f"REFERENCES {target_table} (id) ON DELETE CASCADE"
                     ))
             # Tables created before moves were audited only accept the four lifecycle events.
             audit_table = audit_event.__tablename__

@@ -25,8 +25,6 @@ LINK_KINDS = "kind IN ('dataset', 'column', 'metric')"
 
 
 class GlossaryTermGroup(AuditedModel):
-    """Terms with the same or a close meaning, kept together for administrators and the AI Agent."""
-
     __table_args__ = (
         UniqueConstraint("normalized_name", name="uq_text_to_bi_glossary_term_group_name"),
         {"extend_existing": True},
@@ -40,8 +38,6 @@ class GlossaryTermGroup(AuditedModel):
 
 
 class GlossaryTerm(AuditedModel):
-    """The root of a business term: its stable name, steward and group; its content lives in revisions."""
-
     __table_args__ = (
         UniqueConstraint("normalized_name", name="uq_text_to_bi_glossary_term_normalized_name"),
         {"extend_existing": True},
@@ -63,8 +59,6 @@ class GlossaryTerm(AuditedModel):
 
 
 class GlossaryTermRevision(AuditedModel):
-    """Versioned glossary content; only one current revision exists per term."""
-
     __table_args__ = (
         UniqueConstraint("term_id", "revision_number", name="uq_text_to_bi_glossary_revision_number"),
         CheckConstraint(ReviewStatus.check(), name="ck_text_to_bi_glossary_revision_status"),
@@ -100,8 +94,6 @@ class GlossaryTermRevision(AuditedModel):
 
 
 class GlossaryTermLink(BaseModel):
-    """A revision's safe reference to a live dataset, column, or saved metric."""
-
     __table_args__ = (
         CheckConstraint(LINK_KINDS, name="ck_text_to_bi_glossary_link_kind"),
         UniqueConstraint("revision_id", "link_key", name="uq_text_to_bi_glossary_link"),
@@ -126,8 +118,6 @@ class GlossaryTermLink(BaseModel):
 
 
 class GlossaryTermAuditEvent(BaseModel):
-    """Append-only lifecycle evidence. Application code creates, never mutates, these rows."""
-
     __table_args__ = (
         CheckConstraint(AUDIT_EVENT_TYPES, name="ck_text_to_bi_glossary_audit_event"),
         {"extend_existing": True},

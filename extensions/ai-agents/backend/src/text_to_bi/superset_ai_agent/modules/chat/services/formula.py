@@ -18,7 +18,7 @@ Part = dict[str, str]
 
 
 class _Untold(Exception):
-    """The formula uses something the sentence cannot tell faithfully."""
+    pass
 
 
 def _text(value: str) -> Part:
@@ -61,7 +61,6 @@ def _condition(node: exp.Expression, column_part) -> list[Part]:
 
 
 def _told_aggregate(tree: exp.Expression, column_part) -> list[Part]:
-    """One contract aggregate as sentence parts; raises _Untold for anything else."""
     if not isinstance(tree, (exp.Sum, exp.Avg, exp.Max, exp.Min, exp.Count)):
         raise _Untold
     measure, condition = tree.this, None
@@ -102,7 +101,6 @@ def _lowercased(parts: list[Part]) -> list[Part]:
 
 
 def _told_ratio(tree: exp.Expression, column_part) -> list[Part]:
-    """``scale * AGG(...) / NULLIF(AGG(...), 0)``, the ratio shape the Semantic Layer accepts."""
     if not isinstance(tree, exp.Div):
         raise _Untold
     scaled, guarded = _unwrapped(tree.this), _unwrapped(tree.expression)
@@ -120,7 +118,6 @@ def _told_ratio(tree: exp.Expression, column_part) -> list[Part]:
 
 
 def told_formula(expression: str, columns: list[dict[str, Any]]) -> list[Part] | None:
-    """The formula as sentence parts; `columns` are the dataset's columns with their data dictionary labels."""
     labels = {column["name"]: column.get("label") or column["name"] for column in columns}
 
     def column_part(node: exp.Column) -> Part:
@@ -141,12 +138,6 @@ def told_formula(expression: str, columns: list[dict[str, Any]]) -> list[Part] |
 
 
 def doubtful_result(result: dict[str, Any]) -> str | None:
-    """Why a provisional figure might be a wrong formula rather than a real answer, or None.
-
-    A formula that filters on a value the data never holds still runs and answers with nothing, or with zero. So can a
-    right formula over a quiet week, which is why the caller then checks the metric over all the data
-    (`answers_anything`). A period outside the data is told apart by its coverage and is not doubted here.
-    """
     if (result.get("coverage") or {}).get("status") == "none":
         return None
     if not result.get("total_rows"):
@@ -160,7 +151,6 @@ def doubtful_result(result: dict[str, Any]) -> str | None:
 
 
 def answers_anything(answer: dict[str, Any], metric_name: str) -> bool:
-    """Whether the metric, run over all the data with no filter, gives any value other than zero."""
     for row in answer.get("rows", []):
         try:
             # The Semantic Layer returns numbers as numbers or as decimal strings such as "0.0000".

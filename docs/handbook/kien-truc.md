@@ -74,7 +74,7 @@ modules/<module>/
 - **Tên method** theo CRUD: `create`, `read` / `read_*`, `update`, `delete`; trong repository và service chia mục bằng
   comment `# -------------------------READ---------------------------`. Service nghiệp vụ chính là một lớp
   (`MetricDefService`, `GlossaryTermService`, `ExpertRuleService`), hàm phụ trợ để ở mức module.
-- **Docstring** của hàm viết tiếng Việt, ngắn gọn.
+- **Không viết docstring** cho module, class và hàm (xem [quy-uoc-code.md](quy-uoc-code.md#docstring-và-comment)).
 - **Import**: trong cùng module dùng import tương đối; ngoài module (`common`, `core`, module khác) dùng đường dẫn đầy đủ
   `text_to_bi.superset_semantic_layer...`.
 - **Repository** là nơi duy nhất viết truy vấn. Service và route gọi repository qua `dependencies.py`.

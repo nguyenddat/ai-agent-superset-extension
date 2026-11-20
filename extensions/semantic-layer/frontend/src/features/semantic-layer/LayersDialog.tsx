@@ -79,7 +79,9 @@ function dropped(levels: DraftLevel[], dragging: Dragging, target: DropTarget): 
   if (!rest.some(level => level.key === target.level)) return levels;
   return rest.map(level => {
     if (level.key !== target.level) return level;
-    const at = target.before === null ? level.layers.length : level.layers.findIndex(item => item.key === target.before);
+    const at = target.before === null
+      ? level.layers.length
+      : level.layers.findIndex(item => item.key === target.before);
     const layers = [...level.layers];
     layers.splice(at < 0 ? layers.length : at, 0, layer);
     return { ...level, layers };
@@ -89,7 +91,8 @@ function dropped(levels: DraftLevel[], dragging: Dragging, target: DropTarget): 
 const sameTarget = (a: DropTarget | null, b: DropTarget) => (
   a !== null && a.kind === b.kind && (a.kind === 'gap'
     ? a.index === (b as Extract<DropTarget, { kind: 'gap' }>).index
-    : a.level === (b as Extract<DropTarget, { kind: 'layer' }>).level && a.before === (b as Extract<DropTarget, { kind: 'layer' }>).before)
+    : a.level === (b as Extract<DropTarget, { kind: 'layer' }>).level &&
+      a.before === (b as Extract<DropTarget, { kind: 'layer' }>).before)
 );
 
 /**
@@ -113,7 +116,10 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
 
   const layerCount = levels.reduce((sum, level) => sum + level.layers.length, 0);
   const update = (key: string, values: Partial<DraftLayer>) => {
-    setLevels(current => current.map(level => ({ ...level, layers: level.layers.map(draft => (draft.key === key ? { ...draft, ...values } : draft)) })));
+    setLevels(current => current.map(level => ({
+      ...level,
+      layers: level.layers.map(draft => (draft.key === key ? { ...draft, ...values } : draft)),
+    })));
   };
   const remove = (key: string) => setLevels(current => withoutLayer(current, key).levels);
   const blankLayer = (): DraftLayer => ({
@@ -124,7 +130,9 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
     color: DOMAIN_COLORS[layerCount % DOMAIN_COLORS.length],
   });
   const addLayer = (levelKey: string) => {
-    setLevels(current => current.map(level => (level.key === levelKey ? { ...level, layers: [...level.layers, blankLayer()] } : level)));
+    setLevels(current => current.map(
+      level => (level.key === levelKey ? { ...level, layers: [...level.layers, blankLayer()] } : level)
+    ));
   };
   const addLevel = () => setLevels(current => [...current, { key: newKey('level'), layers: [blankLayer()] }]);
   // Keyboard alternatives to dragging: a level moves up or down; a layer moves to the level before or after its own,
@@ -137,7 +145,9 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
   });
   const moveLayer = (key: string, levelIndex: number, offset: number) => setLevels(current => {
     const destination = levelIndex + offset;
-    if (destination >= current.length) return dropped(current, { kind: 'layer', key }, { kind: 'gap', index: current.length });
+    if (destination >= current.length) return dropped(
+      current, { kind: 'layer', key }, { kind: 'gap', index: current.length }
+    );
     if (destination < 0) return dropped(current, { kind: 'layer', key }, { kind: 'gap', index: 0 });
     return dropped(current, { kind: 'layer', key }, { kind: 'layer', level: current[destination].key, before: null });
   });
@@ -194,13 +204,18 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
           const created = await requestJson<{ layer: DataLayer }>(semanticLayerApi.dataLayers, 'POST', body);
           ids.set(draft.key, created.layer.id);
         } else {
-          if (!original || original.name !== body.name || (original.description ?? null) !== body.description || original.color !== body.color) {
+          if (
+            !original || original.name !== body.name || (original.description ?? null) !== body.description ||
+            original.color !== body.color
+          ) {
             await requestJson(semanticLayerApi.dataLayer(draft.id), 'PUT', body);
           }
           ids.set(draft.key, draft.id);
         }
       }
-      const order = levels.map(level => level.layers.map(draft => ids.get(draft.key) as number)).filter(level => level.length > 0);
+      const order = levels
+        .map(level => level.layers.map(draft => ids.get(draft.key) as number))
+        .filter(level => level.length > 0);
       if (order.length > 0) await requestJson(semanticLayerApi.dataLayersOrder, 'PUT', { levels: order });
       onSaved();
       onOpenChange(false);
@@ -221,7 +236,9 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
         onDragOver={event => over(event, { kind: 'gap', index })}
         onDrop={drop}
       >
-        {dragging ? <span>{dragging.kind === 'layer' ? 'Thả vào đây để tạo cấp mới' : 'Chuyển cấp tới đây'}</span> : null}
+        {dragging
+          ? <span>{dragging.kind === 'layer' ? 'Thả vào đây để tạo cấp mới' : 'Chuyển cấp tới đây'}</span>
+          : null}
       </div>
     );
   };
@@ -243,7 +260,10 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
               <React.Fragment key={level.key}>
                 {gap(index)}
                 <section
-                  className={`sl-level${levelTarget ? ' is-target' : ''}${dragging?.kind === 'level' && dragging.key === level.key ? ' is-dragged' : ''}`}
+                  className={
+                    `sl-level${levelTarget ? ' is-target' : ''}` +
+                    `${dragging?.kind === 'level' && dragging.key === level.key ? ' is-dragged' : ''}`
+                  }
                   aria-label={`Cấp ${index + 1}`}
                   onDragOver={event => over(event, { kind: 'layer', level: level.key, before: null })}
                   onDrop={drop}
@@ -253,7 +273,9 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
                       className="sl-level-grip"
                       draggable
                       title="Kéo để đổi thứ tự cấp"
-                      onDragStart={event => startDrag(event, { kind: 'level', key: level.key }, event.currentTarget.closest('.sl-level'))}
+                      onDragStart={event => startDrag(
+                        event, { kind: 'level', key: level.key }, event.currentTarget.closest('.sl-level')
+                      )}
                       onDragEnd={endDrag}
                     >
                       <GripVertical />
@@ -264,17 +286,31 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
                       {level.layers.length > 1 ? ` · ${level.layers.length} tầng cùng cấp` : ''}
                     </span>
                     <span className="sl-level-actions">
-                      <Button size="icon-xs" variant="ghost" aria-label={`Đưa cấp ${index + 1} lên trước`} disabled={index === 0} onClick={() => moveLevel(index, -1)}><ArrowUp /></Button>
-                      <Button size="icon-xs" variant="ghost" aria-label={`Đưa cấp ${index + 1} xuống sau`} disabled={index === levels.length - 1} onClick={() => moveLevel(index, 1)}><ArrowDown /></Button>
+                      <Button
+                        size="icon-xs" variant="ghost" aria-label={`Đưa cấp ${index + 1} lên trước`}
+                        disabled={index === 0} onClick={() => moveLevel(index, -1)}
+                      >
+                        <ArrowUp />
+                      </Button>
+                      <Button
+                        size="icon-xs" variant="ghost" aria-label={`Đưa cấp ${index + 1} xuống sau`}
+                        disabled={index === levels.length - 1} onClick={() => moveLevel(index, 1)}
+                      >
+                        <ArrowDown />
+                      </Button>
                     </span>
                   </div>
                   <div className="sl-level-layers">
                     {level.layers.map(draft => {
-                      const before = dragging?.kind === 'layer' && target?.kind === 'layer' && target.level === level.key && target.before === draft.key;
+                      const before = dragging?.kind === 'layer' && target?.kind === 'layer' &&
+                        target.level === level.key && target.before === draft.key;
                       return (
                         <div
                           key={draft.key}
-                          className={`sl-level-layer${before ? ' is-drop-before' : ''}${dragging?.kind === 'layer' && dragging.key === draft.key ? ' is-dragged' : ''}`}
+                          className={
+                            `sl-level-layer${before ? ' is-drop-before' : ''}` +
+                            `${dragging?.kind === 'layer' && dragging.key === draft.key ? ' is-dragged' : ''}`
+                          }
                           style={{ '--layer-color': draft.color } as React.CSSProperties}
                           onDragOver={event => over(event, { kind: 'layer', level: level.key, before: draft.key })}
                           onDrop={drop}
@@ -284,13 +320,20 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
                               className="sl-level-grip"
                               draggable
                               title="Kéo sang cấp khác"
-                              onDragStart={event => startDrag(event, { kind: 'layer', key: draft.key }, event.currentTarget.closest('.sl-level-layer'))}
+                              onDragStart={event => startDrag(
+                                event, { kind: 'layer', key: draft.key }, event.currentTarget.closest('.sl-level-layer')
+                              )}
                               onDragEnd={endDrag}
                             >
                               <GripVertical />
                             </span>
-                            <Select items={colorItems} value={draft.color} onValueChange={color => { if (color) update(draft.key, { color }); }}>
-                              <SelectTrigger aria-label={`Màu của tầng ${draft.name || 'mới'}`} className="w-14" size="sm">
+                            <Select
+                              items={colorItems} value={draft.color}
+                              onValueChange={color => { if (color) update(draft.key, { color }); }}
+                            >
+                              <SelectTrigger
+                                aria-label={`Màu của tầng ${draft.name || 'mới'}`} className="w-14" size="sm"
+                              >
                                 <SelectValue>
                                   {(value: string) => (
                                     <span className="sl-reference-item">
@@ -311,11 +354,22 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
                                 </SelectGroup>
                               </SelectContent>
                             </Select>
-                            <Input aria-label="Tên tầng" placeholder="Tên tầng" value={draft.name} onChange={event => update(draft.key, { name: event.target.value })} />
-                            <Button size="icon-xs" variant="ghost" aria-label={`Xóa tầng ${draft.name || 'mới'}`} onClick={() => remove(draft.key)}><Trash2 /></Button>
+                            <Input
+                              aria-label="Tên tầng" placeholder="Tên tầng" value={draft.name}
+                              onChange={event => update(draft.key, { name: event.target.value })}
+                            />
+                            <Button
+                              size="icon-xs" variant="ghost" aria-label={`Xóa tầng ${draft.name || 'mới'}`}
+                              onClick={() => remove(draft.key)}
+                            >
+                              <Trash2 />
+                            </Button>
                           </div>
                           <div className="sl-level-layer-bottom">
-                            <Input aria-label="Mô tả tầng" placeholder="Mô tả ngắn" value={draft.description} onChange={event => update(draft.key, { description: event.target.value })} />
+                            <Input
+                              aria-label="Mô tả tầng" placeholder="Mô tả ngắn" value={draft.description}
+                              onChange={event => update(draft.key, { description: event.target.value })}
+                            />
                             <Button
                               size="icon-xs"
                               variant="ghost"
@@ -349,9 +403,13 @@ export function LayersDialog({ open, layers, onOpenChange, onSaved }: LayersDial
             );
           })}
           {levels.length > 0 ? gap(levels.length) : null}
-          {levels.length === 0 ? <p className="sl-empty">Chưa có tầng nào. Ví dụ: Nguồn, Chuẩn hóa, Phục vụ báo cáo.</p> : null}
+          {levels.length === 0
+            ? <p className="sl-empty">Chưa có tầng nào. Ví dụ: Nguồn, Chuẩn hóa, Phục vụ báo cáo.</p>
+            : null}
         </div>
-        <Button variant="outline" className="w-fit" onClick={addLevel}><Plus data-icon="inline-start" /> Thêm cấp mới</Button>
+        <Button variant="outline" className="w-fit" onClick={addLevel}>
+          <Plus data-icon="inline-start" /> Thêm cấp mới
+        </Button>
         {error ? <p role="alert" className="text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Hủy</Button>

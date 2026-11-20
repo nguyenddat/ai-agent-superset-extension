@@ -1,9 +1,15 @@
-from text_to_bi.superset_semantic_layer.common.exceptions import ConflictError, NotFoundError, SelfApprovalError, ServiceUnavailableError, ValidationError
+from text_to_bi.superset_semantic_layer.common.exceptions import (
+    ConflictError,
+    NotFoundError,
+    SelfApprovalError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 
 
 # -------------------------DICTIONARY---------------------
 class DataDictionaryValidationError(ValidationError):
-    """Dictionary metadata or time semantics that breaks a rule."""
+    pass
 
 
 class NoColumnsToDescribeError(ValidationError):
@@ -28,7 +34,7 @@ class AutoFillUnavailableError(ServiceUnavailableError):
 
 # -------------------------RELATIONSHIP-------------------
 class RelationshipValidationError(ValidationError):
-    """A relationship between datasets, or its contract, breaks a rule."""
+    pass
 
 
 class RelationshipSelfApprovalError(SelfApprovalError):
@@ -52,7 +58,7 @@ class ApprovedContractExistsError(ConflictError):
 
 
 class DatasetDraftValidationError(ValidationError):
-    """A submitted dataset or metric draft breaks the metadata rules."""
+    pass
 
 
 class ProposedDatasetCreationError(ValidationError):

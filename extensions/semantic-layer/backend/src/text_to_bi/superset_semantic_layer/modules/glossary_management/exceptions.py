@@ -7,16 +7,14 @@ from text_to_bi.superset_semantic_layer.common.exceptions import (
 
 
 class GlossaryValidationError(ValidationError):
-    """A client-visible validation error that contains no protected metadata."""
+    pass
 
 
 class GlossaryConflictError(ConflictError):
-    """An optimistic concurrency conflict."""
+    pass
 
 
 class GlossarySelfApprovalError(SelfApprovalError):
-    """The author of a revision tried to approve it while a second reviewer is required."""
-
     message = "Người soạn thuật ngữ không thể tự duyệt; cần một quản trị viên khác duyệt."
 
 
@@ -29,7 +27,7 @@ class GlossaryTermGroupNotFoundError(NotFoundError):
 
 
 class ContradictionValidationError(ValidationError):
-    """A dismissal that cannot be saved as sent."""
+    pass
 
 
 class ContradictionNotFoundError(NotFoundError):

@@ -53,7 +53,6 @@ class MetricDefinitionRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def update_metric_query_defaults(self, dataset: Any, metric: Any):
-        """Đặt grain, mốc thời gian và bộ lọc mặc định của metric; trả về giá trị đã chuẩn hóa."""
         require_admin()
         ensure_dictionary_tables()
         defaults = MetricDefService().update_query_defaults(dataset, metric, request.get_json(silent=True))

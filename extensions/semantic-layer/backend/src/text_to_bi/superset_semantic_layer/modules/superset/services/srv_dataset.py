@@ -57,7 +57,6 @@ def require_database(database_id: int) -> Any:
     return database
 
 def connection_identity(database: Any) -> dict[str, Any]:
-    """Định danh kết nối của database cho mã băm hợp đồng, không chứa thông tin đăng nhập."""
     return {
         "id": getattr(database, "id", None),
         "name": getattr(database, "database_name", None),

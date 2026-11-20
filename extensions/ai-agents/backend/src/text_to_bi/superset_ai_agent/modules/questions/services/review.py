@@ -41,10 +41,6 @@ def serialize_for_review(
 
 
 def questions_for_review(handling_filter: str, missing_filter: str | None) -> dict[str, Any]:
-    """The `needs_review` questions, newest first, with their handling and the count per handling status.
-
-    The counts cover every question missing `missing_filter`, before `handling_filter` narrows the list.
-    """
     rows = question_repository().needs_review()
     if missing_filter:
         rows = [(question, handling) for question, handling in rows if missing_filter in (question.missing or [])]
@@ -57,7 +53,6 @@ def questions_for_review(handling_filter: str, missing_filter: str | None) -> di
 
 
 def record_handling(question_id: int, status: str, note: str | None, handled_by: int) -> dict[str, Any]:
-    """Record how a `needs_review` question was handled; `pending` removes the decision."""
     question = question_repository().get(question_id)
     if question is None or question.status != "needs_review":
         raise QuestionNotFoundError()

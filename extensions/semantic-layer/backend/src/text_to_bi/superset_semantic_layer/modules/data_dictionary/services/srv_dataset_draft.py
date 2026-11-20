@@ -54,7 +54,6 @@ def _text(body: dict[str, Any], key: str, limit: int, required: bool = True) -> 
 
 
 def checked_metric_draft(body: dict[str, Any], dataset: Any) -> AgentMetricDraft:
-    """The agent's metric, held to the same formula rule as any contract metric on this dataset."""
     metric_name = _text(body, "metric_name", METRIC_NAME_MAX_LENGTH).lower()
     if not _IDENTIFIER.fullmatch(metric_name):
         raise DatasetDraftValidationError("Tên metric chỉ được gồm chữ cái thường không dấu, chữ số và dấu gạch dưới.")
@@ -74,15 +73,10 @@ def checked_metric_draft(body: dict[str, Any], dataset: Any) -> AgentMetricDraft
 
 
 def asked_question(body: dict[str, Any]) -> str | None:
-    """The question that made the agent build a metric, kept in the review history; optional."""
     return _text(body, "question", QUESTION_MAX_LENGTH, required=False)
 
 
 def normalized_formula(expression: str) -> str | None:
-    """A formula written the same way whatever its spacing, keyword case or quoting; None when it does not parse.
-
-    A quoted lowercase name is the same column as the unquoted one in PostgreSQL, so its quotes are dropped.
-    """
     try:
         tree = sqlglot.parse_one(expression)
     except SqlglotError:
@@ -96,7 +90,6 @@ def normalized_formula(expression: str) -> str | None:
 
 
 def matching_metric(dataset: Any, expression: str) -> Any | None:
-    """A metric already on the dataset with the same formula, so the agent reuses it instead of adding a copy."""
     wanted = normalized_formula(expression)
     return next(
         (
@@ -133,7 +126,6 @@ class CheckedDatasetSql:
 
 
 def checked_dataset_sql(sql: Any, allowed_datasets: dict[str, Any]) -> CheckedDatasetSql:
-    """A single read-only SELECT over the allowed base datasets, keyed by table name, with named output columns."""
     if not isinstance(sql, str) or not sql.strip() or len(sql) > DATASET_SQL_MAX_LENGTH:
         raise DatasetDraftValidationError(f"SQL phải là văn bản không rỗng, tối đa {DATASET_SQL_MAX_LENGTH} ký tự.")
     try:
@@ -155,7 +147,9 @@ def checked_dataset_sql(sql: Any, allowed_datasets: dict[str, Any]) -> CheckedDa
     for table in tree.find_all(exp.Table):
         dataset = allowed_datasets.get(table.name)
         if dataset is None or table.catalog or (table.db and table.db != (getattr(dataset, "schema", None) or "")):
-            raise DatasetDraftValidationError(f"{table.sql(dialect='postgres')} không phải dataset cơ sở bạn được dùng.")
+            raise DatasetDraftValidationError(
+                f"{table.sql(dialect='postgres')} không phải dataset cơ sở bạn được dùng."
+            )
         sources[dataset.id] = dataset
     if not sources:
         raise DatasetDraftValidationError("SQL phải đọc ít nhất một dataset cơ sở.")
@@ -176,8 +170,6 @@ def checked_dataset_sql(sql: Any, allowed_datasets: dict[str, Any]) -> CheckedDa
 
 @dataclass(frozen=True)
 class DerivedColumnKeys:
-    """Key flags of an output column, and the base column (dataset ID, column name) it reads and references."""
-
     is_pk: bool
     is_unique: bool
     referenced: tuple[int, str]
@@ -188,7 +180,6 @@ def _is_key(entry: Any) -> bool:
 
 
 def _joins_to_one(tree: exp.Select, aliases: dict[str, Any], entries: dict[int, dict[str, Any]]) -> bool:
-    """Whether every join matches at most one row: its ON clause equates a unique column of the joined table."""
     pk_counts = {
         dataset_id: sum(1 for entry in columns.values() if getattr(entry, "is_pk", False))
         for dataset_id, columns in entries.items()
@@ -221,14 +212,6 @@ def derived_column_keys(
     source_datasets: list[Any],
     entries: dict[int, dict[str, Any]],
 ) -> dict[str, DerivedColumnKeys]:
-    """Data dictionary keys of a proposed dataset's output columns, carried over from the base columns they read.
-
-    Like the existing fact datasets, an output column that reads a key column of a base dataset unchanged is a foreign
-    key to that base column, which is what draws the lineage edge between them; an attribute or a computed column gets
-    no key. It stays a primary key or unique only while the query keeps the base table's rows one to one: it is read
-    from the FROM table, nothing is grouped or made distinct, and every join matches at most one row. `entries` maps
-    a source dataset ID to its column dictionary rows by column name.
-    """
     tree = sqlglot.parse_one(sql, read="postgres")
     if not isinstance(tree, exp.Select) or tree.args.get("with"):
         return {}
@@ -267,7 +250,6 @@ def sql_fingerprint(sql: str) -> str:
 
 
 def checked_dataset_proposal(body: Any, allowed_datasets: dict[str, Any]) -> dict[str, Any]:
-    """The agent's dataset: a name, its SQL over base datasets and the metric the question needs on its columns."""
     if not isinstance(body, dict):
         raise DatasetDraftValidationError("A JSON object is required.")
     name = _text(body, "name", DATASET_NAME_MAX_LENGTH).lower()

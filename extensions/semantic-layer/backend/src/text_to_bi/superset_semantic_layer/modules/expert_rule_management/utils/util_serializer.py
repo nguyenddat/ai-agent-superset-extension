@@ -18,7 +18,6 @@ def serialize_expert_rule_group(group: ExpertRuleGroup) -> dict[str, Any]:
 
 
 def serialize_group_reference(group: ExpertRuleGroup | None) -> dict[str, Any] | None:
-    """Tên và ID nhóm của rule; None nếu chưa phân nhóm."""
     return {"id": group.id, "name": group.name} if group else None
 
 
@@ -40,7 +39,6 @@ def serialize_expert_rule(revision: ExpertRuleRevision) -> dict[str, Any]:
 def serialize_expert_rule_review_entry(
     rule: ExpertRule, revision: ExpertRuleRevision, links: list[ExpertRuleLink], user_name: UserName
 ) -> dict[str, Any]:
-    """Bản hiện tại của rule với trạng thái duyệt, người liên quan và tên cột, thuật ngữ, metric."""
     dataset = get_dataset(rule.dataset_id)
     metric_names = {metric.id: metric.verbose_name or metric.metric_name for metric in getattr(dataset, "metrics", [])}
     column_ids = {condition["field_ref"]["column_dictionary_id"] for condition in revision.conditions}
@@ -72,7 +70,6 @@ def serialize_expert_rule_review_entry(
 
 
 def serialize_discovered_rule(rule: ExpertRule, revision: ExpertRuleRevision, links: list[ExpertRuleLink]) -> dict:
-    """Rule cho AI Agent: nội dung, nhóm, metric, thuật ngữ và cột vật lý của từng điều kiện."""
     column_ids = {condition["field_ref"]["column_dictionary_id"] for condition in revision.conditions}
     return {
         **serialize_expert_rule(revision),

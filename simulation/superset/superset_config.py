@@ -1,6 +1,5 @@
 import os
 
-
 SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "local-development-secret-change-me")
 SQLALCHEMY_DATABASE_URI = (
     "postgresql+psycopg2://"

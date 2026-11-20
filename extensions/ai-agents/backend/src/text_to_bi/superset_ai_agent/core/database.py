@@ -9,11 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 def handle_errors(method):
-    """Answer an AI Agent error with its status and message, discarding the half-done transaction.
-
-    It sits directly above the route function, inside rollback_on_error and Superset's @safe, which would answer 500.
-    """
-
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         try:
@@ -26,8 +21,6 @@ def handle_errors(method):
 
 
 def rollback_on_error(method):
-    """Log an unexpected failure, discard the half-done transaction and answer with a plain 500."""
-
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         try:

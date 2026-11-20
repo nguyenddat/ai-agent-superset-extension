@@ -4,8 +4,14 @@ from types import SimpleNamespace
 import pytest
 
 from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import MetricContractValidationError
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import metric_contract_hash, metric_contract_state, parse_contract_metric
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_data import build_latest_time_payload
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import (
+    metric_contract_hash,
+    metric_contract_state,
+    parse_contract_metric,
+)
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_data import (
+    build_latest_time_payload,
+)
 from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_execute import (
     execute_approved_chart_query,
     planned_metric_chart,
@@ -52,7 +58,9 @@ def _checked(body, expression=RAIN, row_kind_column="loai_quan_sat", grains=None
     return checked_query_defaults(
         body,
         {column.column_name: column for column in dataset.columns},
-        DatasetTimeContext("thoi_diem_quan_sat", row_kind_column, GRAINS if grains is None else grains, {"thoi_diem_quan_sat"}),
+        DatasetTimeContext(
+            "thoi_diem_quan_sat", row_kind_column, GRAINS if grains is None else grains, {"thoi_diem_quan_sat"},
+        ),
         formula_row_kinds=formula_row_kinds(formula, row_kind_column),
     )
 
@@ -120,7 +128,12 @@ def test_stored_defaults_round_trip_through_the_definition_row():
     )
     context = DatasetTimeContext("thoi_diem_quan_sat", "loai_quan_sat", GRAINS, {"thoi_diem_quan_sat"})
     assert stored_query_defaults(row, context) == defaults
-    assert stored_query_defaults(SimpleNamespace(grain=None, row_kind_value=None, time_column=None, time_window=None, time_anchor=None, default_filters=None), context) is None
+    assert stored_query_defaults(
+        SimpleNamespace(
+            grain=None, row_kind_value=None, time_column=None, time_window=None, time_anchor=None, default_filters=None,
+        ),
+        context,
+    ) is None
     assert stored_query_defaults(None, context) is None
 
 

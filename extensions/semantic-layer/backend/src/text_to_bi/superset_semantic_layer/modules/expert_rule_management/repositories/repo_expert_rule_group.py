@@ -20,7 +20,6 @@ class ExpertRuleGroupRepository(BaseRepository[ExpertRuleGroup]):
         return self.get(group_id)
 
     def read_all(self) -> list[ExpertRuleGroup]:
-        """Mọi nhóm, theo tên."""
         return self.query().order_by(ExpertRuleGroup.name).all()
 
     def read_by_normalized_name(self, normalized_name: str) -> ExpertRuleGroup | None:

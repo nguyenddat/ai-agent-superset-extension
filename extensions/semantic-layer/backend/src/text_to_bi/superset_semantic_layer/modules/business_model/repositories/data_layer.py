@@ -16,7 +16,6 @@ class DataLayerRepository(BaseRepository[DataLayer]):
         return self.query().all()
 
     def in_flow_order(self) -> list[DataLayer]:
-        """Layers level by level, as data flows, and in their saved order within a level."""
         return self.query().order_by(DataLayer.level, DataLayer.sort_order, DataLayer.id).all()
 
     def by_name(self, name: str) -> DataLayer | None:
@@ -29,7 +28,6 @@ class DataLayerRepository(BaseRepository[DataLayer]):
         return self.query().order_by(DataLayer.level.desc()).first()
 
     def levels_for_datasets(self, dataset_ids: Iterable[int]) -> dict[int, int]:
-        """Level of the data layer each dataset is classified into in the data dictionary."""
         rows = self.session.execute(
             select(DatasetDictionary.id, DataLayer.level)
             .join(DataLayer, DatasetDictionary.layer_id == DataLayer.id)

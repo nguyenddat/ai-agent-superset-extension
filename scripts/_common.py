@@ -66,13 +66,18 @@ def extensions() -> tuple[Extension, ...]:
 
 
 def source_fingerprint(extension: Extension) -> dict[str, str]:
-    """Hash inputs that can change either bundled backend or compiled frontend."""
     paths = [extension.directory / "extension.json", extension.directory / "requirements.txt"]
     for directory_name in ("backend/src", "frontend/src"):
-        paths.extend(path for path in (extension.directory / directory_name).rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
+        paths.extend(
+            path for path in (extension.directory / directory_name).rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        )
     paths.extend(path for path in (extension.directory / "frontend").glob("*") if path.is_file())
     paths.extend(path for path in (extension.directory / "backend").glob("*") if path.is_file())
-    return {path.relative_to(extension.directory).as_posix(): sha256_file(path) for path in sorted(set(paths)) if path.is_file()}
+    return {
+        path.relative_to(extension.directory).as_posix(): sha256_file(path)
+        for path in sorted(set(paths)) if path.is_file()
+    }
 
 
 def bundle_problems(extension: Extension) -> list[str]:
@@ -92,7 +97,10 @@ def bundle_problems(extension: Extension) -> list[str]:
     if not isinstance(previous, dict):
         problems.append(f"{extension.provenance.name} has no source hashes")
     else:
-        problems.extend(f"{extension.name}: source changed: {name}" for name in sorted(current.keys() | previous.keys()) if current.get(name) != previous.get(name))
+        problems.extend(
+            f"{extension.name}: source changed: {name}"
+            for name in sorted(current.keys() | previous.keys()) if current.get(name) != previous.get(name)
+        )
     try:
         bundle = zipfile.ZipFile(extension.bundle)
     except zipfile.BadZipFile:
@@ -104,7 +112,9 @@ def bundle_problems(extension: Extension) -> list[str]:
                 name = f"backend/src/{source.relative_to(extension.directory / 'backend' / 'src').as_posix()}"
                 if name not in bundled_names or bundle.read(name) != source.read_bytes():
                     problems.append(f"{extension.name}: bundled backend differs: {name}")
-        frontend_names = [name for name in bundled_names if name.startswith("frontend/dist/") and not name.endswith("/")]
+        frontend_names = [
+            name for name in bundled_names if name.startswith("frontend/dist/") and not name.endswith("/")
+        ]
         if not frontend_names:
             problems.append(f"{extension.name}: bundle has no frontend assets")
         for name in frontend_names:
@@ -124,7 +134,6 @@ def fail(message: str) -> None:
 
 
 def resolve_command(command: list[str]) -> list[str]:
-    """Resolve the executable through PATH and PATHEXT, so `npm` finds `npm.cmd` on Windows."""
     executable = shutil.which(command[0])
     return [executable, *command[1:]] if executable else command
 
@@ -170,7 +179,10 @@ def sha256_file(path: Path) -> str:
 
 
 def container_sha256(path: str) -> str | None:
-    result = compose("exec", "-T", SUPERSET_SERVICE, "sh", "-c", 'if [ -f "$1" ]; then sha256sum "$1"; else printf "ABSENT\\n"; fi', "sh", path, capture=True, check=False)
+    result = compose(
+        "exec", "-T", SUPERSET_SERVICE, "sh", "-c",
+        'if [ -f "$1" ]; then sha256sum "$1"; else printf "ABSENT\\n"; fi', "sh", path, capture=True, check=False,
+    )
     if result.returncode != 0:
         raise RuntimeError(f"could not inspect installed bundle: {path}")
     output = result.stdout.strip()

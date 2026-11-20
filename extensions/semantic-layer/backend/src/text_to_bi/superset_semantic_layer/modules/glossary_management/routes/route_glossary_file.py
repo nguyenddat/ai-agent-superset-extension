@@ -22,7 +22,6 @@ class GlossaryFileRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def export_glossary_file(self):
-        """Mọi thuật ngữ thành file Excel theo mẫu, import đọc lại được."""
         require_admin()
         ensure_dictionary_tables()
         return self.response(200, **export_terms())
@@ -33,7 +32,6 @@ class GlossaryFileRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def export_glossary_template(self):
-        """File Excel mẫu để nhập thuật ngữ, có dòng ví dụ và sheet hướng dẫn."""
         require_admin()
         return self.response(200, **export_term_template())
 
@@ -44,7 +42,6 @@ class GlossaryFileRoutes(RouteMixin):
     @csrf_protected
     @handle_errors
     def preview_glossary_file(self):
-        """Kết quả import từng dòng của file; không lưu gì."""
         require_admin()
         ensure_dictionary_tables()
         return self.response(200, **import_report(preview_term_import(request.get_json(silent=True))))
@@ -58,7 +55,6 @@ class GlossaryFileRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def import_glossary_file(self):
-        """Tạo và cập nhật thuật ngữ của file thành bản nháp trong một transaction; một dòng lỗi thì không lưu gì."""
         require_admin()
         ensure_dictionary_tables()
         rows = apply_term_import(request.get_json(silent=True), current_user.id)

@@ -52,7 +52,9 @@ export function ReferenceFields({
   ];
 
   const isKey = (name: string) => !!(table?.key_columns?.[name]?.pk || table?.key_columns?.[name]?.unique);
-  const availableColumns = (table?.columns ?? []).filter(name => !(table?.id === sourceDatasetId && name === sourceColumnName));
+  const availableColumns = (table?.columns ?? []).filter(
+    name => !(table?.id === sourceDatasetId && name === sourceColumnName)
+  );
   const keyColumns = availableColumns.filter(isKey);
   const otherColumns = availableColumns.filter(name => !isKey(name));
   const columnItems = [
@@ -68,7 +70,8 @@ export function ReferenceFields({
     }
     const next = datasets.find(dataset => dataset.id === nextId);
     // A column with the same name is the likely key, so it is filled in; otherwise the user picks the column next.
-    const sameName = next && next.id !== sourceDatasetId && next.columns.includes(sourceColumnName) ? sourceColumnName : null;
+    const sameName =
+      next && next.id !== sourceDatasetId && next.columns.includes(sourceColumnName) ? sourceColumnName : null;
     setPendingDatasetId(nextId);
     if (sameName) onChange(nextId, sameName);
     else if (datasetId !== null) onChange(null, null);
@@ -86,7 +89,9 @@ export function ReferenceFields({
     <SelectItem key={name} value={name}>
       <span className="sl-reference-item">
         <span className="sl-reference-item-name">{name}</span>
-        {table?.key_columns?.[name]?.pk ? <span className="sl-reference-badge">PK</span> : isKey(name) ? <span className="sl-reference-badge">UQ</span> : null}
+        {table?.key_columns?.[name]?.pk
+          ? <span className="sl-reference-badge">PK</span>
+          : isKey(name) ? <span className="sl-reference-badge">UQ</span> : null}
         {name === sourceColumnName ? <span className="sl-reference-item-meta">cùng tên</span> : null}
         <span className="sl-reference-item-meta is-type">{table?.column_types?.[name] ?? ''}</span>
       </span>
@@ -98,7 +103,9 @@ export function ReferenceFields({
       <div className="sl-column-detail">
         <span>Reference table</span>
         <Select items={tableItems} value={tableId} disabled={disabled} onValueChange={value => selectTable(value)}>
-          <SelectTrigger aria-label={`Bảng tham chiếu của ${sourceColumnName}`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={`Bảng tham chiếu của ${sourceColumnName}`} className="w-full">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent alignItemWithTrigger={false} className="max-h-80 min-w-64">
             <SelectGroup>
               <SelectItem value={null}>Không tham chiếu</SelectItem>
@@ -122,9 +129,15 @@ export function ReferenceFields({
       </div>
       <div className="sl-column-detail">
         <span>Reference column</span>
-        <Select items={columnItems} value={datasetId !== null ? columnName : null} disabled={disabled || !table} onValueChange={value => { if (table && value) onChange(table.id, value); }}>
+        <Select
+          items={columnItems} value={datasetId !== null ? columnName : null} disabled={disabled || !table}
+          onValueChange={value => { if (table && value) onChange(table.id, value); }}
+        >
           <SelectTrigger aria-label={`Cột tham chiếu của ${sourceColumnName}`} className="w-full">
-            <SelectValue>{(value: string | null) => value ?? <span className="text-muted-foreground">{table ? 'Chọn cột' : 'Chọn bảng trước'}</span>}</SelectValue>
+            <SelectValue>
+              {(value: string | null) =>
+                value ?? <span className="text-muted-foreground">{table ? 'Chọn cột' : 'Chọn bảng trước'}</span>}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false} className="max-h-80 min-w-96">
             {keyColumns.length > 0 ? (

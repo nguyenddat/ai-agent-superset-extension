@@ -25,7 +25,8 @@ export const semanticLayerModules: Array<{ id: SemanticLayerModule; label: strin
   { id: 'glossary', label: 'Business Glossary', description: 'Thuật ngữ nghiệp vụ được quản trị' },
   { id: 'rules', label: 'Expert Rules', description: 'Quy tắc nghiệp vụ của chuyên gia' },
   { id: 'contradictions', label: 'Mâu thuẫn', description: 'Thuật ngữ và rule nói trái nhau, phát hiện tự động' },
-  { id: 'questions', label: 'Xử lý câu hỏi', description: 'Cách hiểu riêng của người dùng, câu hỏi thiếu metric và đề xuất dataset' },
+  { id: 'questions', label: 'Xử lý câu hỏi',
+    description: 'Cách hiểu riêng của người dùng, câu hỏi thiếu metric và đề xuất dataset' },
   { id: 'access', label: 'Phân quyền', description: 'Gán nhóm quyền xem và truy vấn Semantic Layer cho người dùng' },
 ];
 

@@ -5,7 +5,9 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { requestJson, semanticLayerApi } from './api';
-import type { ColumnDictionary, DatasetDictionary, DatasetGrain, Grain, GrainProfile, GrainProfileResponse } from './types';
+import type {
+  ColumnDictionary, DatasetDictionary, DatasetGrain, Grain, GrainProfile, GrainProfileResponse
+} from './types';
 
 export type TimeSemantics = Pick<DatasetDictionary, 'time_column' | 'row_kind_column' | 'grains'>;
 
@@ -33,7 +35,9 @@ function shownMoment(value: string | null): string {
   const moment = value ? /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(value) : null;
   if (!moment) return value ?? '—';
   const day = `${moment[3]}/${moment[2]}/${moment[1]}`;
-  return moment[4] === undefined || (moment[4] === '00' && moment[5] === '00') ? day : `${day} ${moment[4]}:${moment[5]}`;
+  return moment[4] === undefined || (moment[4] === '00' && moment[5] === '00')
+    ? day
+    : `${day} ${moment[4]}:${moment[5]}`;
 }
 
 function profileText(profile: GrainProfile): string {
@@ -93,7 +97,10 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
     onChange({ ...value, row_kind_column: rowKindColumn, grains: [] });
   };
   const setGrain = (index: number, changes: Partial<DatasetGrain>) => {
-    onChange({ ...value, grains: value.grains.map((item, position) => (position === index ? { ...item, ...changes } : item)) });
+    onChange({
+      ...value,
+      grains: value.grains.map((item, position) => (position === index ? { ...item, ...changes } : item)),
+    });
   };
   const removeGrain = (index: number) => {
     onChange({ ...value, grains: value.grains.filter((_item, position) => position !== index) });
@@ -127,14 +134,19 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
   return (
     <div className="sl-time-semantics">
       <div className="sl-time-semantics-header">
-        <p>Một dòng dữ liệu ứng với khoảng thời gian nào. AI Agent dựa vào đây để lọc trọn ngày và gom theo giờ, ngày, tháng.</p>
+        <p>
+          Một dòng dữ liệu ứng với khoảng thời gian nào. AI Agent dựa vào đây để lọc trọn ngày và gom theo giờ,
+          ngày, tháng.
+        </p>
         <Button
           variant="outline"
           disabled={disabled || profiling || !value.time_column}
           onClick={() => void detectGrain()}
           title="Đọc dữ liệu (chỉ đọc) để gợi ý grain cho từng loại dòng; chỉ có hiệu lực khi bấm Lưu thay đổi"
         >
-          {profiling ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <ScanSearch data-icon="inline-start" />}
+          {profiling
+            ? <LoaderCircle data-icon="inline-start" className="animate-spin" />
+            : <ScanSearch data-icon="inline-start" />}
           {profiling ? 'Đang đọc dữ liệu…' : 'Phát hiện grain'}
         </Button>
       </div>
@@ -145,29 +157,45 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
             <SelectTrigger aria-label="Cột thời gian chính" className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectGroup>
-                {timeColumnItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                {timeColumnItems.map(item => (
+                  <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>
+                ))}
               </SelectGroup>
             </SelectContent>
           </Select>
         </Field>
         <Field>
-          <FieldLabel title="Cột mà giá trị của nó tách các dòng có grain khác nhau, ví dụ loai_quan_sat">Cột phân loại dòng</FieldLabel>
-          <Select items={rowKindItems} value={value.row_kind_column} disabled={disabled || !value.time_column} onValueChange={setRowKindColumn}>
+          <FieldLabel title="Cột mà giá trị của nó tách các dòng có grain khác nhau, ví dụ loai_quan_sat">
+            Cột phân loại dòng
+          </FieldLabel>
+          <Select
+            items={rowKindItems} value={value.row_kind_column} disabled={disabled || !value.time_column}
+            onValueChange={setRowKindColumn}
+          >
             <SelectTrigger aria-label="Cột phân loại dòng" className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectGroup>
-                {rowKindItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                {rowKindItems.map(item => (
+                  <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>
+                ))}
               </SelectGroup>
             </SelectContent>
           </Select>
         </Field>
       </div>
       {temporalColumns.length === 0 ? (
-        <p className="sl-time-semantics-note">Dataset chưa có cột nào được đánh dấu là cột thời gian. Chọn kiểu thời gian ở chi tiết của cột trong bảng bên dưới.</p>
+        <p className="sl-time-semantics-note">
+          Dataset chưa có cột nào được đánh dấu là cột thời gian. Chọn kiểu thời gian ở chi tiết của cột trong bảng
+          bên dưới.
+        </p>
       ) : null}
-      {profileError ? <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {profileError}</div> : null}
+      {profileError ? (
+        <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {profileError}</div>
+      ) : null}
       {tooManyKinds ? (
-        <p className="sl-time-semantics-note is-warning">Cột phân loại có hơn 20 giá trị nên không giống một cột phân loại dòng; chỉ 20 giá trị đầu được hiện.</p>
+        <p className="sl-time-semantics-note is-warning">
+          Cột phân loại có hơn 20 giá trị nên không giống một cột phân loại dòng; chỉ 20 giá trị đầu được hiện.
+        </p>
       ) : null}
       {value.time_column ? (
         <table className="sl-time-semantics-table">
@@ -199,11 +227,18 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
                     </td>
                   ) : null}
                   <td>
-                    <Select items={grainItems} value={item.grain} disabled={disabled} onValueChange={grain => grain && setGrain(index, { grain })}>
-                      <SelectTrigger aria-label={`Grain của ${item.row_kind_value ?? 'dataset'}`} className="w-full"><SelectValue /></SelectTrigger>
+                    <Select
+                      items={grainItems} value={item.grain} disabled={disabled}
+                      onValueChange={grain => grain && setGrain(index, { grain })}
+                    >
+                      <SelectTrigger aria-label={`Grain của ${item.row_kind_value ?? 'dataset'}`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
-                          {grainItems.map(grain => <SelectItem key={grain.value} value={grain.value}>{grain.label}</SelectItem>)}
+                          {grainItems.map(grain => (
+                            <SelectItem key={grain.value} value={grain.value}>{grain.label}</SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
@@ -214,16 +249,23 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
                         <>
                           <span>{profileText(profile)}</span>
                           {profile.suggested_grain ? (
-                            <span className={disagrees ? 'is-warning' : undefined}>Gợi ý: {GRAIN_LABELS[profile.suggested_grain]}</span>
+                            <span className={disagrees ? 'is-warning' : undefined}>
+                              Gợi ý: {GRAIN_LABELS[profile.suggested_grain]}
+                            </span>
                           ) : null}
                         </>
                       ) : (
-                        <span className="is-muted">{profiles.length ? 'Không còn trong dữ liệu' : 'Bấm “Phát hiện grain” để xem'}</span>
+                        <span className="is-muted">
+                          {profiles.length ? 'Không còn trong dữ liệu' : 'Bấm “Phát hiện grain” để xem'}
+                        </span>
                       )}
                     </div>
                   </td>
                   <td>
-                    <Button variant="ghost" size="icon" aria-label={`Xoá grain của ${item.row_kind_value ?? 'dataset'}`} disabled={disabled} onClick={() => removeGrain(index)}>
+                    <Button
+                      variant="ghost" size="icon" aria-label={`Xoá grain của ${item.row_kind_value ?? 'dataset'}`}
+                      disabled={disabled} onClick={() => removeGrain(index)}
+                    >
                       <Trash2 />
                     </Button>
                   </td>
@@ -233,7 +275,8 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
             {value.grains.length === 0 ? (
               <tr>
                 <td colSpan={byRowKind ? 5 : 3} className="sl-time-semantics-empty">
-                  Chưa khai báo grain. Bấm “Phát hiện grain” để đọc dữ liệu và nhận gợi ý{byRowKind ? ', hoặc thêm loại dòng bên dưới.' : '.'}
+                  Chưa khai báo grain. Bấm “Phát hiện grain” để đọc dữ liệu và nhận
+                  gợi ý{byRowKind ? ', hoặc thêm loại dòng bên dưới.' : '.'}
                 </td>
               </tr>
             ) : null}
@@ -241,7 +284,10 @@ export function TimeSemanticsFields({ datasetId, columns, value, disabled, onCha
         </table>
       ) : null}
       {value.time_column && !byRowKind && value.grains.length === 0 ? (
-        <Button variant="outline" size="sm" disabled={disabled} onClick={() => onChange({ ...value, grains: [{ row_kind_value: null, label: null, grain: 'day' }] })}>
+        <Button
+          variant="outline" size="sm" disabled={disabled}
+          onClick={() => onChange({ ...value, grains: [{ row_kind_value: null, label: null, grain: 'day' }] })}
+        >
           <Plus data-icon="inline-start" /> Khai báo grain thủ công
         </Button>
       ) : null}

@@ -8,9 +8,6 @@ from .client import AGENT_QUERY_API, cached, get_public_json, post_public_json
 
 @dataclass
 class DataModelSources:
-    """What the data model offers when no approved metric answers: aggregate datasets to build a metric on, with the
-    formulas already saved there, and base datasets to draft a dataset over."""
-
     aggregates: list[dict[str, Any]] = field(default_factory=list)
     bases: list[dict[str, Any]] = field(default_factory=list)
 
@@ -22,7 +19,6 @@ class DataModelSources:
 
 
 def _source_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str, Any]:
-    """An aggregate or base dataset, shaped like a catalog dataset so the query planner can use it as one."""
     entry = {
         **dataset_entry({"id": dataset["id"], "name": dataset.get("name"), "dimensions": []}, members),
         "columns": dataset.get("columns", []),
@@ -34,7 +30,6 @@ def _source_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str,
 
 
 def load_data_model_sources(cookie_header: str) -> DataModelSources:
-    """The aggregate and base datasets the user may query, with the labelled values and date ranges of aggregates."""
     payload = get_public_json(f"{AGENT_QUERY_API}/data-model/sources", cookie_header)
     datasets = payload.get("datasets", [])
     aggregates = [dataset for dataset in datasets if dataset.get("dataset_type") == "aggregate"]
@@ -57,12 +52,10 @@ _cached_schema_graphs: dict[tuple[int, int], tuple[float, dict[str, Any]]] = {}
 
 
 def cached_schema_graph(user_id: int, database_id: int, cookie_header: str) -> dict[str, Any]:
-    """The base tables of one database the user may read in full, and the approved relationships between them."""
     path = f"{AGENT_QUERY_API}/schema-graph?database_id={database_id}"
     return cached(_cached_schema_graphs, (user_id, database_id), lambda: get_public_json(path, cookie_header))
 
 
 def propose_agent_dataset(draft: dict[str, Any], cookie_header: str, csrf_token: str) -> dict[str, Any]:
-    """Keep the dataset the agent drafted over base datasets for an administrator; returns the proposal."""
     path = "/extensions/text-to-bi/superset-ai-agent/agent-ladder/dataset-proposals"
     return post_public_json(path, draft, cookie_header, csrf_token, "gửi đề xuất dataset")["proposal"]

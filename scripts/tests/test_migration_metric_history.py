@@ -4,13 +4,21 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, inspect, text
 
-MIGRATION_PATH = Path(__file__).parents[2] / "extensions/semantic-layer/backend/src/text_to_bi/superset_semantic_layer/migrations.py"
+MIGRATION_PATH = (
+    Path(__file__).parents[2] / "extensions/semantic-layer/backend/src/text_to_bi/superset_semantic_layer/migrations.py"
+)
 
 
 def _root_metrics_function(namespace):
     source = ast.parse(MIGRATION_PATH.read_text(encoding="utf-8"))
-    function = next(node for node in source.body if isinstance(node, ast.FunctionDef) and node.name == "_root_metrics_on_definition")
-    exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])), str(MIGRATION_PATH), "exec"), namespace)  # noqa: S102
+    function = next(
+        node for node in source.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_root_metrics_on_definition"
+    )
+    exec(  # noqa: S102
+        compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])), str(MIGRATION_PATH), "exec"),
+        namespace,
+    )
     return namespace["_root_metrics_on_definition"]
 
 
@@ -18,13 +26,27 @@ def test_populated_legacy_metric_migration_keeps_ids_approvals_and_events():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE sql_metrics (id INTEGER PRIMARY KEY, metric_name TEXT NOT NULL)"))
-        connection.execute(text("CREATE TABLE text_to_bi_metric_definition (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, metric_id INTEGER NOT NULL, business_definition TEXT NOT NULL)"))
-        connection.execute(text("CREATE TABLE text_to_bi_metric_contract (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, metric_id INTEGER NOT NULL, status TEXT NOT NULL, approved_at TEXT, approver_id INTEGER)"))
-        connection.execute(text("CREATE TABLE text_to_bi_metric_contract_event (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, metric_id INTEGER NOT NULL, action TEXT NOT NULL)"))
+        connection.execute(text(
+            "CREATE TABLE text_to_bi_metric_definition (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, "
+            "metric_id INTEGER NOT NULL, business_definition TEXT NOT NULL)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE text_to_bi_metric_contract (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, "
+            "metric_id INTEGER NOT NULL, status TEXT NOT NULL, approved_at TEXT, approver_id INTEGER)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE text_to_bi_metric_contract_event (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, "
+            "metric_id INTEGER NOT NULL, action TEXT NOT NULL)"
+        ))
         connection.execute(text("INSERT INTO sql_metrics VALUES (10, 'Rain'), (11, 'Wind')"))
         connection.execute(text("INSERT INTO text_to_bi_metric_definition VALUES (40, 3, 10, 'Total rain')"))
-        connection.execute(text("INSERT INTO text_to_bi_metric_contract VALUES (50, 3, 10, 'approved', '2026-01-01', 7), (51, 3, 11, 'candidate', NULL, NULL)"))
-        connection.execute(text("INSERT INTO text_to_bi_metric_contract_event VALUES (60, 3, 10, 'approve'), (61, 3, 11, 'candidate')"))
+        connection.execute(text(
+            "INSERT INTO text_to_bi_metric_contract VALUES (50, 3, 10, 'approved', '2026-01-01', 7), "
+            "(51, 3, 11, 'candidate', NULL, NULL)"
+        ))
+        connection.execute(text(
+            "INSERT INTO text_to_bi_metric_contract_event VALUES (60, 3, 10, 'approve'), (61, 3, 11, 'candidate')"
+        ))
 
     namespace = {
         "db": SimpleNamespace(engine=engine),
@@ -39,9 +61,15 @@ def test_populated_legacy_metric_migration_keeps_ids_approvals_and_events():
     migrate(False)
 
     with engine.connect() as connection:
-        definitions = connection.execute(text("SELECT id, dataset_id, metric_id, business_definition FROM text_to_bi_metric_definition ORDER BY metric_id")).all()
-        contracts = connection.execute(text("SELECT id, definition_id, status, approved_at, approver_id FROM text_to_bi_metric_contract ORDER BY id")).all()
-        events = connection.execute(text("SELECT id, definition_id, metric_id, metric_name, action FROM text_to_bi_metric_contract_event ORDER BY id")).all()
+        definitions = connection.execute(text(
+            "SELECT id, dataset_id, metric_id, business_definition FROM text_to_bi_metric_definition ORDER BY metric_id"
+        )).all()
+        contracts = connection.execute(text(
+            "SELECT id, definition_id, status, approved_at, approver_id FROM text_to_bi_metric_contract ORDER BY id"
+        )).all()
+        events = connection.execute(text(
+            "SELECT id, definition_id, metric_id, metric_name, action FROM text_to_bi_metric_contract_event ORDER BY id"
+        )).all()
     assert definitions == [(40, 3, 10, "Total rain"), (41, 3, 11, "Chưa có định nghĩa nghiệp vụ.")]
     assert contracts == [(50, 40, "approved", "2026-01-01", 7), (51, 41, "draft", None, None)]
     assert events == [(60, 40, 10, "Rain", "approve"), (61, 41, 11, "Wind", "candidate")]

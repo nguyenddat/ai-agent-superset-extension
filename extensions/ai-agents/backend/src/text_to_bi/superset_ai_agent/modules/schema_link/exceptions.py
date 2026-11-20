@@ -2,12 +2,10 @@ from ...common.exceptions import NotAuthorizedError, ValidationError
 
 
 class GoalError(ValidationError):
-    """The goal does not fit the schema graph; the message says what to change."""
+    pass
 
 
 class NoJoinPathError(ValidationError):
-    """Some needed table is not reachable from the root through approved relationships."""
-
     message = "No approved relationships connect every needed table."
 
     def __init__(self, unreachable: list[int]) -> None:

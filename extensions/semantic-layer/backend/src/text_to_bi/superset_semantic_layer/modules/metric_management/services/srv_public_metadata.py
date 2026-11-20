@@ -2,8 +2,14 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from text_to_bi.superset_semantic_layer.core.security import can_access_dataset
-from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_relationship_contract import RelationshipEnd, relationship_is_approved_current
-from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import datasets_by_name, is_internal_dataset
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_relationship_contract import (
+    RelationshipEnd,
+    relationship_is_approved_current,
+)
+from text_to_bi.superset_semantic_layer.modules.superset.services.srv_dataset import (
+    datasets_by_name,
+    is_internal_dataset,
+)
 from text_to_bi.superset_semantic_layer.modules.superset.services.srv_user import user_names
 
 from ..dependencies import metric_contract_repository, metric_definition_repository
@@ -23,7 +29,6 @@ def build_semantic_catalog(
     metric_details: Callable[[int, int], Mapping[str, Any]] | None = None,
     query_defaults: Mapping[tuple[int, int], Any] | None = None,
 ) -> dict[str, Any]:
-    """Build a consumer catalog from approved, current metadata the caller can access."""
     access: dict[int, bool] = {}
 
     def allowed(dataset: Any) -> bool:
@@ -41,11 +46,15 @@ def build_semantic_catalog(
         defaults = (query_defaults or {}).get((dataset.id, contract.metric_id))
         if metric is None or not contract_is_approved_current(contract, dataset, metric, defaults):
             continue
-        catalog.setdefault(dataset.id, {"id": dataset.id, "name": dataset.table_name, "metrics": [], "dimensions": []})["metrics"].append(
+        catalog.setdefault(
+            dataset.id, {"id": dataset.id, "name": dataset.table_name, "metrics": [], "dimensions": []}
+        )["metrics"].append(
             {
                 "metric_id": metric.id, "metric_name": metric.metric_name,
-                "verbose_name": getattr(metric, "verbose_name", None), "description": getattr(metric, "description", None),
-                "d3format": getattr(metric, "d3format", None), "query_defaults": defaults.as_dict() if defaults else None,
+                "verbose_name": getattr(metric, "verbose_name", None),
+                "description": getattr(metric, "description", None),
+                "d3format": getattr(metric, "d3format", None),
+                "query_defaults": defaults.as_dict() if defaults else None,
                 **(metric_details(dataset.id, metric.id) if metric_details else {}),
             }
         )
@@ -53,10 +62,15 @@ def build_semantic_catalog(
     for contract, source, target in relationships:
         if source.dataset.id not in datasets or target.dataset.id not in datasets:
             continue
-        if not (allowed(source.dataset) and allowed(target.dataset)) or not relationship_is_approved_current(contract, source, target):
+        if (
+            not (allowed(source.dataset) and allowed(target.dataset))
+            or not relationship_is_approved_current(contract, source, target)
+        ):
             continue
         for dataset in (source.dataset, target.dataset):
-            catalog.setdefault(dataset.id, {"id": dataset.id, "name": dataset.table_name, "metrics": [], "dimensions": []})
+            catalog.setdefault(
+                dataset.id, {"id": dataset.id, "name": dataset.table_name, "metrics": [], "dimensions": []}
+            )
         visible_relationships.append({
             "id": contract.id, "from_dataset_id": contract.from_dataset_id, "from_column": contract.from_column,
             "to_dataset_id": contract.to_dataset_id, "to_column": contract.to_column,
@@ -71,7 +85,8 @@ def build_semantic_catalog(
             {
                 "name": column.column_name, "label": getattr(column, "verbose_name", None),
                 "type": getattr(column, "type", None), "temporal": bool(getattr(column, "is_dttm", False)),
-                "groupby": bool(getattr(column, "groupby", False)), "filterable": bool(getattr(column, "filterable", False)),
+                "groupby": bool(getattr(column, "groupby", False)),
+                "filterable": bool(getattr(column, "filterable", False)),
             }
             for column in getattr(dataset, "columns", [])
             if getattr(column, "is_active", None) is True and not getattr(column, "expression", None)
@@ -85,10 +100,18 @@ def build_semantic_catalog(
 
 
 def read_query_metrics() -> dict[str, Any]:
-    datasets = [dataset for dataset in datasets_by_name() if not is_internal_dataset(dataset) and can_access_dataset(dataset)]
+    datasets = [
+        dataset for dataset in datasets_by_name() if not is_internal_dataset(dataset) and can_access_dataset(dataset)
+    ]
     dataset_ids = [dataset.id for dataset in datasets]
-    contracts = {(contract.dataset_id, contract.metric_id): contract for contract in metric_contract_repository().read_on_datasets(dataset_ids)}
-    definitions = {(definition.dataset_id, definition.metric_id): definition for definition in metric_definition_repository().read_on_datasets(dataset_ids)}
+    contracts = {
+        (contract.dataset_id, contract.metric_id): contract
+        for contract in metric_contract_repository().read_on_datasets(dataset_ids)
+    }
+    definitions = {
+        (definition.dataset_id, definition.metric_id): definition
+        for definition in metric_definition_repository().read_on_datasets(dataset_ids)
+    }
     defaults = query_defaults_on(dataset_ids)
     user_name = user_names()
     result = []
@@ -98,9 +121,12 @@ def read_query_metrics() -> dict[str, Any]:
             contract, definition, query_defaults = contracts.get(key), definitions.get(key), defaults.get(key)
             result.append({
                 "dataset_id": dataset.id, "metric_id": metric.id, "metric_name": metric.metric_name,
-                "label": metric.verbose_name, "expression": metric.expression, "description": metric.description, "d3format": metric.d3format,
-                "state": metric_contract_state(contract, dataset, metric, query_defaults), "origin": getattr(contract, "origin", None),
-                "definition": getattr(definition, "business_definition", None), "unit": getattr(definition, "unit", None),
+                "label": metric.verbose_name, "expression": metric.expression, "description": metric.description,
+                "d3format": metric.d3format,
+                "state": metric_contract_state(contract, dataset, metric, query_defaults),
+                "origin": getattr(contract, "origin", None),
+                "definition": getattr(definition, "business_definition", None),
+                "unit": getattr(definition, "unit", None),
                 "steward_name": user_name(definition.steward_id) if definition else None,
                 "query_defaults": query_defaults.as_dict() if query_defaults else None,
             })

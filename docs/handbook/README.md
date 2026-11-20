@@ -6,7 +6,7 @@ commit với code.
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [quy-uoc-code.md](quy-uoc-code.md) | Độ dài dòng, đặt tên, docstring và comment, test, commit message |
+| [quy-uoc-code.md](quy-uoc-code.md) | Độ dài dòng, đặt tên, import, docstring và comment, dữ liệu, test, tài liệu, commit message |
 | [kien-truc.md](kien-truc.md) | Các lớp `common`, `core`, `modules`; module chia theo nghiệp vụ; cấu trúc một module |
 | [hanh-vi.md](hanh-vi.md) | Exception và mã lỗi, thứ tự decorator của route, transaction, quyền và CSRF |
 

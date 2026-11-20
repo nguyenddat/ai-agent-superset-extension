@@ -46,7 +46,9 @@ class AgentSemanticQueryAPI(RestApi):
     @handle_errors
     def dimension_members(self, dataset_id: int):
         require_semantic_layer_query()
-        return self.response(200, **public_payload(read_dimension_members(dataset_id, request.headers.get("Cookie", ""))))
+        return self.response(
+            200, **public_payload(read_dimension_members(dataset_id, request.headers.get("Cookie", ""))),
+        )
 
     @expose("/data-model/sources", methods=("GET",))
     @protect()

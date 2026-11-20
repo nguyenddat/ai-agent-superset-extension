@@ -42,7 +42,9 @@ type DomainDialogProps = {
 };
 
 /** Creates or edits a business domain: its name, description, colour and member tables. */
-export function DomainDialog({ open, domain, groups, datasetTypeOf, usedColors, onOpenChange, onSaved }: DomainDialogProps) {
+export function DomainDialog({
+  open, domain, groups, datasetTypeOf, usedColors, onOpenChange, onSaved,
+}: DomainDialogProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(DOMAIN_COLORS[0]);
@@ -64,7 +66,10 @@ export function DomainDialog({ open, domain, groups, datasetTypeOf, usedColors, 
   const visibleGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
     return groups
-      .map(group => ({ ...group, datasets: group.datasets.filter(dataset => !query || getDatasetName(dataset).toLowerCase().includes(query)) }))
+      .map(group => ({
+        ...group,
+        datasets: group.datasets.filter(dataset => !query || getDatasetName(dataset).toLowerCase().includes(query)),
+      }))
       .filter(group => group.datasets.length > 0);
   }, [groups, search]);
 
@@ -119,11 +124,17 @@ export function DomainDialog({ open, domain, groups, datasetTypeOf, usedColors, 
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="sl-domain-name">Tên nghiệp vụ</FieldLabel>
-            <Input id="sl-domain-name" value={name} maxLength={255} placeholder="Ví dụ: Khám bệnh" onChange={event => setName(event.target.value)} />
+            <Input
+              id="sl-domain-name" value={name} maxLength={255} placeholder="Ví dụ: Khám bệnh"
+              onChange={event => setName(event.target.value)}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="sl-domain-description">Mô tả</FieldLabel>
-            <Textarea id="sl-domain-description" rows={2} value={description} placeholder="Phạm vi và mục đích của nghiệp vụ" onChange={event => setDescription(event.target.value)} />
+            <Textarea
+              id="sl-domain-description" rows={2} value={description} placeholder="Phạm vi và mục đích của nghiệp vụ"
+              onChange={event => setDescription(event.target.value)}
+            />
           </Field>
           <FieldSet>
             <FieldLegend variant="label">Màu</FieldLegend>
@@ -144,23 +155,38 @@ export function DomainDialog({ open, domain, groups, datasetTypeOf, usedColors, 
           <FieldSet>
             <FieldLegend variant="label">Bảng ({datasetIds.length} đã chọn)</FieldLegend>
             <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-8" value={search} placeholder="Tìm bảng…" onChange={event => setSearch(event.target.value)} />
+              <Search
+                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                className="pl-8" value={search} placeholder="Tìm bảng…"
+                onChange={event => setSearch(event.target.value)}
+              />
             </div>
             <div className="sl-domain-dataset-list">
               {visibleGroups.map(group => (
                 <div key={group.label} className="flex flex-col gap-1">
                   <span className="px-1 text-xs font-medium text-muted-foreground">{group.label}</span>
                   {group.datasets.map(dataset => (
-                    <label key={dataset.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-accent">
-                      <Checkbox checked={datasetIds.includes(dataset.id)} onCheckedChange={checked => toggleDataset(dataset.id, checked)} />
+                    <label
+                      key={dataset.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={datasetIds.includes(dataset.id)}
+                        onCheckedChange={checked => toggleDataset(dataset.id, checked)}
+                      />
                       <span className="truncate">{getDatasetName(dataset)}</span>
-                      {datasetTypeOf(dataset.id) === 'aggregate' ? <span className="sl-model-aggregate" title="Bảng Aggregate">Agg</span> : null}
+                      {datasetTypeOf(dataset.id) === 'aggregate'
+                        ? <span className="sl-model-aggregate" title="Bảng Aggregate">Agg</span>
+                        : null}
                     </label>
                   ))}
                 </div>
               ))}
-              {visibleGroups.length === 0 ? <span className="px-1 py-2 text-muted-foreground">Không có bảng phù hợp.</span> : null}
+              {visibleGroups.length === 0
+                ? <span className="px-1 py-2 text-muted-foreground">Không có bảng phù hợp.</span>
+                : null}
             </div>
           </FieldSet>
           {error ? <p role="alert" className="text-destructive">{error}</p> : null}

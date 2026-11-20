@@ -32,7 +32,9 @@ export type MembershipChange = { datasetId: number; domain: BusinessDomain; add:
 
 export const cellKey = (cell: Cell) => `${cell.col},${cell.row}`;
 
-const STEPS: Record<Direction, Cell> = { left: { col: -1, row: 0 }, right: { col: 1, row: 0 }, up: { col: 0, row: -1 }, down: { col: 0, row: 1 } };
+const STEPS: Record<Direction, Cell> = {
+  left: { col: -1, row: 0 }, right: { col: 1, row: 0 }, up: { col: 0, row: -1 }, down: { col: 0, row: 1 },
+};
 
 /** The cell `steps` cells away from `cell` in `direction`. */
 export function stepCell(cell: Cell, direction: Direction, steps = 1): Cell {
@@ -68,7 +70,8 @@ export function cellsConnected(cells: Cell[]): boolean {
 
 /** Whether `cell` is one of `keys` or right next to one of them. */
 const touches = (cell: Cell, keys: Set<string>) => (
-  keys.has(cellKey(cell)) || (Object.keys(STEPS) as Direction[]).some(direction => keys.has(cellKey(stepCell(cell, direction))))
+  keys.has(cellKey(cell)) ||
+  (Object.keys(STEPS) as Direction[]).some(direction => keys.has(cellKey(stepCell(cell, direction))))
 );
 
 type DomainEntry = { key: string; domain: BusinessDomain | null; ids: number[] };
@@ -78,7 +81,9 @@ function domainEntries(domains: BusinessDomain[], datasetIds: number[]): DomainE
   const assigned = new Set(domains.flatMap(domain => domain.dataset_ids));
   const unassigned = datasetIds.filter(id => !assigned.has(id));
   return [
-    ...domains.map(domain => ({ key: `domain-${domain.id}`, domain, ids: domain.dataset_ids.filter(id => datasetIds.includes(id)) })),
+    ...domains.map(domain => ({
+      key: `domain-${domain.id}`, domain, ids: domain.dataset_ids.filter(id => datasetIds.includes(id)),
+    })),
     ...(unassigned.length > 0 ? [{ key: UNASSIGNED_DOMAIN, domain: null, ids: unassigned }] : []),
   ];
 }
@@ -209,7 +214,9 @@ export function reconcileGrid(grid: CanvasGrid, domains: BusinessDomain[], datas
     for (const id of members) {
       const keys = new Set(cells.map(cellKey));
       if (keys.has(cellKey(tables.get(id) as Cell))) continue;
-      const blocked = new Set([...[...tables].filter(([other]) => other !== id).map(([, cell]) => cellKey(cell)), ...headers(), ...domainCells]);
+      const blocked = new Set([
+        ...[...tables].filter(([other]) => other !== id).map(([, cell]) => cellKey(cell)), ...headers(), ...domainCells,
+      ]);
       const cell = findFreeCell(area.header, candidate => !blocked.has(cellKey(candidate)) && touches(candidate, keys));
       tables.set(id, cell);
       if (!keys.has(cellKey(cell))) cells.push(cell);
@@ -223,7 +230,9 @@ export function reconcileGrid(grid: CanvasGrid, domains: BusinessDomain[], datas
 export function strayTables(grid: CanvasGrid): number[] {
   const area = new Set(grid.domains.find(item => item.key === UNASSIGNED_DOMAIN)?.cells.map(cellKey));
   const covered = new Set(grid.domains.filter(item => item.domain).flatMap(item => item.cells.map(cellKey)));
-  return [...grid.tables].filter(([, cell]) => !covered.has(cellKey(cell)) && !area.has(cellKey(cell))).map(([id]) => id);
+  return [...grid.tables]
+    .filter(([, cell]) => !covered.has(cellKey(cell)) && !area.has(cellKey(cell)))
+    .map(([id]) => id);
 }
 
 /**
@@ -236,7 +245,9 @@ export function validGrid(grid: CanvasGrid): boolean {
   if (new Set(tableCells).size !== tableCells.length || new Set(headers).size !== headers.length) return false;
   if (tableCells.some(key => headers.includes(key))) return false;
   const unassigned = new Set(grid.domains.find(item => item.key === UNASSIGNED_DOMAIN)?.cells.map(cellKey));
-  return grid.domains.every(item => item.key === UNASSIGNED_DOMAIN || item.cells.every(cell => !unassigned.has(cellKey(cell))));
+  return grid.domains.every(
+    item => item.key === UNASSIGNED_DOMAIN || item.cells.every(cell => !unassigned.has(cellKey(cell)))
+  );
 }
 
 /** Tables that now lie inside a domain they do not belong to, or outside a domain they belong to. */
@@ -247,7 +258,9 @@ export function membershipChanges(grid: CanvasGrid): MembershipChange[] {
     const covered = new Set(item.cells.map(cellKey));
     for (const [datasetId, cell] of grid.tables) {
       const inside = covered.has(cellKey(cell));
-      if (inside !== item.domain.dataset_ids.includes(datasetId)) changes.push({ datasetId, domain: item.domain, add: inside });
+      if (inside !== item.domain.dataset_ids.includes(datasetId)) {
+        changes.push({ datasetId, domain: item.domain, add: inside });
+      }
     }
   }
   return changes;
@@ -257,7 +270,9 @@ export function membershipChanges(grid: CanvasGrid): MembershipChange[] {
 export function toStoredCanvas(grid: CanvasGrid): StoredCanvas {
   const pair = (cell: Cell): [number, number] => [cell.col, cell.row];
   return {
-    domains: grid.domains.map(domain => ({ key: domain.key, header: pair(domain.header), cells: domain.cells.map(pair) })),
+    domains: grid.domains.map(domain => ({
+      key: domain.key, header: pair(domain.header), cells: domain.cells.map(pair),
+    })),
     tables: Object.fromEntries([...grid.tables].map(([id, cell]) => [String(id), pair(cell)])),
   };
 }
@@ -280,7 +295,9 @@ export function canvasSignature(stored: StoredCanvas): string {
 export function fromStoredCanvas(stored: StoredCanvas): CanvasGrid {
   const cell = ([col, row]: [number, number]): Cell => ({ col, row });
   return {
-    domains: stored.domains.map(domain => ({ key: domain.key, domain: null, header: cell(domain.header), cells: domain.cells.map(cell) })),
+    domains: stored.domains.map(domain => ({
+      key: domain.key, domain: null, header: cell(domain.header), cells: domain.cells.map(cell),
+    })),
     tables: new Map(Object.entries(stored.tables).map(([id, position]) => [Number(id), cell(position)])),
   };
 }
@@ -302,7 +319,9 @@ export function tilePosition(cell: Cell): Point {
 
 /** The cell a tile at canvas `position` is closest to. */
 export function tileCell(position: Point): Cell {
-  return { col: Math.round((position.x - TILE_INSET) / GRID_CELL), row: Math.round((position.y - TILE_INSET) / GRID_CELL) };
+  return {
+    col: Math.round((position.x - TILE_INSET) / GRID_CELL), row: Math.round((position.y - TILE_INSET) / GRID_CELL),
+  };
 }
 
 /**
@@ -313,7 +332,10 @@ export type Lane = { key: string; label: string; hint: string; color: string | n
 
 export const UNCLASSIFIED_LANE = 'unclassified';
 
-/** Lineage lanes in flow order: the data layers level by level, then the unclassified datasets on a level after them. */
+/**
+ * Lineage lanes in flow order: the data layers level by level, then the unclassified datasets on a level after
+ * them.
+ */
 export function lineageLanes(layers: DataLayer[]): Lane[] {
   const levels = layerLevels(layers);
   return [
@@ -324,7 +346,10 @@ export function lineageLanes(layers: DataLayer[]): Lane[] {
       color: layer.color,
       level: index,
     }))),
-    { key: UNCLASSIFIED_LANE, label: 'Chưa phân tầng', hint: 'Phân loại trong Data Dictionary', color: null, level: levels.length },
+    {
+      key: UNCLASSIFIED_LANE, label: 'Chưa phân tầng', hint: 'Phân loại trong Data Dictionary', color: null,
+      level: levels.length,
+    },
   ];
 }
 
@@ -345,7 +370,9 @@ export function selectLineageItems(
   edges: LineageEdge[],
 ): LineageItem[] {
   const selected = domains.filter(domain => selectedDomainIds.includes(domain.id));
-  const active = new Set(selected.length > 0 ? selected.flatMap(domain => domain.dataset_ids) : [...datasetLanes.keys()]);
+  const active = new Set(
+    selected.length > 0 ? selected.flatMap(domain => domain.dataset_ids) : [...datasetLanes.keys()]
+  );
   const included = new Set(active);
   for (const edge of edges) {
     if (active.has(edge.source)) included.add(edge.target);

@@ -13,7 +13,6 @@ class GlossaryEventService:
     def create(
         self, revision: GlossaryTermRevision, event_type: str, actor_id: int, reason: str | None = None
     ) -> None:
-        """Ghi một sự kiện vào lịch sử thuật ngữ; sự kiện không bao giờ bị sửa."""
         values = {
             "term_id": revision.term_id,
             "revision_id": revision.id,
@@ -30,6 +29,5 @@ class GlossaryEventService:
         return self.events.read_history(term_id)
 
     def read_author_id(self, revision: GlossaryTermRevision) -> int | None:
-        """Người soạn một bản: người thực hiện sự kiện tạo hoặc sửa của bản đó."""
         event = self.events.read_latest_authoring(revision.id)
         return event.actor_id if event else None

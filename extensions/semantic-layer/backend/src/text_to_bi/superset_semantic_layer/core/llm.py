@@ -28,11 +28,9 @@ def _build_chat_model(**limits) -> ChatOpenAI:
 
 @lru_cache(maxsize=1)
 def get_chat_model() -> ChatOpenAI:
-    """Model chat của AI AutoFill, giữ thời hạn mặc định của client."""
     return _build_chat_model()
 
 
 @lru_cache(maxsize=1)
 def get_judgement_chat_model() -> ChatOpenAI:
-    """Model chat chấm mâu thuẫn, có giới hạn thời gian để request không vượt timeout của Gunicorn."""
     return _build_chat_model(timeout=JUDGEMENT_TIMEOUT_SECONDS, max_retries=JUDGEMENT_MAX_RETRIES)

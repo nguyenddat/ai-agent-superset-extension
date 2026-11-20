@@ -61,12 +61,17 @@ def main(argv=None):
     parser.add_argument("--isolated-url", required=True, help="Local, disposable Superset stack URL")
     arguments = parser.parse_args(argv)
     parsed_url = urllib.parse.urlparse(arguments.isolated_url)
-    if parsed_url.scheme != "http" or parsed_url.hostname not in {"localhost", "127.0.0.1"} or parsed_url.username or parsed_url.password:
+    if (
+        parsed_url.scheme != "http" or parsed_url.hostname not in {"localhost", "127.0.0.1"}
+        or parsed_url.username or parsed_url.password
+    ):
         parser.error("--isolated-url must be an HTTP localhost URL without embedded credentials")
     base_url = arguments.isolated_url.rstrip("/")
     accounts = json.loads(os.environ.get("SUPERSET_SECURITY_USERS_JSON", "{}"))
     if set(accounts) != set(ROLE_NAMES) or any(set(accounts[role]) != {"username", "password"} for role in ROLE_NAMES):
-        parser.error("SUPERSET_SECURITY_USERS_JSON must provide username and password for admin, viewer, query and no_role")
+        parser.error(
+            "SUPERSET_SECURITY_USERS_JSON must provide username and password for admin, viewer, query and no_role"
+        )
 
     sessions = {role: login(base_url, accounts[role]) for role in ROLE_NAMES}
     openers = {role: session[0] for role, session in sessions.items()}
@@ -77,12 +82,16 @@ def main(argv=None):
         passed = status in expected
         print(f"{'ok  ' if passed else 'FAIL'} {role:7} {status} {method:6} {path}")
         if not passed:
-            failures.append(f"{role} {method} {path}: expected {sorted(expected)}, got {status}, body {str(payload)[:200]}")
+            failures.append(
+                f"{role} {method} {path}: expected {sorted(expected)}, got {status}, body {str(payload)[:200]}"
+            )
         return payload
 
     for role in ROLE_NAMES:
         payload = check(role, "GET", f"{SEMANTIC_API}/access", {200})
-        expected_flags = {"admin": (True, True), "viewer": (True, False), "query": (False, True), "no_role": (False, False)}
+        expected_flags = {
+            "admin": (True, True), "viewer": (True, False), "query": (False, True), "no_role": (False, False),
+        }
         if isinstance(payload, dict) and (payload.get("can_view"), payload.get("can_query")) != expected_flags[role]:
             failures.append(f"{role} /access returned wrong view/query flags")
         check(role, "GET", f"{SEMANTIC_API}/datasets/query-metadata", {200} if role in {"admin", "query"} else {403})

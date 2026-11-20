@@ -40,7 +40,10 @@ def main(argv: list[str] | None = None) -> None:
         if source_fingerprint(extension) != sources:
             raise RuntimeError(f"{extension.name} sources changed while building; run the build again")
         bundle_hash = sha256_file(extension.bundle)
-        extension.provenance.write_text(json.dumps({"bundle_sha256": bundle_hash, "sources": sources}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        extension.provenance.write_text(
+            json.dumps({"bundle_sha256": bundle_hash, "sources": sources}, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         print(f"Bundle: {extension.bundle}\nsha256: {bundle_hash}")
 
 

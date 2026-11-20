@@ -17,9 +17,15 @@ from text_to_bi.superset_semantic_layer.modules.expert_rule_management.exception
     ExpertRuleValidationError,
 )
 from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule as service
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_group as group_service
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_link as rule_links
-from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import srv_expert_rule_validation as validation
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule_group as group_service,
+)
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule_link as rule_links,
+)
+from text_to_bi.superset_semantic_layer.modules.expert_rule_management.services import (
+    srv_expert_rule_validation as validation,
+)
 
 
 def _payload(**overrides):
@@ -158,7 +164,6 @@ def test_normalize_payload_rejects_sql_command_families(command):
     ],
 )
 def test_normalize_payload_rejects_embedded_sql_grammar(text):
-    """SQL-shaped fragments remain unsafe even when surrounded by prose."""
     with pytest.raises(ExpertRuleValidationError):
         validation.normalize_rule_payload(_payload(exceptions=[{"when": text, "outcome": "ignore"}]))
 
@@ -224,7 +229,6 @@ def test_normalize_payload_rejects_sql_control_syntax(command):
     ],
 )
 def test_normalize_payload_rejects_prose_prefixed_control_commands(command):
-    """Control grammar remains unsafe when a user prefixes it with prose."""
     with pytest.raises(ExpertRuleValidationError):
         validation.normalize_rule_payload(_payload(exceptions=[{"when": f"Please {command}", "outcome": "ignore"}]))
 
@@ -260,14 +264,12 @@ def test_normalize_payload_rejects_prose_prefixed_control_commands(command):
     ],
 )
 def test_normalize_payload_rejects_prose_prefixed_sql_statement_grammar(command):
-    """Executable statement grammar is unsafe even after an explanatory prefix."""
     with pytest.raises(ExpertRuleValidationError):
         validation.normalize_rule_payload(_payload(exceptions=[{"when": f"Please {command}", "outcome": "ignore"}]))
 
 
 @pytest.mark.parametrize("command", ["SHOW ALL", "LOAD file"])
 def test_normalize_payload_rejects_dialect_commands_without_optional_parser(command):
-    """Dialect commands are unsafe without an optional parser runtime dependency."""
     with pytest.raises(ExpertRuleValidationError):
         validation.normalize_rule_payload(_payload(exceptions=[{"when": f"Please {command}", "outcome": "ignore"}]))
 
@@ -298,15 +300,21 @@ def test_normalize_payload_accepts_sql_words_when_they_are_ordinary_prose(field)
 
 def test_validate_links_requires_approved_same_dataset_objects(monkeypatch):
     payload = validation.normalize_rule_payload(_payload())
-    monkeypatch.setattr(rule_links, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id) if dataset_id == 7 else None)
-    monkeypatch.setattr(rule_links, "glossary_links", lambda _: [SimpleNamespace(status="approved", is_current=True, dataset_id=7)])
+    monkeypatch.setattr(
+        rule_links, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id) if dataset_id == 7 else None,
+    )
+    monkeypatch.setattr(
+        rule_links, "glossary_links", lambda _: [SimpleNamespace(status="approved", is_current=True, dataset_id=7)],
+    )
     monkeypatch.setattr(rule_links, "approved_metric", lambda _: SimpleNamespace(dataset_id=7, status="approved"))
     rule_links.validate_semantic_links(payload)
 
     monkeypatch.setattr(rule_links, "glossary_links", lambda _: [])
     with pytest.raises(ExpertRuleValidationError):
         rule_links.validate_semantic_links(payload)
-    monkeypatch.setattr(rule_links, "glossary_links", lambda _: [SimpleNamespace(status="approved", is_current=True, dataset_id=7)])
+    monkeypatch.setattr(
+        rule_links, "glossary_links", lambda _: [SimpleNamespace(status="approved", is_current=True, dataset_id=7)],
+    )
     monkeypatch.setattr(rule_links, "approved_metric", lambda _: SimpleNamespace(dataset_id=8, status="approved"))
     with pytest.raises(ExpertRuleValidationError):
         rule_links.validate_semantic_links(payload)
@@ -314,7 +322,9 @@ def test_validate_links_requires_approved_same_dataset_objects(monkeypatch):
 
 def test_validate_links_selects_a_matching_current_glossary_link_from_multiple_links(monkeypatch):
     payload = validation.normalize_rule_payload(_payload())
-    monkeypatch.setattr(rule_links, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id) if dataset_id == 7 else None)
+    monkeypatch.setattr(
+        rule_links, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id) if dataset_id == 7 else None,
+    )
     glossary = [
         SimpleNamespace(status="approved", is_current=True, dataset_id=2),
         SimpleNamespace(status="approved", is_current=True, dataset_id=7),
@@ -355,7 +365,9 @@ def test_discoverable_rules_keep_live_same_dataset_links_and_omit_stale_or_inacc
     monkeypatch.setattr(service, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id))
     monkeypatch.setattr(service, "can_access_dataset", lambda dataset: dataset.id == 7)
     monkeypatch.setattr(service, "linked_target_authorized", lambda link: link.dataset_id == 7)
-    monkeypatch.setattr(rule_links, "live_fingerprint", lambda link: link.fingerprint if link.fingerprint == "live" else "changed")
+    monkeypatch.setattr(
+        rule_links, "live_fingerprint", lambda link: link.fingerprint if link.fingerprint == "live" else "changed",
+    )
 
     discovered = rules.read_discoverable()
     assert [(rule.id, revision.id) for rule, revision, _ in discovered] == [(visible.rule_id, visible.id)]
@@ -372,7 +384,6 @@ def test_mutations_use_row_lock_and_expected_revision():
 
 
 def _lifecycle_session(monkeypatch):
-    """Use disposable SQLite tables; never import or connect to Superset metadata."""
     base = declarative_base()
 
     class Group(base):
@@ -438,20 +449,20 @@ def _lifecycle_session(monkeypatch):
     monkeypatch.setitem(sys.modules, module.__name__, module)
     # A repository binds its model when imported, so import the repositories again with these tables.
     for name in [name for name in sys.modules if name.startswith(f"{service.__package__[:-9]}.repositories.")]:
-        _track_parent_module_attribute(monkeypatch, name, getattr(sys.modules[name.rsplit(".", 1)[0]], name.rsplit(".", 1)[1], None))
+        _track_parent_module_attribute(
+            monkeypatch, name, getattr(sys.modules[name.rsplit(".", 1)[0]], name.rsplit(".", 1)[1], None),
+        )
         monkeypatch.delitem(sys.modules, name)
     return sessionmaker(bind=engine)(), Rule, Revision, Audit
 
 
 def _track_parent_module_attribute(monkeypatch, module_name, replacement):
-    """Restore package attributes as well as sys.modules when tests swap model modules."""
     parent_name, attribute = module_name.rsplit(".", 1)
     parent = importlib.import_module(parent_name)
     monkeypatch.setattr(parent, attribute, replacement, raising=False)
 
 
 def _current_rule_service(monkeypatch):
-    """Run the production lifecycle service against small repository doubles."""
     rules_by_id, revisions_by_id, links_by_revision, events = {}, {}, {}, []
 
     class Rules:
@@ -482,13 +493,22 @@ def _current_rule_service(monkeypatch):
             return revision
 
         def read_current(self, rule_id):
-            return next((revision for revision in revisions_by_id.values() if revision.rule_id == rule_id and revision.is_current), None)
+            return next(
+                (
+                    revision for revision in revisions_by_id.values()
+                    if revision.rule_id == rule_id and revision.is_current
+                ),
+                None,
+            )
 
         def read_current_for_update(self, rule_id):
             return self.read_current(rule_id)
 
         def read_all_approved_current(self):
-            return [revision for revision in revisions_by_id.values() if revision.status == "approved" and revision.is_current]
+            return [
+                revision for revision in revisions_by_id.values()
+                if revision.status == "approved" and revision.is_current
+            ]
 
     class Links:
         def create(self, values, flush=True):
@@ -512,11 +532,16 @@ def _current_rule_service(monkeypatch):
 
         def read_author_id(self, revision):
             return next(
-                (event.actor_id for event in events if event.revision_id == revision.id and event.event_type in {"created", "updated"}),
+                (
+                    event.actor_id for event in events
+                    if event.revision_id == revision.id and event.event_type in {"created", "updated"}
+                ),
                 None,
             )
 
-    monkeypatch.setattr(service, "ExpertRule", lambda **values: SimpleNamespace(id=None, group=None, group_id=None, **values))
+    monkeypatch.setattr(
+        service, "ExpertRule", lambda **values: SimpleNamespace(id=None, group=None, group_id=None, **values),
+    )
     monkeypatch.setattr(service, "with_term_metrics", lambda payload: payload)
     monkeypatch.setattr(service, "validate_semantic_links", lambda _: None)
     monkeypatch.setattr(
@@ -525,7 +550,10 @@ def _current_rule_service(monkeypatch):
         lambda dataset_id: lambda reference: SimpleNamespace(id=reference, dataset_id=dataset_id, column_name="status"),
     )
     monkeypatch.setattr(service, "rule_links", lambda values: [
-        {"kind": "dataset", "target_id": values["dataset_id"], "dataset_id": values["dataset_id"], "fingerprint": "live"}
+        {
+            "kind": "dataset", "target_id": values["dataset_id"], "dataset_id": values["dataset_id"],
+            "fingerprint": "live",
+        }
     ])
     monkeypatch.setattr(service, "live_fingerprint", lambda _: "live")
     instance = service.ExpertRuleService.__new__(service.ExpertRuleService)
@@ -805,4 +833,6 @@ def test_an_edit_moves_the_rule_and_a_deleted_group_leaves_its_rules_ungrouped(m
     assert groups.delete(renamed.id, 12) == [created.rule_id]
     assert rule_rows[created.rule_id].group_id is None
     moves = [event for event in events if event.event_type == "moved"]
-    assert [event.reason for event in moves] == [f"{group_service.UNGROUPED} {chr(0x2192)} Filters", f"Dimensions {chr(0x2192)} {group_service.UNGROUPED}"]
+    assert [event.reason for event in moves] == [
+        f"{group_service.UNGROUPED} {chr(0x2192)} Filters", f"Dimensions {chr(0x2192)} {group_service.UNGROUPED}",
+    ]

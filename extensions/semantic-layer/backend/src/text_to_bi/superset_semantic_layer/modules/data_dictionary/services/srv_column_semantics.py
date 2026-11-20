@@ -12,7 +12,6 @@ MAX_DESCRIPTION_LENGTH = 2000
 
 
 def default_semantic_role(data_type: Any, temporal_kind: str | None, is_key: bool, is_row_kind: bool = False) -> str:
-    """Vai trò cột nhiều khả năng nhất, suy ra từ những gì từ điển đã biết về cột."""
     if is_key:
         return "key"
     if is_row_kind:
@@ -25,10 +24,6 @@ def default_semantic_role(data_type: Any, temporal_kind: str | None, is_key: boo
 
 
 def checked_column_semantics(item: dict[str, Any], index: int, role_after_save: str | None) -> dict[str, Any]:
-    """Các trường ngữ nghĩa của một cột như sẽ lưu: danh sách thành JSON, chuỗi trống thành NULL.
-
-    `role_after_save` là vai trò của cột sau khi lưu, để chỉ measure giữ aggregations; None khi vai trò giữ như đã lưu.
-    """
     values: dict[str, Any] = {}
     if "semantic_role" in item:
         if item["semantic_role"] not in ROLES:
@@ -37,7 +32,9 @@ def checked_column_semantics(item: dict[str, Any], index: int, role_after_save: 
     if "aggregations" in item:
         aggregations = item["aggregations"]
         if not isinstance(aggregations, list) or any(value not in AGGREGATIONS for value in aggregations):
-            raise DataDictionaryValidationError(f"columns[{index}].aggregations must be a list of {', '.join(AGGREGATIONS)}.")
+            raise DataDictionaryValidationError(
+                f"columns[{index}].aggregations must be a list of {', '.join(AGGREGATIONS)}."
+            )
         if aggregations and role_after_save not in (None, "measure"):
             raise DataDictionaryValidationError(f"columns[{index}].aggregations are only declared on a measure.")
         ordered = [value for value in AGGREGATIONS if value in aggregations]
@@ -48,11 +45,15 @@ def checked_column_semantics(item: dict[str, Any], index: int, role_after_save: 
             raise DataDictionaryValidationError(f"columns[{index}].synonyms must be a list of strings.")
         cleaned = list(dict.fromkeys(value.strip() for value in synonyms if value.strip()))
         if len(cleaned) > MAX_SYNONYMS or any(len(value) > MAX_SYNONYM_LENGTH for value in cleaned):
-            raise DataDictionaryValidationError(f"columns[{index}].synonyms may hold {MAX_SYNONYMS} words of at most {MAX_SYNONYM_LENGTH} characters.")
+            raise DataDictionaryValidationError(
+                f"columns[{index}].synonyms may hold {MAX_SYNONYMS} words of at most {MAX_SYNONYM_LENGTH} characters."
+            )
         values["synonyms"] = json.dumps(cleaned, ensure_ascii=False) if cleaned else None
     if "description" in item:
         description = item["description"]
         if description is not None and (not isinstance(description, str) or len(description) > MAX_DESCRIPTION_LENGTH):
-            raise DataDictionaryValidationError(f"columns[{index}].description must be a string of at most {MAX_DESCRIPTION_LENGTH} characters.")
+            raise DataDictionaryValidationError(
+                f"columns[{index}].description must be a string of at most {MAX_DESCRIPTION_LENGTH} characters."
+            )
         values["description"] = description.strip() if isinstance(description, str) and description.strip() else None
     return values

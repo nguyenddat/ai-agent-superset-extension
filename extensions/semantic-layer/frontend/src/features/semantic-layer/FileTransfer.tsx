@@ -68,7 +68,10 @@ function saveFile(file: TableFile) {
 type FileTransferProps = {
   /** What one row of the file is, for the dialog title: `thuật ngữ`, `rule`, `data dictionary`. */
   subject: string;
-  /** The export endpoint; `/template` below it gives the blank sample, `/preview` and `/import` check and apply a file. */
+  /**
+   * The export endpoint; `/template` below it gives the blank sample, `/preview` and `/import` check and apply a
+   * file.
+   */
   endpoint: string;
   /** How the file is laid out: its columns, how rows match existing items, and what review an import needs. */
   guide: ReactNode;
@@ -169,7 +172,9 @@ export function FileTransfer({ subject, endpoint, guide, disabled, disabledReaso
         title={disabled ? disabledReason : undefined}
         onClick={() => void exportItems()}
       >
-        {exporting ? <LoaderCircle className="sl-spin" data-icon="inline-start" /> : <Download data-icon="inline-start" />} Xuất file
+        {exporting
+          ? <LoaderCircle className="sl-spin" data-icon="inline-start" />
+          : <Download data-icon="inline-start" />} Xuất file
       </Button>
       <Button
         variant="outline"

@@ -9,7 +9,6 @@ BACKEND_ROOT = REPOSITORY_ROOT / "extensions" / "semantic-layer" / "backend"
 
 
 def _docker_run_command_arguments(dockerfile: str, command_prefix: str) -> list[str]:
-    """Return shell arguments for the uniquely targeted continued Docker RUN command."""
     lines = dockerfile.splitlines()
     command_lines: list[str] = []
 

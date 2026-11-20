@@ -13,7 +13,10 @@ from text_to_bi.superset_semantic_layer.core.exceptions import (
 from text_to_bi.superset_semantic_layer.modules.data_dictionary.exceptions import RelationshipValidationError
 from text_to_bi.superset_semantic_layer.modules.data_dictionary.routes import route_relationship
 from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import MetricContractValidationError
-from text_to_bi.superset_semantic_layer.modules.metric_management.routes import route_crud_metric_def, route_metric_contract
+from text_to_bi.superset_semantic_layer.modules.metric_management.routes import (
+    route_crud_metric_def,
+    route_metric_contract,
+)
 
 
 class _Session:
@@ -45,7 +48,6 @@ class _RouteAPI(
 
 
 def _invoke_route(api, route_name, *arguments, csrf_valid=True, **keywords):
-    """Skip FAB's permission/login wrappers while retaining CSRF, transaction, error, and resolver wrappers."""
     handler = getattr(type(api), route_name)
     handler = handler.__wrapped__.__wrapped__
     csrf_globals = handler.__globals__
@@ -119,13 +121,18 @@ def route_context(monkeypatch):
     monkeypatch.setattr(route_crud_metric_def, "require_admin", require_admin)
     monkeypatch.setattr(route_crud_metric_def, "ensure_dictionary_tables", lambda: None)
     monkeypatch.setattr(route_crud_metric_def, "serialize_metric_definition", lambda definition: definition)
-    monkeypatch.setattr(route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: body, args=SimpleNamespace(get=lambda *_args, **_kwargs: None)))
+    monkeypatch.setattr(
+        route_relationship, "request",
+        SimpleNamespace(get_json=lambda silent=True: body, args=SimpleNamespace(get=lambda *_args, **_kwargs: None)),
+    )
     monkeypatch.setattr(route_relationship, "current_user", user)
     monkeypatch.setattr(route_relationship, "require_admin", require_admin)
     monkeypatch.setattr(route_relationship, "ensure_dictionary_tables", lambda: None)
     from text_to_bi.superset_semantic_layer.modules.superset import dependencies as superset_dependencies
 
-    monkeypatch.setattr(superset_dependencies, "require_dataset", lambda dataset_id: dataset if dataset_id == dataset.id else None)
+    monkeypatch.setattr(
+        superset_dependencies, "require_dataset", lambda dataset_id: dataset if dataset_id == dataset.id else None,
+    )
 
     return SimpleNamespace(
         api=_RouteAPI(), dataset=dataset, metric=metric, user=user, body=body, session=session,
@@ -211,7 +218,9 @@ def test_metric_execute_route_checks_query_and_dataset_access_before_service(rou
     context.access_state["dataset_access"] = True
     status, payload = _invoke_route(context.api, "execute_metric_contract", **route_arguments)
     assert status == 200 and payload["result"]["rows"] == [{"value": 1}]
-    service.execute.assert_called_once_with(context.dataset, context.metric, body, route_metric_contract.run_chart_query)
+    service.execute.assert_called_once_with(
+        context.dataset, context.metric, body, route_metric_contract.run_chart_query,
+    )
 
 
 def test_metric_execute_maps_validation_errors_and_rolls_back(route_context, monkeypatch):
@@ -275,7 +284,9 @@ def test_relationship_candidate_route_delegates_identity_and_commits(route_conte
     service.create_candidate.return_value = (contract, source, target)
     monkeypatch.setattr(route_relationship, "RelationshipService", lambda: service)
     monkeypatch.setattr(route_relationship, "serialize_relationship_contract", lambda *values: values)
-    monkeypatch.setattr(route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: {"source": "naming"}))
+    monkeypatch.setattr(
+        route_relationship, "request", SimpleNamespace(get_json=lambda silent=True: {"source": "naming"}),
+    )
 
     status, payload = _invoke_route(context.api, "create_relationship_contract_candidate", context.dataset.id, 22)
     assert status == 201 and payload["contract"] == (contract, source, target)
@@ -310,7 +321,10 @@ def test_relationship_approve_and_revoke_routes_forward_path_and_contract_identi
     monkeypatch.setattr(
         route_relationship,
         "request",
-        SimpleNamespace(get_json=lambda silent=True: {}, args=SimpleNamespace(get=lambda name, **_: 53 if name == "contract_id" else None)),
+        SimpleNamespace(
+            get_json=lambda silent=True: {},
+            args=SimpleNamespace(get=lambda name, **_: 53 if name == "contract_id" else None),
+        ),
     )
 
     status, payload = _invoke_route(context.api, "approve_relationship_contract", context.dataset.id, 22)
@@ -342,7 +356,9 @@ def test_metric_list_filters_denied_datasets_before_building_entries(route_conte
     monkeypatch.setattr(route_metric_contract, "second_reviewer_required", lambda: True)
     from text_to_bi.superset_semantic_layer.modules.superset import dependencies as superset_dependencies
 
-    monkeypatch.setattr(superset_dependencies, "require_database", lambda database_id: database if database_id == database.id else None)
+    monkeypatch.setattr(
+        superset_dependencies, "require_database", lambda database_id: database if database_id == database.id else None,
+    )
 
     monkeypatch.setattr(
         route_metric_contract,
@@ -375,7 +391,9 @@ def test_metric_contract_read_rejects_dataset_without_access_before_service(rout
     service.read.assert_not_called()
 
     context.access_state["dataset_access"] = True
-    assert _invoke_route(context.api, "read_metric_contract", **route_arguments) == (200, {"contract": {"id": contract.id}})
+    assert _invoke_route(context.api, "read_metric_contract", **route_arguments) == (
+        200, {"contract": {"id": contract.id}},
+    )
     service.read.assert_called_once_with(context.dataset, context.metric)
 
 
@@ -386,7 +404,9 @@ def test_metric_event_route_checks_dataset_access_and_preserves_service_history_
     service.read_history.return_value = events
     monkeypatch.setattr(route_metric_contract, "require_semantic_layer_view", lambda: None)
     monkeypatch.setattr(route_metric_contract, "MetricEventService", lambda: service)
-    monkeypatch.setattr(route_metric_contract, "serialize_metric_events", lambda history: [event.action for event in history])
+    monkeypatch.setattr(
+        route_metric_contract, "serialize_metric_events", lambda history: [event.action for event in history],
+    )
     route_arguments = {"dataset_id": context.dataset.id, "metric_id": context.metric.id}
 
     context.access_state["dataset_access"] = False
@@ -432,9 +452,14 @@ def test_agent_metric_route_reuses_or_rejects_existing_contracts(
     contracts = Mock()
     contracts.read.return_value = contract
     monkeypatch.setattr(route_metric_candidate, "MetricContractService", lambda: contracts)
-    monkeypatch.setattr(route_metric_candidate, "dataset_dictionary_repository", lambda: SimpleNamespace(read=lambda _: SimpleNamespace(dataset_type="aggregate")))
+    monkeypatch.setattr(
+        route_metric_candidate, "dataset_dictionary_repository",
+        lambda: SimpleNamespace(read=lambda _: SimpleNamespace(dataset_type="aggregate")),
+    )
     monkeypatch.setattr(route_metric_candidate, "is_internal_dataset", lambda _: False)
-    monkeypatch.setattr(route_metric_candidate, "checked_metric_draft", lambda *_: SimpleNamespace(expression="AVG(temperature)"))
+    monkeypatch.setattr(
+        route_metric_candidate, "checked_metric_draft", lambda *_: SimpleNamespace(expression="AVG(temperature)"),
+    )
     monkeypatch.setattr(route_metric_candidate, "asked_question", lambda _: "Average temperature?")
     monkeypatch.setattr(route_metric_candidate, "matching_metric", lambda *_: metric)
     monkeypatch.setattr(route_metric_candidate, "metric_contract_state", lambda *_: state)
@@ -443,11 +468,16 @@ def test_agent_metric_route_reuses_or_rejects_existing_contracts(
     monkeypatch.setattr(route_metric_candidate, "require_semantic_layer_query", lambda: None)
     monkeypatch.setattr(route_metric_candidate, "require_dataset_access", lambda _: None)
     monkeypatch.setattr(route_metric_candidate, "ensure_dictionary_tables", lambda: None)
-    monkeypatch.setattr(route_metric_candidate, "require_dataset", lambda dataset_id: context.dataset if dataset_id == context.dataset.id else None)
+    monkeypatch.setattr(
+        route_metric_candidate, "require_dataset",
+        lambda dataset_id: context.dataset if dataset_id == context.dataset.id else None,
+    )
     monkeypatch.setattr(
         route_metric_candidate,
         "metric_definition_repository",
-        lambda: SimpleNamespace(read_by_metric=lambda _: SimpleNamespace(business_definition="Average temperature.", unit="C")),
+        lambda: SimpleNamespace(
+            read_by_metric=lambda _: SimpleNamespace(business_definition="Average temperature.", unit="C"),
+        ),
     )
     monkeypatch.setattr(AgentRouteAPI, "_agent_metric", lambda *_: {"metric_id": metric.id})
     context.api = AgentRouteAPI()

@@ -4,7 +4,6 @@ from superset import security_manager
 
 
 def user_names() -> Callable[[int | None], str | None]:
-    """A per-request lookup from user ID to display name: full name, else username."""
     names: dict[int, str | None] = {}
 
     def user_name(user_id: int | None) -> str | None:

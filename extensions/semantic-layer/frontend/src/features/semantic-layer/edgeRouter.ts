@@ -12,8 +12,12 @@ const STUB = 20;
 const BEND_COST = 48;
 
 const outward = (side: CardSide) => (side === 'left' ? -1 : 1);
-const inside = (point: Point, box: Box) => point.x > box.x && point.x < box.x + box.width && point.y > box.y && point.y < box.y + box.height;
-const inflate = (box: Box, by: number): Box => ({ x: box.x - by, y: box.y - by, width: box.width + by * 2, height: box.height + by * 2 });
+const inside = (point: Point, box: Box) => (
+  point.x > box.x && point.x < box.x + box.width && point.y > box.y && point.y < box.y + box.height
+);
+const inflate = (box: Box, by: number): Box => ({
+  x: box.x - by, y: box.y - by, width: box.width + by * 2, height: box.height + by * 2,
+});
 
 /** Whether the axis-aligned segment from `a` to `b` passes through the inside of `box`. */
 function crosses(a: Point, b: Point, box: Box): boolean {
@@ -35,7 +39,10 @@ export function routeCrosses(points: Point[], boxes: Box[]): boolean {
   });
 }
 
-/** The sorted distinct values, with the midpoint of each neighbouring pair, so routes can run down the middle of gaps. */
+/**
+ * The sorted distinct values, with the midpoint of each neighbouring pair, so routes can run down the middle of
+ * gaps.
+ */
 function guides(values: number[]): number[] {
   const sorted = [...new Set(values.map(value => Math.round(value)))].sort((a, b) => a - b);
   const result: number[] = [];
@@ -94,7 +101,9 @@ const STEPS: Array<[number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1]];
  * (kept MARGIN away) and the lines midway between them, taking the path that is shortest once each bend is charged
  * BEND_COST. Null when the obstacles leave no way through.
  */
-export function routeOrthogonal(source: Point, sourceSide: CardSide, target: Point, targetSide: CardSide, obstacles: Box[]): Point[] | null {
+export function routeOrthogonal(
+  source: Point, sourceSide: CardSide, target: Point, targetSide: CardSide, obstacles: Box[]
+): Point[] | null {
   const start = { x: source.x + outward(sourceSide) * STUB, y: source.y };
   const end = { x: target.x + outward(targetSide) * STUB, y: target.y };
   // Cards packed closer than the clearance would wall in the stubs; such a card stops counting as an obstacle.

@@ -27,7 +27,6 @@ HANOI_HOURLY_TEMPERATURE = {
 
 
 def _graph(tables, edges):
-    """A small graph: `tables` as IDs, `edges` as (id, from, to) foreign keys, many to one unless a fourth item says."""
     return SchemaGraph.from_payload({
         "database": {"dialect": "postgresql"},
         "tables": [{"dataset_id": table, "table": f"t{table}", "columns": []} for table in tables],

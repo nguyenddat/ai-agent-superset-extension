@@ -20,8 +20,6 @@ RULE_OPERATORS = {
 
 @dataclass
 class SemanticCatalog:
-    """Approved business content, flattened into the shapes the agent prompts list."""
-
     glossary_terms: list[dict[str, Any]] = field(default_factory=list)
     metrics: list[dict[str, Any]] = field(default_factory=list)
     expert_rules: list[dict[str, Any]] = field(default_factory=list)
@@ -42,7 +40,6 @@ def _condition_text(condition: dict[str, Any], column_names: dict[str, str]) -> 
 
 
 def rule_filters(rule: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """The rule's conditions as metric query filters, or None when one of them cannot be expressed as a filter."""
     columns = rule.get("condition_columns") or {}
     filters = []
     for condition in rule.get("conditions", []):
@@ -55,7 +52,6 @@ def rule_filters(rule: dict[str, Any]) -> list[dict[str, Any]] | None:
 
 
 def dataset_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str, Any]:
-    """A dataset as the query planner reads it: columns, labelled key values and the date range of the data."""
     return {
         "id": dataset["id"],
         "name": dataset.get("name"),
@@ -83,18 +79,12 @@ def dataset_entry(dataset: dict[str, Any], members: dict[str, Any]) -> dict[str,
 
 
 def query_defaults_entry(defaults: dict[str, Any] | None) -> dict[str, Any] | None:
-    """A metric's grain, time window and default filters without the unset parts; None when it has none.
-
-    The Semantic Layer applies them itself unless the query filters the same column, so the planner only needs to know
-    them to leave a period it does not have to ask for, and to say which one was used.
-    """
     if not defaults:
         return None
     return {key: value for key, value in defaults.items() if value not in (None, "", [])} or None
 
 
 def term_entry(term: dict[str, Any], metric_keys: set[tuple[int, int]]) -> dict[str, Any]:
-    """A glossary term with what it names in the data: metrics the caller can query, columns and whole datasets."""
     links = term.get("links") or []
     return {
         "id": term["term_id"],
@@ -121,7 +111,6 @@ def flatten_catalog(
     rules: dict[str, Any],
     members_by_dataset: dict[int, dict[str, Any]] | None = None,
 ) -> SemanticCatalog:
-    """Turn the consumer payloads into compact lists keyed by the IDs the agent must answer with."""
     metric_keys = {
         (dataset["id"], metric["metric_id"])
         for dataset in catalog.get("datasets", [])
@@ -169,7 +158,6 @@ def flatten_catalog(
 
 
 def dimension_members(dataset_id: int, cookie_header: str) -> dict[str, Any]:
-    """Labelled key values help the agent filter by a name; without them it can still answer, so a failure is empty."""
     try:
         return get_public_json(f"{AGENT_QUERY_API}/dataset/{dataset_id}/dimension-members", cookie_header)
     except SemanticLayerUnavailableError:
@@ -177,7 +165,6 @@ def dimension_members(dataset_id: int, cookie_header: str) -> dict[str, Any]:
 
 
 def load_semantic_catalog(cookie_header: str) -> SemanticCatalog:
-    """Read the three consumer payloads at once, then the labelled values of every dataset with approved metrics."""
     paths = (
         f"{AGENT_QUERY_API}/semantic-catalog",
         f"{SEMANTIC_LAYER_API}/glossary/discovery",

@@ -42,7 +42,6 @@ def _catalog_block(catalog: SemanticCatalog) -> str:
 
 
 def structured_conditions(definition: dict[str, Any], catalog: SemanticCatalog, model: Any) -> dict[str, Any] | None:
-    """`{dataset_id, filters}` for a qualitative concept's definition, or None when it is not a set of conditions."""
     if definition["kind"] != "expert_rule" or not catalog.datasets:
         return None
     asked = {key: definition.get(key) for key in ("name", "concept", "definition")}
@@ -67,7 +66,6 @@ def structured_conditions(definition: dict[str, Any], catalog: SemanticCatalog, 
 def structure_definitions(
     definitions: Sequence[dict[str, Any]], load_catalog: Callable[[], SemanticCatalog], model: Any,
 ) -> list[dict[str, Any] | None]:
-    """The conditions of each definition, worked out side by side; the catalog is read only when one needs it."""
     if not any(item["kind"] == "expert_rule" for item in definitions):
         return [None] * len(definitions)
     try:
@@ -82,7 +80,6 @@ def structure_definitions(
 def conditions_for(
     definitions: Sequence[dict[str, Any]], user_id: int, cookie_header: str,
 ) -> list[dict[str, Any] | None]:
-    """Conditions for definitions a user is saving, read against the catalog that user may see."""
     try:
         model = get_chat_model()
     except ChatModelNotConfiguredError:

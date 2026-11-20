@@ -9,7 +9,6 @@ class DatasetProposalRepository(BaseRepository[DatasetProposal]):
         super().__init__(session, DatasetProposal)
 
     def pending_with_fingerprint(self, sql_fingerprint: str) -> DatasetProposal | None:
-        """A proposal of the same SQL still waiting for review."""
         return (
             self.query()
             .filter(DatasetProposal.sql_fingerprint == sql_fingerprint, DatasetProposal.status == "pending")

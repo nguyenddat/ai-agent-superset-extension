@@ -27,7 +27,6 @@ def tfidf_vectors(texts: Sequence[str]) -> list[dict[str, float]]:
 
 
 def unit_vector(vector: Any) -> Any:
-    """A dense list or a sparse feature → weight map scaled to length 1; a zero vector stays as it is."""
     values = vector.values() if isinstance(vector, dict) else vector
     length = math.sqrt(sum(value * value for value in values))
     if not length:
@@ -38,7 +37,6 @@ def unit_vector(vector: Any) -> Any:
 
 
 def cosine(left: Any, right: Any) -> float:
-    """The cosine similarity of two unit vectors, both dense lists or both sparse maps."""
     if isinstance(left, dict):
         smaller, larger = (left, right) if len(left) <= len(right) else (right, left)
         return sum(value * larger.get(feature, 0.0) for feature, value in smaller.items())
@@ -46,7 +44,6 @@ def cosine(left: Any, right: Any) -> float:
 
 
 def similarity_matrix(vectors: Sequence[Any]) -> list[list[float]]:
-    """Pairwise cosine similarities of the vectors, after scaling each to unit length."""
     units = [unit_vector(vector) for vector in vectors]
     matrix = [[1.0] * len(units) for _ in units]
     for row in range(len(units)):
@@ -57,9 +54,6 @@ def similarity_matrix(vectors: Sequence[Any]) -> list[list[float]]:
 
 @dataclass(frozen=True)
 class NeighbourCluster:
-    """Members close enough to be grouped: `member_indexes` are ungrouped members to put together, in the existing
-    group `group_id` (whose members are `anchor_indexes`) or, when `group_id` is None, in a new group."""
-
     group_id: int | None
     member_indexes: tuple[int, ...]
     anchor_indexes: tuple[int, ...]
@@ -68,14 +62,6 @@ class NeighbourCluster:
 def neighbour_clusters(
     group_ids: Sequence[int | None], similarity: Sequence[Sequence[float]], threshold: float
 ) -> list[NeighbourCluster]:
-    """Average-linkage agglomerative clustering of members that keeps the groups administrators already made.
-
-    `group_ids[i]` is member i's group, or None. Each existing group starts as one fixed cluster and each ungrouped
-    member as its own cluster. The two clusters with the highest average pairwise similarity merge while that average
-    reaches `threshold`, except that two existing groups never merge: grouping is the administrators' decision, and a
-    suggestion only places ungrouped members. Average linkage, unlike connected components, does not chain A to C
-    through a B that is merely close to both.
-    """
     clusters: dict[int, list[int]] = {}
     fixed_group: dict[int, int | None] = {}
     group_keys: dict[int, int] = {}
@@ -97,7 +83,6 @@ def neighbour_clusters(
         return sums[cluster_pair] / (len(clusters[first]) * len(clusters[second]))
 
     def close(cluster_pair: tuple[int, int]) -> bool:
-        """Whether two clusters may merge: not two existing groups, and similar enough on average."""
         first, second = cluster_pair
         mergeable = fixed_group[first] is None or fixed_group[second] is None
         return mergeable and linkage(cluster_pair) >= threshold

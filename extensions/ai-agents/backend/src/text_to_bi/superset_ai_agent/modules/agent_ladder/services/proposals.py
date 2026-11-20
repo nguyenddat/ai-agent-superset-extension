@@ -1,10 +1,18 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from text_to_bi.superset_ai_agent.modules.semantic_layer.services.dataset_drafts import create_dataset_draft, validate_dataset_draft
+from text_to_bi.superset_ai_agent.modules.semantic_layer.services.dataset_drafts import (
+    create_dataset_draft,
+    validate_dataset_draft,
+)
 
 from ..dependencies import dataset_proposal_repository
-from ..exceptions import AgentLadderValidationError, DatasetProposalNotFoundError, ProposalAlreadyReviewedError, TooManyPendingProposalsError
+from ..exceptions import (
+    AgentLadderValidationError,
+    DatasetProposalNotFoundError,
+    ProposalAlreadyReviewedError,
+    TooManyPendingProposalsError,
+)
 from ..models import DatasetProposal
 
 MAX_PENDING_PROPOSALS = 50
@@ -21,7 +29,9 @@ class DatasetProposalService:
             return waiting, False
         if self.proposals.pending_count() >= MAX_PENDING_PROPOSALS:
             raise TooManyPendingProposalsError()
-        proposal = DatasetProposal(**values, status="pending", proposer_id=actor_id, created_on=datetime.now(timezone.utc))
+        proposal = DatasetProposal(
+            **values, status="pending", proposer_id=actor_id, created_on=datetime.now(timezone.utc),
+        )
         self.proposals.add(proposal, flush=False)
         return proposal, True
 
@@ -35,7 +45,9 @@ class DatasetProposalService:
 
     def update(self, proposal_id: int, body: Any, cookie: str, csrf: str) -> DatasetProposal:
         proposal = self.require_pending(proposal_id)
-        values = validate_dataset_draft({**body, "question": proposal.question} if isinstance(body, dict) else body, cookie, csrf)
+        values = validate_dataset_draft(
+            {**body, "question": proposal.question} if isinstance(body, dict) else body, cookie, csrf,
+        )
         for field, value in values.items():
             setattr(proposal, field, value)
         return proposal
@@ -51,7 +63,9 @@ class DatasetProposalService:
 
     def create(self, proposal_id: int, actor_id: int, cookie: str, csrf: str) -> DatasetProposal:
         proposal = self.require_pending(proposal_id)
-        body = {field: getattr(proposal, field) for field in ("name", "label", "description", "sql", "metric", "question")}
+        body = {
+            field: getattr(proposal, field) for field in ("name", "label", "description", "sql", "metric", "question")
+        }
         body["creation_key"] = f"ai-agent:dataset-proposal:{proposal.id}"
         body["proposer_id"] = proposal.proposer_id
         dataset_id = create_dataset_draft(body, cookie, csrf)

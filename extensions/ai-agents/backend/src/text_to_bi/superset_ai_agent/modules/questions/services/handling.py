@@ -9,7 +9,6 @@ MAX_NOTE_LENGTH = 1000
 
 
 def parse_handling(body: Any) -> tuple[str, str | None]:
-    """Validate a handling decision and return its status and trimmed note."""
     if not isinstance(body, dict):
         raise QuestionHandlingValidationError("Nội dung yêu cầu phải là JSON object.")
     status = body.get("status")
@@ -25,7 +24,6 @@ def parse_handling(body: Any) -> tuple[str, str | None]:
 
 
 def parse_review_filters(handling: str, missing: str | None) -> tuple[str, str | None]:
-    """The review list's `?handling=` (a handling status or `all`) and `?missing=` (a missing kind) filters."""
     if handling not in ("all", *HANDLING_STATUSES):
         raise QuestionHandlingValidationError("Bộ lọc xử lý không hợp lệ.")
     if missing not in (None, *MISSING_KINDS):
@@ -34,7 +32,6 @@ def parse_review_filters(handling: str, missing: str | None) -> tuple[str, str |
 
 
 def count_by_handling(statuses: list[str | None]) -> dict[str, int]:
-    """Count questions per handling status; a question with no handling row counts as `pending`."""
     counts = dict.fromkeys(HANDLING_STATUSES, 0)
     for status in statuses:
         counts[status if status in counts else "pending"] += 1

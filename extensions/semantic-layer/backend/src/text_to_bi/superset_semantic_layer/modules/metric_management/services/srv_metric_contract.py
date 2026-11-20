@@ -37,8 +37,6 @@ NOT_STARTED, INELIGIBLE, OUTDATED = "not_started", "ineligible", "outdated"
 
 @dataclass(frozen=True)
 class MetricEntry:
-    """Một dòng của danh sách metric: metric Superset cùng mọi thứ Semantic Layer giữ về nó."""
-
     dataset: Any
     metric: Any
     contract: MetricContract | None
@@ -56,7 +54,6 @@ class MetricContractService:
 
     # -------------------------READ---------------------------
     def read(self, dataset: Any, metric: Any) -> MetricContract | None:
-        """Bản duyệt của metric trong dataset này, hoặc None nếu chưa đề xuất."""
         contract = self.contracts.read_by_metric(metric.id)
         return contract if contract is not None and contract.dataset_id == dataset.id else None
 
@@ -71,11 +68,9 @@ class MetricContractService:
         return definition if definition is not None and definition.dataset_id == dataset.id else None
 
     def query_defaults(self, dataset: Any, metric: Any) -> MetricQueryDefaults | None:
-        """Giá trị mặc định đã lưu của metric, là một phần của mã băm hợp đồng."""
         return query_defaults_for(dataset.id, metric.id)
 
     def read_entries(self, datasets: list[Any]) -> list[MetricEntry]:
-        """Mọi metric của các dataset kèm bản duyệt, định nghĩa, giá trị mặc định và trạng thái; đọc một lần."""
         dataset_ids = [dataset.id for dataset in datasets]
         contracts = {item.metric_id: item for item in self.contracts.read_on_datasets(dataset_ids)}
         definitions = {item.metric_id: item for item in self.definitions.read_on_datasets(dataset_ids)}
@@ -96,14 +91,15 @@ class MetricContractService:
                         definition=definitions.get(metric.id),
                         defaults=defaults,
                         state=metric_contract_state(contract, dataset, metric, defaults),
-                        ineligibility=self._ineligibility(dataset, metric, getattr(definitions.get(metric.id), "unit", None)),
+                        ineligibility=self._ineligibility(
+                            dataset, metric, getattr(definitions.get(metric.id), "unit", None)
+                        ),
                     )
                 )
         return entries
 
     # -------------------------CREATE-------------------------
     def propose(self, dataset: Any, metric: Any, body: Any) -> MetricContract:
-        """Chụp công thức và giá trị mặc định hiện tại thành bản nháp chờ duyệt."""
         note = review_reason(body)
         # The AI Agent answers with this definition, so a metric must say what it means before anyone reviews it.
         definition = self._definition(dataset, metric)
@@ -142,7 +138,6 @@ class MetricContractService:
     def propose_for_agent(
         self, dataset: Any, metric: Any, business_definition: str, unit: str | None, note: str, owner_id: int | None
     ) -> MetricContract:
-        """Bản nháp AI Agent tạo, kèm định nghĩa nếu chưa có; trả số tạm cho người hỏi tới khi được duyệt."""
         definition = self._definition(dataset, metric)
         if ineligibility := self._ineligibility(dataset, metric, unit if definition is None else definition.unit):
             raise MetricContractValidationError(ineligibility)
@@ -172,12 +167,10 @@ class MetricContractService:
         return contract
 
     def count_agent_drafts(self, dataset: Any) -> int:
-        """Số bản nháp AI Agent tạo trên dataset mà chưa ai duyệt."""
         return self.contracts.count_on(dataset.id, origin=ContractOrigin.AI_AGENT.value, status=ReviewStatus.DRAFT)
 
     # -------------------------UPDATE-------------------------
     def approve(self, dataset: Any, metric: Any, body: Any) -> MetricContract:
-        """Duyệt bản nháp khi metric chưa đổi kể từ lúc đề xuất."""
         contract = self.require(dataset, metric)
         if contract.status != ReviewStatus.DRAFT:
             raise MetricContractValidationError("Chỉ duyệt được metric đang chờ duyệt.")
@@ -202,7 +195,6 @@ class MetricContractService:
 
     @staticmethod
     def _ineligibility(dataset: Any, metric: Any, metric_unit: str | None = None) -> str | None:
-        """Combine formula eligibility with declared column roles, aggregations, units and dataset grains."""
         if ineligibility := metric_contract_ineligibility(dataset, metric):
             return ineligibility
         definition = dataset_dictionary_repository().read(dataset.id)
@@ -215,7 +207,6 @@ class MetricContractService:
         )
 
     def revoke(self, dataset: Any, metric: Any, body: Any) -> MetricContract:
-        """Thu hồi metric để nó không trả lời người dùng nữa; bắt buộc có lý do."""
         contract = self.require(dataset, metric)
         if contract.status == ReviewStatus.REVOKED:
             raise MetricContractValidationError("Metric này đã bị thu hồi.")
@@ -239,7 +230,6 @@ class MetricContractService:
 
 
 def metric_contract_hash(dataset: Any, metric: Any, defaults: MetricQueryDefaults | None = None) -> str:
-    """Mã băm của metric, vị trí dữ liệu và giá trị mặc định; một trong số đó đổi là bản duyệt hết hiệu lực."""
     formula = parse_contract_metric(str(metric.expression or ""))
     live_columns = {column.column_name: column for column in dataset.columns}
     metric_column = live_columns.get(formula.measure_column) if formula and formula.measure_column else None
@@ -265,7 +255,6 @@ def metric_contract_hash(dataset: Any, metric: Any, defaults: MetricQueryDefault
 def contract_is_approved_current(
     contract: MetricContract, dataset: Any, metric: Any, defaults: MetricQueryDefaults | None = None
 ) -> bool:
-    """Bản duyệt còn hiệu lực: đã duyệt, đúng metric và metric chưa đổi."""
     return (
         contract.status == ReviewStatus.APPROVED
         and contract.dataset_id == dataset.id
@@ -278,7 +267,6 @@ def contract_is_approved_current(
 def metric_contract_state(
     contract: MetricContract | None, dataset: Any, metric: Any, defaults: MetricQueryDefaults | None = None
 ) -> str:
-    """Trạng thái hiển thị cho quản trị viên: chưa đề xuất, không đủ điều kiện, nháp, đã duyệt, đã đổi, thu hồi."""
     eligible = metric_contract_ineligibility(dataset, metric) is None
     if contract is None:
         return NOT_STARTED if eligible else INELIGIBLE
@@ -292,7 +280,6 @@ def metric_contract_state(
 
 
 def review_reason(body: Any) -> str | None:
-    """Ghi chú hoặc lý do người duyệt gửi kèm, đã bỏ khoảng trắng; để trống là không có."""
     reason = body.get("reason") if isinstance(body, dict) else None
     if reason is None:
         return None

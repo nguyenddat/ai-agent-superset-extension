@@ -56,7 +56,6 @@ class GlossaryGroupRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def delete_glossary_group(self, group_id: int):
-        """Xóa nhóm; thuật ngữ trong nhóm thành chưa phân nhóm và giữ trạng thái duyệt."""
         require_admin()
         ensure_dictionary_tables()
         moved_term_ids = GlossaryGroupService().delete(group_id, current_user.id)
@@ -70,7 +69,6 @@ class GlossaryGroupRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_glossary_group_suggestions(self):
-        """Gợi ý nhóm cho thuật ngữ chưa phân nhóm có nghĩa gần nhau; embedding mới được cache lại."""
         require_admin()
         ensure_dictionary_tables()
         suggestions = GlossaryGroupService().suggest()
@@ -89,7 +87,6 @@ class GlossaryGroupRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def apply_glossary_group_suggestion(self):
-        """Chuyển các thuật ngữ quản trị viên giữ lại vào nhóm có sẵn hoặc nhóm mới; không cần duyệt."""
         require_admin()
         ensure_dictionary_tables()
         group, moved_term_ids = GlossaryGroupService().apply_suggestion(request.get_json(silent=True), current_user.id)

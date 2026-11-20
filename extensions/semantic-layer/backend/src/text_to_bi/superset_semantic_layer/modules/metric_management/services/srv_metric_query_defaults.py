@@ -43,11 +43,6 @@ MOMENT_TEXT = re.compile(
 
 @dataclass(frozen=True)
 class MetricQueryDefaults:
-    """Cách đọc metric khi câu hỏi không nói khác: grain, loại dòng, mốc thời gian và bộ lọc mặc định.
-
-    `row_kind_column` và `native_grain` lấy từ từ điển dữ liệu của dataset, không lưu cùng metric.
-    """
-
     grain: str | None = None
     row_kind_value: str | None = None
     time_column: str | None = None
@@ -73,7 +68,6 @@ class MetricQueryDefaults:
         }
 
     def stored_values(self) -> dict[str, Any]:
-        """Giá trị lưu vào các cột mặc định của MetricDefinition."""
         filters = json.dumps(list(self.default_filters), ensure_ascii=False) if self.default_filters else None
         return {
             "grain": self.grain,
@@ -87,8 +81,6 @@ class MetricQueryDefaults:
 
 @dataclass(frozen=True)
 class DatasetTimeContext:
-    """Những gì từ điển dữ liệu nói về thời gian của một dataset."""
-
     time_column: str | None
     row_kind_column: str | None
     grains: dict[str | None, str]
@@ -98,12 +90,10 @@ class DatasetTimeContext:
 
 # -------------------------READ---------------------------
 def dataset_time_context(dataset: Any) -> DatasetTimeContext:
-    """Cột thời gian chính, cột loại dòng kèm grain từng loại và các cột ngày/giờ lọc được của dataset."""
     return dataset_time_contexts([dataset])[dataset.id]
 
 
 def dataset_time_contexts(datasets: list[Any]) -> dict[int, DatasetTimeContext]:
-    """`dataset_time_context` của nhiều dataset, đọc từ điển dữ liệu một lần."""
     dataset_ids = [dataset.id for dataset in datasets]
     if not dataset_ids:
         return {}
@@ -138,7 +128,6 @@ def dataset_time_contexts(datasets: list[Any]) -> dict[int, DatasetTimeContext]:
 
 
 def dataset_column_labels(datasets: list[Any]) -> dict[int, dict[str, str]]:
-    """Nhãn cột của từng dataset: tên hiển thị trong từ điển dữ liệu, không có thì tên của Superset."""
     labels = {
         dataset.id: {column.column_name: column.verbose_name for column in dataset.columns if column.verbose_name}
         for dataset in datasets
@@ -151,7 +140,6 @@ def dataset_column_labels(datasets: list[Any]) -> dict[int, dict[str, str]]:
 
 
 def query_defaults_on(dataset_ids: Iterable[int]) -> dict[tuple[int, int], MetricQueryDefaults]:
-    """Giá trị mặc định của mọi metric đã đặt trong các dataset, theo (dataset ID, metric ID)."""
     dataset_ids = sorted(set(dataset_ids))
     definitions = metric_definition_repository().read_on_datasets(dataset_ids) if dataset_ids else []
     declared = [item for item in definitions if any(getattr(item, field) for field in QUERY_DEFAULT_FIELDS)]
@@ -175,12 +163,10 @@ def query_defaults_on(dataset_ids: Iterable[int]) -> dict[tuple[int, int], Metri
 
 
 def query_defaults_for(dataset_id: int, metric_id: int) -> MetricQueryDefaults | None:
-    """Giá trị mặc định của một metric; None nếu chưa đặt."""
     return query_defaults_on([dataset_id]).get((dataset_id, metric_id))
 
 
 def stored_query_defaults(definition: Any, context: DatasetTimeContext) -> MetricQueryDefaults | None:
-    """Giá trị mặc định đã lưu của metric, kèm thông tin loại dòng từ từ điển dữ liệu; None nếu chưa đặt."""
     if definition is None:
         return None
     try:
@@ -205,7 +191,6 @@ def stored_query_defaults(definition: Any, context: DatasetTimeContext) -> Metri
 
 
 def native_grain(row_kind_value: str | None, grains: dict[str | None, str]) -> str | None:
-    """Grain của các dòng metric đọc: của loại dòng đã chọn, hoặc grain duy nhất của dataset."""
     if row_kind_value is not None:
         return grains.get(row_kind_value)
     return next(iter(grains.values())) if len(grains) == 1 else None
@@ -215,10 +200,6 @@ def native_grain(row_kind_value: str | None, grains: dict[str | None, str]) -> s
 def checked_query_defaults(
     body: Any, columns: dict[str, Any], context: DatasetTimeContext, formula_row_kinds: set[str]
 ) -> MetricQueryDefaults:
-    """Kiểm tra giá trị mặc định quản trị viên gửi lên theo dataset và công thức; sai thì báo lỗi 400.
-
-    `formula_row_kinds` là các loại dòng mà công thức đã chọn sẵn.
-    """
     if not isinstance(body, dict) or set(body) - set(QUERY_DEFAULT_FIELDS):
         raise MetricContractValidationError(
             "Chỉ gửi grain, row_kind_value, time_column, time_window, time_anchor và default_filters."
@@ -325,7 +306,6 @@ def checked_query_defaults(
 
 
 def checked_query_filter(columns: dict[str, Any], item: Any) -> dict[str, Any]:
-    """Một bộ lọc `{column, operator, value}` đổi sang dạng ChartData, đã kiểm tra cột và kiểu giá trị."""
     if not isinstance(item, dict) or set(item) != {"column", "operator", "value"}:
         raise MetricContractValidationError("Mỗi bộ lọc cần đủ column, operator và value.")
     operator = item["operator"]
@@ -347,7 +327,6 @@ def checked_query_filter(columns: dict[str, Any], item: Any) -> dict[str, Any]:
 
 
 def query_column(columns: dict[str, Any], name: Any, capability: str) -> str:
-    """Tên cột còn dùng được để `groupby` hoặc `filterable` khi chạy metric."""
     if not isinstance(name, str) or name not in columns:
         raise MetricContractValidationError(f"Dataset không có cột “{name}”.")
     column = columns[name]
@@ -369,11 +348,6 @@ def applied_query_defaults(
     latest_time: Callable[[list[dict[str, Any]]], Any] | None = None,
     now: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, dict[str, Any] | None]:
-    """Bộ lọc và grain mà giá trị mặc định thêm vào truy vấn, kèm mô tả những gì đã áp.
-
-    Bộ lọc người gọi gửi trên một cột thắng giá trị mặc định trên cột đó; `apply_defaults` False bỏ qua tất cả.
-    `latest_time(filters)` đọc mốc dữ liệu mới nhất, cho khoảng thời gian tính từ `latest_data`.
-    """
     time_column = defaults.time_column if defaults else None
     if requested_grain is not None:
         if requested_grain not in READ_GRAINS:
@@ -427,11 +401,6 @@ def applied_query_defaults(
 
 
 def time_window_bounds(window: str, reference: datetime) -> tuple[datetime, datetime, bool]:
-    """Điểm đầu, điểm cuối của khoảng thời gian và điểm cuối có nằm trong khoảng không.
-
-    `last_<n>_<đơn vị>` kết thúc ở đơn vị chứa `reference`; `current_` là cả đơn vị đó, `previous_` là đơn vị trước;
-    `<đơn vị>_to_date` chạy từ đầu đơn vị tới chính `reference`.
-    """
     match = TIME_WINDOW.match(window)
     if match is None:
         raise MetricContractValidationError("Khoảng thời gian của metric không hợp lệ.")
@@ -449,7 +418,6 @@ def time_window_bounds(window: str, reference: datetime) -> tuple[datetime, date
 
 
 def reference_moment(value: Any) -> datetime | None:
-    """Mốc mới nhất ChartData trả về, đổi thành datetime không múi giờ; None nếu rỗng hoặc không đọc được."""
     if isinstance(value, datetime):
         return value.replace(tzinfo=None)
     if isinstance(value, date):
@@ -468,12 +436,10 @@ def reference_moment(value: Any) -> datetime | None:
 
 
 def current_moment() -> datetime:
-    """Giờ hiện tại theo giờ Việt Nam, như kho dữ liệu lưu."""
     return datetime.now(tz=DATA_TIMEZONE).replace(tzinfo=None)
 
 
 def time_axis_column(column_name: str, grain: str) -> dict[str, Any]:
-    """Cột thời gian gom theo `grain`, dạng trục x của Superset (BASE_AXIS kèm timeGrain)."""
     return {
         "label": column_name,
         "sqlExpression": column_name,
@@ -485,7 +451,6 @@ def time_axis_column(column_name: str, grain: str) -> dict[str, Any]:
 
 # -------------------------HELPERS------------------------
 def _floor(moment: datetime, unit: str) -> datetime:
-    """Đầu giờ, ngày, tuần (thứ Hai), tháng, quý hoặc năm chứa `moment`."""
     if unit == "hour":
         return moment.replace(minute=0, second=0, microsecond=0)
     day = moment.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -501,7 +466,6 @@ def _floor(moment: datetime, unit: str) -> datetime:
 
 
 def _shifted(moment: datetime, unit: str, count: int) -> datetime:
-    """`moment` (đầu một đơn vị) dời đi `count` đơn vị."""
     if unit in ("hour", "day", "week"):
         return moment + timedelta(**{f"{unit}s": count})
     month_index = moment.year * 12 + moment.month - 1 + count * {"month": 1, "quarter": 3, "year": 12}[unit]
@@ -509,7 +473,6 @@ def _shifted(moment: datetime, unit: str, count: int) -> datetime:
 
 
 def _bound_text(moment: datetime) -> str:
-    """Ngày dạng YYYY-MM-DD, mốc khác kèm giờ, như bộ lọc thời gian của Superset đọc."""
     if moment.time() == datetime.min.time():
         return moment.strftime("%Y-%m-%d")
     return moment.strftime("%Y-%m-%d %H:%M:%S")
@@ -554,7 +517,6 @@ def _is_number(value: Any) -> bool:
 
 
 def _is_moment(value: Any) -> bool:
-    """Ngày hoặc ngày giờ có thật, viết theo dạng frontend nhận."""
     match = MOMENT_TEXT.match(value.strip()) if isinstance(value, str) else None
     if match is None:
         return False
@@ -567,7 +529,6 @@ def _is_moment(value: Any) -> bool:
 
 
 def _check_value_type(column: Any, values: list[Any]) -> None:
-    """Báo lỗi khi giá trị lọc không đọc được theo kiểu của cột: ngày, ngày giờ hoặc số."""
     column_type = str(getattr(column, "type", None) or "")
     label = getattr(column, "verbose_name", None) or getattr(column, "column_name", "")
     numeric = bool(NUMERIC_TYPE.search(column_type))

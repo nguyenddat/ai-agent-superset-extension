@@ -27,7 +27,6 @@ class GlossaryRevisionRepository(BaseRepository[GlossaryTermRevision]):
         return self.query().filter_by(term_id=term_id, is_current=True).one_or_none()
 
     def read_current_for_update(self, term_id: int) -> GlossaryTermRevision | None:
-        """Đọc lại bản hiện tại của thuật ngữ và giữ khóa dòng tới hết transaction."""
         current = self.query().filter_by(term_id=term_id, is_current=True)
         return current.populate_existing().with_for_update().one_or_none()
 
@@ -35,10 +34,6 @@ class GlossaryRevisionRepository(BaseRepository[GlossaryTermRevision]):
         return self.query().filter_by(term_id=term_id).order_by(GlossaryTermRevision.revision_number).all()
 
     def read_serving(self, term_id: int) -> GlossaryTermRevision | None:
-        """Bản AI Agent đang dùng: bản đã quyết định mới nhất, khi nó còn được duyệt.
-
-        A draft waiting for review does not replace it; approving the draft does, and a revocation ends it.
-        """
         decided = (
             self.query()
             .filter(GlossaryTermRevision.term_id == term_id, GlossaryTermRevision.status.in_(DECIDED))
@@ -48,7 +43,6 @@ class GlossaryRevisionRepository(BaseRepository[GlossaryTermRevision]):
         return decided if decided is not None and decided.status == ReviewStatus.APPROVED else None
 
     def read_all_serving(self) -> list[GlossaryTermRevision]:
-        """Bản đang dùng của mọi thuật ngữ, chọn như `read_serving`."""
         decided = (
             self.query()
             .filter(GlossaryTermRevision.status.in_(DECIDED))

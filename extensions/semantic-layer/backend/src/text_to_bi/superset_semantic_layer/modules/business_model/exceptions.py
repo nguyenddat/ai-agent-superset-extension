@@ -2,7 +2,7 @@ from ...common.exceptions import NotFoundError, ValidationError
 
 
 class BusinessModelValidationError(ValidationError):
-    """A canvas, data layer, business domain or lineage edge that breaks a rule."""
+    pass
 
 
 class TransformEdgeNotHideableError(ValidationError):

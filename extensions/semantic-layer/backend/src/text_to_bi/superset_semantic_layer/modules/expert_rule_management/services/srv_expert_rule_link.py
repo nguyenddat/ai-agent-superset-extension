@@ -31,7 +31,6 @@ from ..models import ExpertRuleLink
 
 # -------------------------RESOLVE------------------------
 def column_resolver(dataset_id: Any) -> Callable[[Any], Any]:
-    """Tìm cột Data Dictionary của dataset theo ID (một cột) hoặc tên cột (danh sách)."""
     if isinstance(dataset_id, bool) or not isinstance(dataset_id, int):
         raise ExpertRuleValidationError("Invalid dataset_id.")
     if dataset_dictionary_repository().read(dataset_id) is None:
@@ -51,7 +50,6 @@ def column_resolver(dataset_id: Any) -> Callable[[Any], Any]:
 
 
 def glossary_links(term_id: int) -> list[Any] | None:
-    """Liên kết của bản thuật ngữ đang dùng, mỗi dataset một mục; None nếu thuật ngữ chưa được duyệt."""
     revision = glossary_revision_repository().read_serving(term_id)
     if revision is None:
         return None
@@ -70,7 +68,6 @@ def glossary_links(term_id: int) -> list[Any] | None:
 
 
 def approved_metric(metric_id: int) -> Any | None:
-    """Metric có bản duyệt còn khớp công thức hiện tại; None nếu không."""
     contract = metric_contract_repository().read_by_metric(metric_id)
     dataset = get_dataset(contract.dataset_id) if contract else None
     metric = next((item for item in dataset.metrics if item.id == metric_id), None) if dataset else None
@@ -93,7 +90,6 @@ def glossary_term_name(term_id: int) -> str:
 
 
 def column_name(column_id: int) -> str:
-    """Tên hiển thị của cột Data Dictionary."""
     column = column_dictionary_repository().read(column_id)
     return (column.display_name or column.column_name) if column else f"#{column_id}"
 
@@ -105,7 +101,6 @@ def physical_column(column_id: int) -> str | None:
 
 # -------------------------FINGERPRINT--------------------
 def link_fingerprint(kind: str, target_id: int, dataset_id: int) -> str | None:
-    """Hash định danh và trạng thái của đối tượng được liên kết; không gồm kết nối hay SQL."""
     source: Any
     if kind == "dataset":
         source = get_dataset(dataset_id)
@@ -128,7 +123,6 @@ def live_fingerprint(link: ExpertRuleLink) -> str | None:
 
 
 def rule_links(values: dict[str, Any]) -> list[dict[str, Any]]:
-    """Liên kết của một bản: dataset, các thuật ngữ và metric, kèm fingerprint hiện tại."""
     references = [
         ("dataset", values["dataset_id"]),
         *(("glossary", item) for item in values["glossary_term_ids"]),
@@ -147,7 +141,6 @@ def rule_links(values: dict[str, Any]) -> list[dict[str, Any]]:
 
 # -------------------------CHECK--------------------------
 def with_term_metrics(payload: dict[str, Any]) -> dict[str, Any]:
-    """Metric của rule là các metric đã duyệt mà thuật ngữ của nó nêu, nên không bao giờ chọn riêng."""
     term_ids, dataset_id = payload.get("glossary_term_ids"), payload.get("dataset_id")
     if not isinstance(term_ids, list) or not isinstance(dataset_id, int):
         return payload
@@ -162,7 +155,6 @@ def with_term_metrics(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_semantic_links(values: dict[str, Any]) -> None:
-    """Dataset phải có; thuật ngữ và metric phải đã duyệt và gắn với dataset của rule."""
     if get_dataset(values["dataset_id"]) is None:
         raise ExpertRuleValidationError("Unknown dataset.")
     if not values["glossary_term_ids"]:
@@ -185,7 +177,6 @@ def validate_semantic_links(values: dict[str, Any]) -> None:
 
 
 def rule_is_discoverable(revision: Any, links: list[ExpertRuleLink]) -> bool:
-    """Rule được AI Agent dùng khi đã duyệt, là bản hiện tại và mọi liên kết còn khớp fingerprint."""
     return bool(
         revision.status == ReviewStatus.APPROVED
         and revision.is_current
@@ -195,7 +186,6 @@ def rule_is_discoverable(revision: Any, links: list[ExpertRuleLink]) -> bool:
 
 
 def linked_target_authorized(link: ExpertRuleLink) -> bool:
-    """Đóng khi lỗi: đối tượng được liên kết không đọc được hoặc đã cũ thì ẩn rule."""
     dataset = get_dataset(link.dataset_id)
     if dataset is None or not can_access_dataset(dataset):
         return False
@@ -212,7 +202,6 @@ def linked_target_authorized(link: ExpertRuleLink) -> bool:
 
 # -------------------------OPTIONS------------------------
 def rule_options() -> list[dict[str, Any]]:
-    """Những gì trình soạn rule được tham chiếu theo dataset: cột Data Dictionary, thuật ngữ và metric đã duyệt."""
     terms_by_dataset: dict[int, list[dict[str, Any]]] = {}
     for revision in glossary_revision_repository().read_all_serving():
         links = glossary_link_repository().read_by_revision(revision.id)
@@ -264,7 +253,6 @@ def rule_options() -> list[dict[str, Any]]:
 
 
 def _term_links(term_id: int, dataset_id: int) -> list[Any]:
-    """Liên kết vào một dataset của bản thuật ngữ đang dùng."""
     revision = glossary_revision_repository().read_serving(term_id)
     if revision is None:
         return []

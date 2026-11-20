@@ -48,7 +48,6 @@ class ExpertRuleRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_expert_rules(self):
-        """Mọi rule với bản hiện tại và trạng thái duyệt, cho trang duyệt; người xem cũng đọc được."""
         require_semantic_layer_view()
         user_name = user_names()
         rules_service = ExpertRuleService()
@@ -73,7 +72,6 @@ class ExpertRuleRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_expert_rule_options(self):
-        """Cột Data Dictionary, thuật ngữ và metric đã duyệt mà trình soạn rule được tham chiếu, theo dataset."""
         require_semantic_layer_view()
         return self.response(200, datasets=rule_options())
 
@@ -83,10 +81,11 @@ class ExpertRuleRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def read_discoverable_expert_rules(self):
-        """Rule đã duyệt, còn hợp lệ, trên dataset người gọi được đọc; AI Agent dùng route này."""
         require_semantic_layer_query()
         discovered = ExpertRuleService().read_discoverable()
-        return self.response(200, **public_payload({"rules": [serialize_discovered_rule(*item) for item in discovered]}))
+        return self.response(
+            200, **public_payload({"rules": [serialize_discovered_rule(*item) for item in discovered]})
+        )
 
     @expose(f"{prefix}/<int:rule_id>/audit", methods=("GET",))
     @protect()
@@ -122,7 +121,6 @@ class ExpertRuleRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def update_expert_rule(self, rule_id: int):
-        """Lưu chỉnh sửa thành bản nháp mới chờ duyệt."""
         require_admin()
         payload = _body()
         rules = ExpertRuleService()
@@ -180,7 +178,6 @@ class ExpertRuleRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def move_expert_rule(self, rule_id: int):
-        """Chuyển rule vào nhóm, hoặc bỏ khỏi mọi nhóm với `group_id` null; không cần duyệt."""
         require_admin()
         payload = _body()
         if "group_id" not in payload or set(payload) - {"group_id"}:
@@ -199,7 +196,6 @@ def _body() -> dict[str, Any]:
 
 
 def _committed(save: Callable[[], ExpertRuleRevision]) -> dict[str, Any]:
-    """Lưu và commit; trùng tên phát hiện khi flush hoặc commit trả về 400."""
     try:
         revision = save()
         db.session.commit()

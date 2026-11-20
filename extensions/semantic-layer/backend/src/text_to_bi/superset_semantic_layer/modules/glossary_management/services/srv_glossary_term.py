@@ -35,7 +35,6 @@ class GlossaryTermService:
 
     # -------------------------CREATE-------------------------
     def create(self, payload: Any, actor_id: int) -> GlossaryTermRevision:
-        """Tạo thuật ngữ mới với bản nháp đầu tiên."""
         values = checked_term_content(payload)
         if self.terms.read_by_normalized_name(values["normalized_name"]) is not None:
             raise GlossaryConflictError(NAME_TAKEN)
@@ -59,7 +58,6 @@ class GlossaryTermService:
         return self.terms.read(term_id)
 
     def require(self, term_id: int) -> GlossaryTerm:
-        """Thuật ngữ người gọi được đọc; 404 nếu không có, 403 nếu liên kết tới dataset bị ẩn."""
         term = self.terms.read(term_id)
         if term is None:
             raise GlossaryTermNotFoundError()
@@ -71,7 +69,6 @@ class GlossaryTermService:
         return self.revisions.read_by_term(term_id)
 
     def read_all_current(self) -> list[tuple[GlossaryTerm, GlossaryTermRevision]]:
-        """Bản hiện tại của mọi thuật ngữ người gọi được đọc, theo tên."""
         result = []
         for term in self.terms.read_all():
             revision = self.revisions.read_current(term.id)
@@ -84,10 +81,6 @@ class GlossaryTermService:
 
     # -------------------------UPDATE-------------------------
     def update(self, term_id: int, payload: Any, expected_revision: int, actor_id: int) -> GlossaryTermRevision:
-        """Lưu chỉnh sửa thành bản nháp kế tiếp; bản đã duyệt vẫn được dùng tới khi bản nháp được duyệt.
-
-        A `group_id` in the payload moves the term at once, outside the draft.
-        """
         current = self._locked_current(term_id, expected_revision)
         values = checked_term_content(payload)
         if values["normalized_name"] != current.term.normalized_name:
@@ -105,7 +98,6 @@ class GlossaryTermService:
     def approve(
         self, term_id: int, expected_revision: int, actor_id: int, reason: str | None, require_second_reviewer: bool
     ) -> GlossaryTermRevision:
-        """Duyệt bản nháp hiện tại; khi cần người duyệt thứ hai, tác giả không được tự duyệt."""
         revision = self._locked_current(term_id, expected_revision)
         if revision.status != ReviewStatus.DRAFT:
             raise GlossaryValidationError("Only the current draft can be approved.")
@@ -117,7 +109,6 @@ class GlossaryTermService:
         return revision
 
     def revoke(self, term_id: int, expected_revision: int, actor_id: int, reason: str | None) -> GlossaryTermRevision:
-        """Thu hồi bản AI Agent đang dùng, kể cả khi có bản nháp chờ duyệt."""
         current = self._locked_current(term_id, expected_revision)
         serving = self.revisions.read_serving(term_id)
         if serving is None:
@@ -131,7 +122,6 @@ class GlossaryTermService:
 
     # -------------------------HELPERS------------------------
     def _create_revision(self, term_id: int, revision_number: int, values: dict[str, Any]) -> GlossaryTermRevision:
-        """Bản nháp hiện tại mới, với liên kết gắn vào dataset, cột và metric đang có."""
         links = validated_links(values["links"], get_dataset, metric_approved)
         try:
             revision = self.revisions.create(
@@ -152,7 +142,6 @@ class GlossaryTermService:
         return revision
 
     def _locked_current(self, term_id: int, expected_revision: int) -> GlossaryTermRevision:
-        """Khóa thuật ngữ rồi đọc lại bản hiện tại; bản đã đổi từ khi client đọc là xung đột."""
         if self.terms.read_for_update(term_id) is None:
             raise GlossaryTermNotFoundError()
         current = self.revisions.read_current_for_update(term_id)
@@ -164,7 +153,6 @@ class GlossaryTermService:
 
 
 def checked_term_content(payload: Any) -> dict[str, Any]:
-    """Nội dung thuật ngữ như trình soạn và file import lưu, kèm kiểm tra người phụ trách có tồn tại."""
     values = normalize_glossary_payload(payload)
     steward_id = values["steward_id"]
     if steward_id is not None and get_user(steward_id) is None:

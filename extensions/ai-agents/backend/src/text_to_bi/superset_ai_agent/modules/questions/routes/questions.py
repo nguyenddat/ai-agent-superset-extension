@@ -28,10 +28,6 @@ class AgentQuestionReviewAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def list_review(self):
-        """The `needs_review` questions, newest first, with their handling.
-
-        `?handling=` narrows to one handling status and `?missing=metric` to the questions missing that kind.
-        """
         require_admin()
         handling_filter, missing_filter = parse_review_filters(
             request.args.get("handling", "all"), request.args.get("missing"),
@@ -47,7 +43,6 @@ class AgentQuestionReviewAPI(RestApi):
     @rollback_on_error
     @handle_errors
     def set_handling(self, question_id: int):
-        """Record how a question was handled; `pending` removes the decision."""
         require_admin()
         status, note = parse_handling(request.get_json(silent=True))
         ensure_agent_tables()

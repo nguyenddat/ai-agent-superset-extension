@@ -12,7 +12,9 @@ def _entry(role, aggregations=None, unit=None):
 def test_a_measure_needs_the_declared_role_and_allowed_aggregation():
     metric = SimpleNamespace(expression="SUM(rain_mm)")
     columns = {"rain_mm": _entry("dimension", '["SUM"]', "mm")}
-    assert "vai trò measure" in metric_semantic_ineligibility(metric=metric, dataset=None, columns=columns, metric_unit="mm", grains={})
+    assert "vai trò measure" in metric_semantic_ineligibility(
+        metric=metric, dataset=None, columns=columns, metric_unit="mm", grains={},
+    )
     columns["rain_mm"].semantic_role = "measure"
     columns["rain_mm"].aggregations = '["AVG"]'
     assert "chưa cho phép phép tổng hợp SUM" in metric_semantic_ineligibility(None, metric, columns, "mm", {})
@@ -31,4 +33,6 @@ def test_units_and_row_grain_must_fit_the_formula():
 
 def test_a_count_metric_cannot_claim_a_measure_unit():
     metric = SimpleNamespace(expression="COUNT(rows_seen)")
-    assert "đơn vị count" in metric_semantic_ineligibility(None, metric, {"rows_seen": _entry("measure", '["COUNT"]')}, "mm", {})
+    assert "đơn vị count" in metric_semantic_ineligibility(
+        None, metric, {"rows_seen": _entry("measure", '["COUNT"]')}, "mm", {},
+    )

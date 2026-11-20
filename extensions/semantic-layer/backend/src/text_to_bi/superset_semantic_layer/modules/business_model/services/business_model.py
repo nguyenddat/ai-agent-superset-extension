@@ -23,12 +23,6 @@ EDGE_KINDS = ("flow", "relation", "transform")
 
 
 def _classify_reference(referencing_id: int, referenced_id: int, ranks: dict[int, int]) -> tuple[str, int, int]:
-    """Turn a declared FK (referencing -> referenced) into a lineage edge (kind, source, target).
-
-    When the referenced dataset sits on an earlier level, its data flows into the referencing dataset. References
-    within one level, even across two layers of it, or involving an unclassified dataset, are source relationships
-    drawn dashed.
-    """
     referencing_rank, referenced_rank = ranks.get(referencing_id), ranks.get(referenced_id)
     if referencing_rank is not None and referenced_rank is not None and referenced_rank < referencing_rank:
         return "flow", referenced_id, referencing_id
@@ -36,7 +30,6 @@ def _classify_reference(referencing_id: int, referenced_id: int, ranks: dict[int
 
 
 def infer_dictionary_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
-    """Derive dataset-level lineage edges from FK references declared in the column dictionary."""
     ranks = data_layer_repository().levels_for_datasets(datasets)
     column_repository = column_dictionary_repository()
     rows = column_repository.read_references(datasets)
@@ -92,7 +85,6 @@ def infer_dictionary_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, in
 
 
 def infer_transformation_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
-    """Edges from the column transformations declared in the Data Dictionary (see transformation_edges)."""
     rows = column_transformation_repository().read_into_datasets(datasets)
     table_names = {dataset_id: str(dataset.table_name) for dataset_id, dataset in datasets.items()}
     # A column's inputs may sit on another database; they are named in its list of inputs but draw no edge.
@@ -105,12 +97,10 @@ def infer_transformation_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int
 
 
 def infer_edges(datasets: dict[int, SqlaTable]) -> dict[tuple[int, int, str], dict[str, Any]]:
-    """Every edge the Data Dictionary implies: reference edges from FK declarations and declared transformations."""
     return {**infer_dictionary_edges(datasets), **infer_transformation_edges(datasets)}
 
 
 def lineage_edges(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
-    """Merge dictionary-inferred edges with overrides: added, hidden or recoloured edges."""
     edges = infer_edges(datasets)
     overrides = lineage_edge_repository().between(datasets)
     rows = {(row.source_dataset_id, row.target_dataset_id, row.kind): row for row in overrides}
@@ -147,7 +137,6 @@ def lineage_edges(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
 
 
 def find_edge_override(key: EdgeKey, inferred: dict[EdgeKey, Any]) -> LineageEdge | None:
-    """The override row for an edge, moved to ``key`` when a layer change flipped the inferred edge it belongs to."""
     rows = {
         (row.source_dataset_id, row.target_dataset_id, row.kind): row
         for row in lineage_edge_repository().for_keys(key, flipped_key(key))
@@ -159,11 +148,6 @@ def find_edge_override(key: EdgeKey, inferred: dict[EdgeKey, Any]) -> LineageEdg
 
 
 def dataset_metrics(datasets: dict[int, SqlaTable]) -> list[dict[str, Any]]:
-    """Superset metrics per dataset, without the default COUNT(*) metric every dataset gets.
-
-    Each metric lists the dataset columns its expression uses and their roles (see metric_columns), or None for
-    ``columns`` when the expression cannot be parsed.
-    """
     metrics = []
     for dataset in datasets.values():
         dialect = SQLGLOT_DIALECTS.get(dataset.database.db_engine_spec.engine)
@@ -198,7 +182,6 @@ def serialize_layer(layer: DataLayer) -> dict[str, Any]:
 
 
 def dataset_classifications(dataset_ids: list[int]) -> dict[str, dict[str, Any]]:
-    """Data-dictionary classification per dataset: its data layer and whether it is a base or aggregate table."""
     rows = dataset_dictionary_repository().read_classifications(dataset_ids)
     return {
         str(dataset_id): {"layer_id": layer_id, "dataset_type": dataset_type}
@@ -218,7 +201,6 @@ def serialize_domain(domain: BusinessDomain, dataset_ids: set[int] | None = None
 
 
 def ensure_dataset_dictionaries(datasets: list[SqlaTable]) -> None:
-    """Domains and lineage overrides reference dictionary rows, so create any that are missing."""
     repository = dataset_dictionary_repository()
     existing = repository.read_existing_ids(dataset.id for dataset in datasets)
     for dataset in datasets:

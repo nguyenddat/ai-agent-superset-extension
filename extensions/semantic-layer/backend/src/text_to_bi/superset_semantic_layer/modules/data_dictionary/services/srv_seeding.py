@@ -13,11 +13,6 @@ from .srv_grain import default_temporal_kind
 
 
 def seed_dictionary(dataset: SqlaTable) -> None:
-    """Đồng bộ dòng từ điển của dataset với cột Superset rồi commit.
-
-    Commit ở đây để không để transaction mở cho phần sau. Hai request cùng seed một dataset mới va nhau ở khóa unique;
-    bên thua rollback và thử lại, khi đó thấy các dòng bên thắng đã tạo.
-    """
     for attempt in range(2):
         try:
             _read_or_create_dataset_dictionary(dataset, dataset_dictionary_repository())
@@ -60,24 +55,37 @@ def _seed_dictionary_columns(dataset: SqlaTable, repository: ColumnDictionaryRep
     for actual_column in dataset.columns:
         column_name = str(actual_column.column_name)
         if column_name not in existing:
-            existing[column_name] = repository.create({"dataset_id": dataset.id, **_column_metadata_values(actual_column)})
+            existing[column_name] = repository.create(
+                {"dataset_id": dataset.id, **_column_metadata_values(actual_column)}
+            )
     return list(existing.values())
 
 
-def _read_or_create_dataset_dictionary(dataset: SqlaTable, repository: DatasetDictionaryRepository) -> DatasetDictionary:
+def _read_or_create_dataset_dictionary(
+    dataset: SqlaTable, repository: DatasetDictionaryRepository
+) -> DatasetDictionary:
     record = repository.read(dataset.id)
     if record is None:
         record = repository.create(
-            {"id": dataset.id, "dataset_name": dataset.table_name, "display_name": dataset.table_name, "description": dataset.description}
+            {
+                "id": dataset.id, "dataset_name": dataset.table_name, "display_name": dataset.table_name,
+                "description": dataset.description
+            }
         )
     return record
 
 
 def read_dictionary_snapshot(dataset: SqlaTable) -> tuple[DatasetDictionary, list[ColumnDictionary]]:
-    """Đọc metadata đã lưu; dòng còn thiếu là object tạm không thêm vào session, không flush hay commit."""
     record = dataset_dictionary_repository().read(dataset.id)
     if record is None:
-        record = DatasetDictionary(id=dataset.id, dataset_name=dataset.table_name, display_name=dataset.table_name, description=dataset.description, contains_pii=False)
+        record = DatasetDictionary(
+            id=dataset.id, dataset_name=dataset.table_name, display_name=dataset.table_name,
+            description=dataset.description, contains_pii=False
+        )
     stored = {column.column_name: column for column in column_dictionary_repository().read_by_dataset(dataset.id)}
-    columns = [stored.get(str(column.column_name)) or ColumnDictionary(dataset_id=dataset.id, contains_pii=False, **_column_metadata_values(column)) for column in dataset.columns]
+    columns = [
+        stored.get(str(column.column_name))
+        or ColumnDictionary(dataset_id=dataset.id, contains_pii=False, **_column_metadata_values(column))
+        for column in dataset.columns
+    ]
     return record, columns

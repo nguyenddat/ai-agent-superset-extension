@@ -37,7 +37,6 @@ class AgentUserDefinitionAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def list_own(self):
-        """The user's definitions on `?dashboard_id=`, shared by all their conversations about that dashboard."""
         dashboard_id = request.args.get("dashboard_id", type=int)
         if dashboard_id is None:
             raise DashboardIdRequiredError()
@@ -53,7 +52,6 @@ class AgentUserDefinitionAPI(RestApi):
     @rollback_on_error
     @handle_errors
     def update_own(self, definition_id: int):
-        """Change what the user's definition says; administrators see it again as not yet reviewed."""
         ensure_agent_tables()
         definition = require_own_definition(definition_id, int(current_user.id))
         update_definition(definition, request.get_json(silent=True), request.headers.get("Cookie", ""))
@@ -68,7 +66,6 @@ class AgentUserDefinitionAPI(RestApi):
     @rollback_on_error
     @handle_errors
     def delete_own(self, definition_id: int):
-        """Forget the user's definition; the agent asks about the concept again."""
         ensure_agent_tables()
         user_definition_repository().delete(require_own_definition(definition_id, int(current_user.id)))
         db.session.commit()
@@ -80,7 +77,6 @@ class AgentUserDefinitionAPI(RestApi):
     @permission_name("read")
     @handle_errors
     def list_review(self):
-        """Every user's definitions, most recently changed first (admin only)."""
         require_admin()
         ensure_agent_tables()
         return self.response(200, definitions=definitions_for_review())
@@ -93,7 +89,6 @@ class AgentUserDefinitionAPI(RestApi):
     @rollback_on_error
     @handle_errors
     def set_review(self):
-        """Record `{ids, status}`: a shared term or rule now covers the concept, it stays personal, or is reopened."""
         require_admin()
         definition_ids, status = parse_review(request.get_json(silent=True))
         ensure_agent_tables()

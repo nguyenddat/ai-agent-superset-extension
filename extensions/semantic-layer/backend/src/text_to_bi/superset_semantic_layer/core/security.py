@@ -36,19 +36,16 @@ def require_admin() -> None:
 
 
 def has_semantic_layer_permission(permission: str) -> bool:
-    """Whether the signed-in user holds a Semantic Layer permission through any of their Superset roles."""
     if not getattr(current_user, "is_authenticated", False):
         return False
     return bool(security_manager.can_access(permission, SEMANTIC_LAYER_VIEW_MENU))
 
 
 def can_view_semantic_layer() -> bool:
-    """Read the governed content: the Semantic Layer page and its read-only routes."""
     return is_admin() or has_semantic_layer_permission(VIEW_PERMISSION)
 
 
 def can_query_semantic_layer() -> bool:
-    """Read the consumer catalog and run approved metrics, as the AI Agent does on the user's behalf."""
     return is_admin() or has_semantic_layer_permission(QUERY_PERMISSION)
 
 
@@ -63,7 +60,6 @@ def require_semantic_layer_query() -> None:
 
 
 def can_access_dataset(dataset: Any) -> bool:
-    """Whether the signed-in user may read this dataset, by Superset's own datasource permission check."""
     try:
         security_manager.raise_for_access(datasource=dataset)
     except SupersetSecurityException:
@@ -77,8 +73,6 @@ def require_dataset_access(dataset: Any) -> None:
 
 
 def csrf_protected(method):
-    """Reject a state-changing request that does not carry a valid CSRF token."""
-
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         try:
@@ -96,11 +90,6 @@ def is_superset_access_error(error: Exception) -> bool:
 
 
 def second_reviewer_required() -> bool:
-    """Whether a proposal's author must leave its approval to another administrator.
-
-    Off by default so a single administrator can approve their own work; a deployment with several reviewers
-    sets TEXT_TO_BI_REQUIRE_SECOND_REVIEWER = True in superset_config.
-    """
     return bool(current_app.config.get("TEXT_TO_BI_REQUIRE_SECOND_REVIEWER", False))
 
 

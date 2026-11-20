@@ -10,7 +10,6 @@ def dashboard_titles(dashboard_ids: set[int]) -> dict[int, str]:
 
 
 def require_dashboard_access(dashboard_id: int) -> None:
-    """Raise DashboardAccessError unless the dashboard exists and the signed-in user may open it."""
     try:
         DashboardDAO.get_by_id_or_slug(dashboard_id)
     except (DashboardNotFoundError, DashboardAccessDeniedError) as error:

@@ -6,7 +6,6 @@ GRAPH_VERSION = 1
 
 
 def column_node(live: Any, entry: Any | None, values: list[str] | None) -> dict[str, Any]:
-    """A column as schema link sees it; a column the dictionary has not seeded yet carries only its live facts."""
     name = str(live.column_name)
 
     def field(attribute: str, default: Any = None) -> Any:
@@ -39,10 +38,6 @@ def table_node(
     indicators: dict[str, Any] | None,
     layer: Any | None,
 ) -> dict[str, Any]:
-    """A base table with its columns, time, grains, indicators and layer; `indicator_model` as already read.
-
-    Calculated and inactive columns are left out: schema link joins and filters physical columns only.
-    """
     live_columns = [
         column for column in getattr(dataset, "columns", [])
         if getattr(column, "is_active", None) is True and not getattr(column, "expression", None)
@@ -72,7 +67,6 @@ def table_node(
 
 
 def graph_edges(contracts: list[Any]) -> list[dict[str, Any]]:
-    """The edges of approved, current contracts between nodes, in contract order."""
     return [
         {
             "id": contract.id,

@@ -6,8 +6,6 @@ from ....common.base_model import BaseModel
 
 
 class AgentChatSession(BaseModel):
-    """One conversation a user had with the AI Agent about one dashboard; its turns are the questions it holds."""
-
     __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)

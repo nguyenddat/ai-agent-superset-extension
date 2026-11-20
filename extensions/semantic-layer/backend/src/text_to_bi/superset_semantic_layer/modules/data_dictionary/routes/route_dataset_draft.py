@@ -51,7 +51,6 @@ logger = logging.getLogger(__name__)
 
 class DatasetDraftRoutes(RouteMixin):
     def _base_datasets(self, for_agent: bool) -> dict[str, SqlaTable]:
-        """Base datasets without Superset RLS, limited to those the caller may query for the agent."""
         base_ids = [row.id for row in dataset_dictionary_repository().read_by_type(BASE_DATASET)]
         datasets = get_datasets(base_ids)
         allowed = {}
@@ -64,19 +63,16 @@ class DatasetDraftRoutes(RouteMixin):
                 if dataset.row_level_security_filters:
                     continue
             except Exception:
-                logger.warning("Could not inspect attached RLS for draft source dataset %s; excluding it", dataset.id, exc_info=True)
+                logger.warning(
+                    "Could not inspect attached RLS for draft source dataset %s; excluding it",
+                    dataset.id, exc_info=True
+                )
                 continue
             allowed[dataset.table_name] = dataset
         return allowed
 
     @staticmethod
     def _carry_column_keys(dataset: SqlaTable, values: dict[str, Any], base_datasets: dict[str, SqlaTable]) -> None:
-        """Set PK, FK, unique and the referenced column on the new dataset's dictionary from the base columns it reads.
-
-        Lineage is inferred from these references. A source that no output column references, because the query reads
-        no key of it or its dictionary marks none, gets a manual flow edge into the new dataset instead, so the lineage
-        diagram always shows where the dataset comes from.
-        """
         sources = [dataset for dataset in base_datasets.values() if dataset.id in values["source_dataset_ids"]]
         entries: dict[int, dict[str, ColumnDictionary]] = {}
         column_repository = column_dictionary_repository()
@@ -104,11 +100,6 @@ class DatasetDraftRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def create_dataset_draft(self):
-        """Create the reviewed dataset in Superset and its metric as an AI Agent candidate.
-
-        Superset reads the SQL's columns while creating the virtual dataset, so SQL that does not run is refused here.
-        The dataset is an aggregate dataset in the data dictionary, so the agent builds further metrics on it.
-        """
         require_admin()
         ensure_dictionary_tables()
         base_datasets = self._base_datasets(for_agent=False)
@@ -116,17 +107,23 @@ class DatasetDraftRoutes(RouteMixin):
         if not isinstance(body, dict):
             raise DatasetDraftValidationError("Body phải là một JSON object.")
         creation_key = body.get("creation_key")
-        if not isinstance(creation_key, str) or not creation_key.startswith("ai-agent:dataset-proposal:") or len(creation_key) > 128:
+        if (
+            not isinstance(creation_key, str) or not creation_key.startswith("ai-agent:dataset-proposal:")
+            or len(creation_key) > 128
+        ):
             raise DatasetDraftValidationError("Khóa tạo dataset không hợp lệ.")
         payload_hash = hashlib.sha256(json.dumps(
-            {field: body.get(field) for field in ("name", "label", "description", "sql", "metric", "question")}, sort_keys=True, ensure_ascii=False
+            {field: body.get(field) for field in ("name", "label", "description", "sql", "metric", "question")},
+            sort_keys=True, ensure_ascii=False
         ).encode("utf-8")).hexdigest()
         values = checked_dataset_proposal(body, base_datasets)
         existing = dataset_for_creation_key(creation_key)
         if existing is not None:
             require_dataset_access(existing)
             if json.loads(existing.extra or "{}").get("text_to_bi_creation_payload") != payload_hash:
-                raise DatasetDraftValidationError("Đề xuất đã tạo dataset với nội dung khác; tải lại trang để kiểm tra.")
+                raise DatasetDraftValidationError(
+                    "Đề xuất đã tạo dataset với nội dung khác; tải lại trang để kiểm tra."
+                )
             if json.loads(existing.extra or "{}").get("text_to_bi_creation_ready", True):
                 return self.response(200, **public_payload({'dataset_id': existing.id}))
         proposer_id = body.get("proposer_id") or current_user.id
@@ -143,7 +140,10 @@ class DatasetDraftRoutes(RouteMixin):
                     "table_name": values["name"],
                     "sql": values["sql"],
                     "owners": [current_user.id],
-                    "extra": json.dumps({"text_to_bi_creation_key": creation_key, "text_to_bi_creation_payload": payload_hash, "text_to_bi_creation_ready": False}),
+                    "extra": json.dumps({
+                        "text_to_bi_creation_key": creation_key, "text_to_bi_creation_payload": payload_hash,
+                        "text_to_bi_creation_ready": False,
+                    }),
                 }
             ).run()
         except DatasetInvalidError as ex:
@@ -169,7 +169,10 @@ class DatasetDraftRoutes(RouteMixin):
         MetricContractService().propose_for_agent(
             dataset, metric, metric_values["definition"], metric_values["unit"], "AI Agent dataset draft", proposer_id
         )
-        dataset.extra = json.dumps({**json.loads(dataset.extra or "{}"), "text_to_bi_creation_key": creation_key, "text_to_bi_creation_payload": payload_hash, "text_to_bi_creation_ready": True})
+        dataset.extra = json.dumps({
+            **json.loads(dataset.extra or "{}"), "text_to_bi_creation_key": creation_key,
+            "text_to_bi_creation_payload": payload_hash, "text_to_bi_creation_ready": True,
+        })
         db.session.commit()
         return self.response(201, **public_payload({'dataset_id': dataset.id}))
 

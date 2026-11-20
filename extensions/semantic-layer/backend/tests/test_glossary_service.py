@@ -15,15 +15,21 @@ from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions i
     GlossaryTermNotFoundError,
     GlossaryValidationError,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_group as glossary_groups
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_validation as validation
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import (
+    srv_glossary_group as glossary_groups,
+)
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services import (
+    srv_glossary_validation as validation,
+)
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_link import (
     link_fingerprint as glossary_link_fingerprint,
 )
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_link import (
     validated_links,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_term import GlossaryTermService
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_term import (
+    GlossaryTermService,
+)
 from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_validation import (
     expected_revision_of,
     normalize_glossary_payload,
@@ -33,7 +39,8 @@ from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv
 SERVICE_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_term.py"
 GROUP_SERVICE_PATH = MODULES_PATH / "glossary_management" / "services" / "srv_glossary_group.py"
 REPOSITORY_PATHS = [
-    MODULES_PATH / "glossary_management" / "repositories" / name for name in ("repo_glossary_term.py", "repo_glossary_revision.py")
+    MODULES_PATH / "glossary_management" / "repositories" / name
+    for name in ("repo_glossary_term.py", "repo_glossary_revision.py")
 ]
 VALIDATION_HELPERS = (
     "content_hash",
@@ -57,7 +64,6 @@ def _payload(**overrides):
 
 
 def _current_glossary_service(monkeypatch):
-    """Use the production service with small in-memory repository doubles."""
     from text_to_bi.superset_semantic_layer.modules.glossary_management.services import srv_glossary_term
 
     term_store = {}
@@ -90,7 +96,13 @@ def _current_glossary_service(monkeypatch):
             return revision
 
         def read_current(self, term_id):
-            return next((revision for revision in revision_store.values() if revision.term_id == term_id and revision.is_current), None)
+            return next(
+                (
+                    revision for revision in revision_store.values()
+                    if revision.term_id == term_id and revision.is_current
+                ),
+                None,
+            )
 
         def read_by_term(self, term_id):
             return [revision for revision in revision_store.values() if revision.term_id == term_id]
@@ -99,7 +111,13 @@ def _current_glossary_service(monkeypatch):
             return self.read_current(term_id)
 
         def read_serving(self, term_id):
-            return next((revision for revision in reversed(list(revision_store.values())) if revision.term_id == term_id and revision.status == "approved"), None)
+            return next(
+                (
+                    revision for revision in reversed(list(revision_store.values()))
+                    if revision.term_id == term_id and revision.status == "approved"
+                ),
+                None,
+            )
 
         def serving(self):
             latest_decided = {}
@@ -127,14 +145,22 @@ def _current_glossary_service(monkeypatch):
             ))
 
         def read_author_id(self, revision):
-            return next((event.actor_id for event in events if event.revision_id == revision.id and event.event_type == "created"), None)
+            return next(
+                (
+                    event.actor_id for event in events
+                    if event.revision_id == revision.id and event.event_type == "created"
+                ),
+                None,
+            )
 
         def read_history(self, term_id):
             revision_ids = {revision.id for revision in revision_store.values() if revision.term_id == term_id}
             return [event for event in events if event.revision_id in revision_ids]
 
     monkeypatch.setattr(srv_glossary_term, "get_user", lambda user_id: object() if user_id in {7, 8} else None)
-    monkeypatch.setattr(srv_glossary_term, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id, columns=[], metrics=[]))
+    monkeypatch.setattr(
+        srv_glossary_term, "get_dataset", lambda dataset_id: SimpleNamespace(id=dataset_id, columns=[], metrics=[]),
+    )
     # This in-memory service harness does not need SQLAlchemy mapper configuration or Superset's `tables` model.
     monkeypatch.setattr(
         srv_glossary_term,
@@ -289,13 +315,16 @@ def test_lifecycle_mutations_lock_the_term_and_its_current_revision():
     for path in REPOSITORY_PATHS:
         assert "with_for_update()" in path.read_text(encoding="utf-8")
     source = SERVICE_PATH.read_text(encoding="utf-8")
-    service_class = next(node for node in ast.parse(source).body if isinstance(node, ast.ClassDef) and node.name == "GlossaryTermService")
-    locked = next(node for node in service_class.body if isinstance(node, ast.FunctionDef) and node.name == "_locked_current")
+    service_class = next(
+        node for node in ast.parse(source).body if isinstance(node, ast.ClassDef) and node.name == "GlossaryTermService"
+    )
+    locked = next(
+        node for node in service_class.body if isinstance(node, ast.FunctionDef) and node.name == "_locked_current"
+    )
     assert "read_for_update" in ast.unparse(locked) and "read_current_for_update" in ast.unparse(locked)
 
 
 def _sqlite_service(users=(7, 8)):
-    """The real service, repositories and dependencies on disposable SQLite tables; Superset is never imported."""
     base = declarative_base()
 
     class GlossaryTermGroup(base):
@@ -470,7 +499,9 @@ def test_the_editor_names_the_steward(monkeypatch):
 
 
 @pytest.mark.parametrize("require_second_reviewer", [False, True])
-def test_the_author_may_approve_their_own_draft_unless_a_second_reviewer_is_required(require_second_reviewer, monkeypatch):
+def test_the_author_may_approve_their_own_draft_unless_a_second_reviewer_is_required(
+    require_second_reviewer, monkeypatch,
+):
     service, _ = _current_glossary_service(monkeypatch)
     term_id = service.create(_payload(), 7).term_id
 

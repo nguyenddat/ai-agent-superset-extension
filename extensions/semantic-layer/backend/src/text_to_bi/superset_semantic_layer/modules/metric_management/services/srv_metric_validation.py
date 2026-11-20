@@ -15,10 +15,6 @@ METRIC_CONTRACT_RULE = (
 )
 
 def metric_contract_ineligibility(dataset: Any, metric: Any) -> str | None:
-    """Lý do metric không đề xuất được, hoặc None nếu được.
-
-    Dataset ảo vẫn được: SQL của nó nằm trong mã băm, sửa SQL là mất hiệu lực bản duyệt.
-    """
     if not isinstance(metric.metric_name, str) or not IDENTIFIER.fullmatch(metric.metric_name):
         return "Tên metric chỉ được gồm chữ cái không dấu, chữ số và dấu gạch dưới."
     formula = parse_contract_metric(str(metric.expression or ""))
@@ -37,7 +33,6 @@ def metric_contract_ineligibility(dataset: Any, metric: Any) -> str | None:
 
 
 def metric_is_eligible_for_contract(dataset: Any, metric: Any) -> bool:
-    """Whether a metric currently meets the syntactic and live-column contract rules."""
     return metric_contract_ineligibility(dataset, metric) is None
 
 
@@ -49,11 +44,6 @@ def metric_semantic_ineligibility(
     grains: Mapping[str | None, str],
     row_kind_column: str | None = None,
 ) -> str | None:
-    """Check a formula against declared column roles, allowed aggregations, units and row grains.
-
-    Units must match exactly; the Semantic Layer does not convert units. Ratio terms must use the same row kind and
-    compatible units. The metric's configured grain is checked separately when query defaults are saved.
-    """
     formula = parse_contract_metric(str(getattr(metric, "expression", None) or ""))
     if formula is None:
         return METRIC_CONTRACT_RULE
@@ -89,7 +79,10 @@ def metric_semantic_ineligibility(
             return "Các thành phần của metric có đơn vị khác nhau; không thể chia trực tiếp."
         if normalized_metric_unit and normalized_metric_unit not in {"%", "percent", "phần trăm", "ratio", "tỷ lệ"}:
             return "Metric là tỷ lệ nên đơn vị phải là %, percent, ratio hoặc tỷ lệ."
-    elif terms[0].aggregation == "COUNT" and normalized_metric_unit and normalized_metric_unit not in {"count", "bản ghi", "lượt"}:
+    elif (
+        terms[0].aggregation == "COUNT" and normalized_metric_unit
+        and normalized_metric_unit not in {"count", "bản ghi", "lượt"}
+    ):
         return "Metric đếm phải có đơn vị count, bản ghi hoặc lượt."
     elif normalized_metric_unit and normalized_units and normalized_metric_unit not in normalized_units:
         return f"Đơn vị metric phải khớp đơn vị cột ({next(iter(normalized_units))})."

@@ -27,7 +27,6 @@ def serialize_glossary_group(group: GlossaryTermGroup) -> dict[str, Any]:
 
 
 def serialize_group_reference(group: GlossaryTermGroup | None) -> dict[str, Any] | None:
-    """Tên và ID nhóm của thuật ngữ; None nếu chưa phân nhóm."""
     return {"id": group.id, "name": group.name} if group else None
 
 
@@ -58,7 +57,6 @@ def serialize_glossary_revision(revision: GlossaryTermRevision, links: list[Glos
 
 
 def serialize_glossary_term(term: GlossaryTerm, revisions: list[GlossaryTermRevision]) -> dict[str, Any]:
-    """Thuật ngữ với các bản đã cho; `current_revision` là bản hiện tại trong số đó."""
     serialized = [serialize_glossary_revision(revision, read_links(revision.id)) for revision in revisions]
     return {
         "id": term.id,
@@ -73,7 +71,6 @@ def serialize_glossary_term(term: GlossaryTerm, revisions: list[GlossaryTermRevi
 def serialize_glossary_review_entry(
     term: GlossaryTerm, revision: GlossaryTermRevision, user_name: UserName
 ) -> dict[str, Any]:
-    """Bản hiện tại của thuật ngữ với trạng thái duyệt, người liên quan và tên đối tượng được liên kết."""
     links = read_links(revision.id)
     entry = serialize_glossary_term(term, [revision])
     stale = not all(link_is_live(link) for link in links)
@@ -136,5 +133,4 @@ def serialize_contradiction(row: Contradiction, user_name: UserName) -> dict[str
 
 # -------------------------USER---------------------------
 def serialize_users(users: list[Any]) -> list[dict[str, Any]]:
-    """Người dùng Superset để chọn làm người phụ trách thuật ngữ."""
     return [{"id": user.id, "name": user.get_full_name().strip() or user.username} for user in users]

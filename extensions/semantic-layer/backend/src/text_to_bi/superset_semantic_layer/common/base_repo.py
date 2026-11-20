@@ -7,8 +7,6 @@ ModelType = TypeVar("ModelType", bound=Model)
 
 
 class BaseRepository(Generic[ModelType]):
-    """Database access for one model, on the request's session; committing stays with the caller."""
-
     def __init__(self, session: Session, model: type[ModelType]) -> None:
         self.session = session
         self.model = model
@@ -23,7 +21,6 @@ class BaseRepository(Generic[ModelType]):
         return self.query().offset(offset).limit(limit).all()
 
     def add(self, entity: ModelType, *, flush: bool = True) -> ModelType:
-        """Add a new row; flushing assigns its ID and surfaces a constraint error now rather than at commit."""
         self.session.add(entity)
         if flush:
             self.session.flush()

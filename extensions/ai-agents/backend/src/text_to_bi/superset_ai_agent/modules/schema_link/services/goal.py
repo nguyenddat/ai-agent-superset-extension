@@ -102,7 +102,6 @@ def _measure(graph: SchemaGraph, raw: dict[str, Any]) -> Measure:
 
 
 def resolve_goal(raw: dict[str, Any], graph: SchemaGraph) -> Goal:
-    """The goal with every table and column checked against the graph. Raises GoalError."""
     if not isinstance(raw, dict) or not isinstance(raw.get("measures"), list) or not raw["measures"]:
         raise GoalError("Mục tiêu cần ít nhất một phép đo (measures).")
     measures, filters = [], []
@@ -148,7 +147,6 @@ def resolve_goal(raw: dict[str, Any], graph: SchemaGraph) -> Goal:
 
 
 def grain_problems(goal: Goal, tables: list[int], graph: SchemaGraph) -> list[dict[str, Any]]:
-    """Tables in the join that mix grains without a chosen kind of row, or group finer than the chosen kind's grain."""
     chosen = {item.table: item for item in goal.row_kinds}
     problems = []
     for table in tables:

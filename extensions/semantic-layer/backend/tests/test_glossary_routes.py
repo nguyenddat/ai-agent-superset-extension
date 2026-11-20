@@ -8,7 +8,9 @@ from text_to_bi.superset_semantic_layer.modules.glossary_management.exceptions i
     GlossaryConflictError,
     GlossarySelfApprovalError,
 )
-from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_validation import expected_revision_of
+from text_to_bi.superset_semantic_layer.modules.glossary_management.services.srv_glossary_validation import (
+    expected_revision_of,
+)
 
 ADMIN_ENDPOINTS = {
     "read_glossary_terms": ("/glossary", "GET"),
@@ -66,7 +68,6 @@ class _GlossaryResponseAPI:
 
 
 def _update_handler(payload, update_draft):
-    """Compile the real handler with Superset's request/session boundary faked."""
     methods = api_methods()
     handler = methods["update_glossary_term"]
     # Keep only @handle_errors, which turns the module's errors into responses.
@@ -211,7 +212,10 @@ def test_list_reports_review_state_reviewers_and_the_second_reviewer_setting():
         / "src/text_to_bi/superset_semantic_layer/modules/glossary_management/utils/util_serializer.py"
     )
     serializer_tree = ast.parse(serializer_path.read_text(encoding="utf-8"))
-    serializer = next(node for node in serializer_tree.body if isinstance(node, ast.FunctionDef) and node.name == "serialize_glossary_review_entry")
+    serializer = next(
+        node for node in serializer_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "serialize_glossary_review_entry"
+    )
     source += ast.unparse(serializer)
     for field in (
         "state",

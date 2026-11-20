@@ -219,8 +219,6 @@ def test_a_dataset_the_semantic_layer_refuses_still_reaches_administrators_as_a_
 
 
 class ZeroSemanticLayer(FakeSemanticLayer):
-    """Answers zero for the asked week; over all the data, `whole` decides whether the metric ever gives anything."""
-
     def __init__(self, whole):
         super().__init__()
         self.whole = whole

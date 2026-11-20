@@ -17,7 +17,6 @@ class GlossaryLinkRepository(BaseRepository[GlossaryTermLink]):
 
     # -------------------------READ---------------------------
     def read_by_revision(self, revision_id: int) -> list[GlossaryTermLink]:
-        """Liên kết của một bản, theo thứ tự đã lưu."""
         return self.query().filter_by(revision_id=revision_id).order_by(GlossaryTermLink.id).all()
 
     def read_by_revision_dataset(self, revision_id: int, dataset_id: int) -> list[GlossaryTermLink]:

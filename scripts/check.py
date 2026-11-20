@@ -18,7 +18,10 @@ def main(argv: list[str] | None = None) -> None:
         ("Ruff", [sys.executable, "-m", "ruff", "check", str(BACKEND_DIR)], ROOT),
         ("pytest", [sys.executable, "-m", "pytest", str(BACKEND_DIR / "tests"), "-q"], ROOT),
         ("Release script Ruff", [sys.executable, "-m", "ruff", "check", str(ROOT / "scripts")], ROOT),
-        ("Release and integration pytest", [sys.executable, "-m", "pytest", str(ROOT / "scripts" / "tests"), "-q"], ROOT),
+        (
+            "Release and integration pytest",
+            [sys.executable, "-m", "pytest", str(ROOT / "scripts" / "tests"), "-q"], ROOT,
+        ),
     ]
     if not args.no_frontend:
         checks.append(("TypeScript typecheck", ["npm", "run", "typecheck"], FRONTEND_DIR))

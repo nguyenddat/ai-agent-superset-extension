@@ -36,12 +36,22 @@ from .srv_glossary_validation import normalize_group_payload, normalized_name
 TERM_FILE_NAME = "thuat-ngu"
 LINK_FORMAT = "dataset:<bảng>, column:<bảng>.<cột> hoặc metric:<bảng>.<metric>"
 TERM_COLUMNS = (
-    TemplateColumn("canonical_name", True, "Tên thuật ngữ, tối đa 255 ký tự; khớp thuật ngữ đã có không phân biệt hoa thường, khoảng trắng.", "Nhiệt độ trung bình"),
-    TemplateColumn("definition", True, "Định nghĩa nghiệp vụ, tối đa 10.000 ký tự.", "Trung bình nhiệt độ quan sát được trong khoảng thời gian, đơn vị °C."),
+    TemplateColumn(
+        "canonical_name", True,
+        "Tên thuật ngữ, tối đa 255 ký tự; khớp thuật ngữ đã có không phân biệt hoa thường, khoảng trắng.",
+        "Nhiệt độ trung bình"
+    ),
+    TemplateColumn(
+        "definition", True, "Định nghĩa nghiệp vụ, tối đa 10.000 ký tự.",
+        "Trung bình nhiệt độ quan sát được trong khoảng thời gian, đơn vị °C."
+    ),
     TemplateColumn("synonyms", False, "Từ đồng nghĩa, cách nhau bằng ;", "nhiệt độ TB; nhiệt độ bình quân"),
     TemplateColumn("group", False, "Tên nhóm; trống là chưa phân nhóm, nhóm chưa có sẽ được tạo.", "Thời tiết"),
     TemplateColumn("steward", False, "Tên đăng nhập Superset của người phụ trách.", "admin"),
-    TemplateColumn("links", True, f"Ít nhất một liên kết, cách nhau bằng ;: {LINK_FORMAT}.", "column:tb_gia_tri_quan_sat.gia_tri_so"),
+    TemplateColumn(
+        "links", True, f"Ít nhất một liên kết, cách nhau bằng ;: {LINK_FORMAT}.",
+        "column:tb_gia_tri_quan_sat.gia_tri_so"
+    ),
 )
 # The editor's validation answers in English; the preview shows these in Vietnamese.
 TERM_MESSAGES = {
@@ -61,8 +71,6 @@ TERM_MESSAGES = {
 
 @dataclass
 class TermPlan:
-    """How a row is applied: the editor payload, the term it updates and the group the import creates for it."""
-
     payload: dict[str, Any]
     term_id: int | None = None
     revision_number: int | None = None
@@ -72,12 +80,12 @@ class TermPlan:
 
 # -------------------------READ---------------------------
 def export_term_template() -> dict[str, str]:
-    """File Excel mẫu để nhập thuật ngữ: tiêu đề, một dòng ví dụ và sheet hướng dẫn."""
-    return write_template(TERM_COLUMNS, [[column.example for column in TERM_COLUMNS]], TERM_FILE_NAME, GlossaryValidationError)
+    return write_template(
+        TERM_COLUMNS, [[column.example for column in TERM_COLUMNS]], TERM_FILE_NAME, GlossaryValidationError
+    )
 
 
 def export_terms() -> dict[str, str]:
-    """Bản hiện tại của mọi thuật ngữ thành file Excel theo mẫu, import lại được nguyên vẹn."""
     revisions, links = glossary_revision_repository(), glossary_link_repository()
     rows = []
     for term in glossary_term_repository().read_all():
@@ -99,7 +107,6 @@ def export_terms() -> dict[str, str]:
 
 
 def preview_term_import(payload: Any) -> list[ImportRow]:
-    """Kết quả import từng dòng của file, kiểm tra như trình soạn; không lưu gì."""
     datasets = business_datasets_by_name()
     first_rows: dict[str, int] = {}
     result = []
@@ -119,11 +126,6 @@ def preview_term_import(payload: Any) -> list[ImportRow]:
 
 # -------------------------CREATE-------------------------
 def apply_term_import(payload: Any, actor_id: int) -> list[ImportRow]:
-    """Tạo và cập nhật thuật ngữ của file thành bản nháp chờ duyệt; một dòng lỗi thì không lưu gì.
-
-    An approved term keeps serving its approved revision until the draft is approved. A row that only changes the
-    group moves the term without review. The caller commits once.
-    """
     rows = preview_term_import(payload)
     refusal = refusal_message(rows)
     if refusal:
@@ -231,10 +233,6 @@ def _steward_id(username: str) -> int | None:
 
 
 def _link(token: str, datasets: dict[str, list[Any]]) -> dict[str, Any]:
-    """Liên kết như trình soạn gửi, từ `dataset:<bảng>`, `column:<bảng>.<cột>` hoặc `metric:<bảng>.<metric>`.
-
-    The table is the dataset's name in Superset; it is split from the column or metric at the last dot.
-    """
     kind, _, target = token.partition(":")
     kind, target = kind.strip().casefold(), target.strip()
     table, _, name = target.rpartition(".")

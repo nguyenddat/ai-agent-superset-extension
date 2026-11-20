@@ -36,8 +36,6 @@ RATIO_NODES = (exp.Div, exp.Mul, exp.Nullif)
 
 @dataclass(frozen=True)
 class ContractMetricTerm:
-    """Một hàm tổng hợp trong công thức: tổng hợp gì và trên những dòng nào."""
-
     aggregation: str
     measure_column: str | None
     measure_constant: str | None
@@ -54,8 +52,6 @@ class ContractMetricTerm:
 
 @dataclass(frozen=True)
 class ContractMetricFormula:
-    """Công thức metric đã đọc: tử số, mẫu số và hệ số nếu là tỷ lệ."""
-
     numerator: ContractMetricTerm
     denominator: ContractMetricTerm | None
     scale: str | None
@@ -76,10 +72,6 @@ class ContractMetricFormula:
 
 # -------------------------READ---------------------------
 def parse_contract_metric(expression: str) -> ContractMetricFormula | None:
-    """Đọc công thức gồm một hàm tổng hợp hoặc tỷ lệ của hai hàm; None nếu công thức khác dạng đó.
-
-    Tỷ lệ cần hệ số thập phân (COUNT / COUNT trong PostgreSQL là chia nguyên) và NULLIF ở mẫu số để không chia cho 0.
-    """
     try:
         tree = _unwrapped(sqlglot.parse_one(expression))
     except SqlglotError:
@@ -99,7 +91,6 @@ def parse_contract_metric(expression: str) -> ContractMetricFormula | None:
 
 
 def formula_row_kinds(formula: ContractMetricFormula, row_kind_column: str | None) -> set[str]:
-    """Các loại dòng mà điều kiện trong công thức chọn, ví dụ {"DU_BAO_NGAY"}; rỗng nếu tính mọi loại dòng."""
     terms = [formula.numerator, *([formula.denominator] if formula.denominator else [])]
     return {
         row_kind
@@ -117,7 +108,6 @@ def _unwrapped(node: Any) -> Any:
 
 
 def _contract_term(node: Any) -> ContractMetricTerm | None:
-    """`AGG(cột)` hoặc `AGG(CASE WHEN điều kiện THEN cột hoặc số END)`; None nếu khác."""
     if not isinstance(node, AGGREGATES):
         return None
     inner = [child for child in node.walk() if child is not node]
@@ -145,7 +135,6 @@ def _contract_term(node: Any) -> ContractMetricTerm | None:
 
 
 def _decimal_scale(node: Any) -> str | None:
-    """Số dương có dấu thập phân, như 100.0, để phép chia không là chia nguyên."""
     if isinstance(node, exp.Literal) and node.is_number and "." in node.this:
         try:
             return node.this if float(node.this) > 0 else None
@@ -155,7 +144,6 @@ def _decimal_scale(node: Any) -> str | None:
 
 
 def _ratio(tree: Any) -> tuple[ContractMetricTerm, ContractMetricTerm, str] | None:
-    """`hệ số * AGG(...) / NULLIF(AGG(...), 0)`, hệ số đứng bên nào của tử số cũng được."""
     if not isinstance(tree, exp.Div):
         return None
     scaled, guarded = _unwrapped(tree.this), _unwrapped(tree.expression)
@@ -173,7 +161,6 @@ def _ratio(tree: Any) -> tuple[ContractMetricTerm, ContractMetricTerm, str] | No
 
 
 def _conjuncts(condition: str | None) -> list[Any]:
-    """Các vế nối bằng AND ở cấp ngoài cùng của điều kiện."""
     if not condition:
         return []
     try:
@@ -186,7 +173,6 @@ def _conjuncts(condition: str | None) -> list[Any]:
 
 
 def _row_kind_value(node: Any, row_kind_column: str | None) -> str | None:
-    """Loại dòng mà một điều kiện như loai_quan_sat = 'DU_BAO_NGAY' chọn, hoặc None."""
     node = _unwrapped(node)
     if not row_kind_column or not isinstance(node, exp.EQ):
         return None

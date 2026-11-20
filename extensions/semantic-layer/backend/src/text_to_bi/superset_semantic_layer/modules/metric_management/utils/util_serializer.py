@@ -12,7 +12,6 @@ from ..services.srv_metric_query_defaults import DatasetTimeContext
 
 # -------------------------METRIC DEFINITION--------------
 def serialize_metric_definition(definition: MetricDefinition | None) -> dict[str, Any] | None:
-    """Định nghĩa nghiệp vụ và giá trị mặc định của metric; None nếu chưa có."""
     if definition is None:
         return None
     try:
@@ -35,7 +34,6 @@ def serialize_metric_definition(definition: MetricDefinition | None) -> dict[str
 
 # -------------------------METRIC CONTRACT----------------
 def serialize_metric_contract(contract: MetricContract | None, metric: Any, state: str) -> dict[str, Any]:
-    """Bản duyệt và trạng thái của metric; trả về cả khi chưa đề xuất để frontend biết trạng thái."""
     if contract is None:
         return {"metric_id": metric.id, "metric_name": metric.metric_name, "state": state}
     user_name = user_names()
@@ -61,7 +59,6 @@ def serialize_metric_contract(contract: MetricContract | None, metric: Any, stat
 
 # -------------------------METRIC EVENT-------------------
 def serialize_metric_events(events: list[MetricContractEvent]) -> list[dict[str, Any]]:
-    """Lịch sử duyệt, mỗi bước kèm tên người làm."""
     user_name = user_names()
     return [
         {
@@ -79,7 +76,6 @@ def serialize_metric_events(events: list[MetricContractEvent]) -> list[dict[str,
 
 # -------------------------METRIC LIST--------------------
 def serialize_metric_entry(entry: MetricEntry) -> dict[str, Any]:
-    """Một metric trong danh sách quản trị: công thức SQL gốc, trạng thái, bản duyệt, định nghĩa và giá trị mặc định."""
     metric = entry.metric
     formula = parse_contract_metric(str(metric.expression or ""))
     return {
@@ -100,7 +96,6 @@ def serialize_metric_entry(entry: MetricEntry) -> dict[str, Any]:
 
 
 def serialize_query_dataset(dataset: Any, column_labels: dict[str, str], context: DatasetTimeContext) -> dict[str, Any]:
-    """Dataset kèm các cột nhóm hoặc lọc được khi chạy metric và thông tin thời gian từ từ điển dữ liệu."""
     columns = [
         {
             "column_name": column.column_name,
@@ -128,5 +123,4 @@ def serialize_query_dataset(dataset: Any, column_labels: dict[str, str], context
 
 
 def serialize_users(users: list[Any]) -> list[dict[str, Any]]:
-    """Người dùng Superset để chọn làm người phụ trách metric."""
     return [{"id": user.id, "name": user.get_full_name().strip() or user.username} for user in users]

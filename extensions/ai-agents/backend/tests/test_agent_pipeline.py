@@ -12,8 +12,6 @@ from text_to_bi.superset_ai_agent.modules.semantic_layer.services.catalog import
 
 
 class FakeModel:
-    """Answers each structured step from a table keyed by schema, and streams a fixed final answer."""
-
     def __init__(self, answers):
         self.answers = answers
         self.prompts = []
@@ -58,8 +56,6 @@ TODAY = date(2026, 10, 26)
 
 
 class FakeSemanticLayer:
-    """Runs a metric by echoing one row per day, and records each request."""
-
     def __init__(self, error=None):
         self.calls = []
         self.error = error

@@ -16,7 +16,9 @@ class DatasetDictionary(AuditedModel):
     grain: Mapped[str | None] = Column(Text, nullable=True)
     create_column: Mapped[str | None] = Column(String(255), nullable=True)
     dataset_type: Mapped[str | None] = Column(String(32), nullable=True)
-    layer_id: Mapped[int | None] = Column(Integer, ForeignKey("text_to_bi_data_layer.id", ondelete="SET NULL"), nullable=True, index=True)
+    layer_id: Mapped[int | None] = Column(
+        Integer, ForeignKey("text_to_bi_data_layer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # The column that places a row in time, and the one that tells kinds of rows of different grains apart.
     time_column: Mapped[str | None] = Column(String(255), nullable=True)
     row_kind_column: Mapped[str | None] = Column(String(255), nullable=True)
@@ -31,7 +33,9 @@ class ColumnDictionary(AuditedModel):
     )
 
     id: Mapped[int] = Column(Integer, primary_key=True)
-    dataset_id: Mapped[int] = Column(Integer, ForeignKey("text_to_bi_dataset_dictionary.id", ondelete="CASCADE"), nullable=False, index=True)
+    dataset_id: Mapped[int] = Column(
+        Integer, ForeignKey("text_to_bi_dataset_dictionary.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     column_name: Mapped[str] = Column(String(255), nullable=False)
     display_name: Mapped[str] = Column(String(255), nullable=False)
     data_type: Mapped[str] = Column(String(128), nullable=False)
@@ -39,7 +43,9 @@ class ColumnDictionary(AuditedModel):
     default_value: Mapped[str | None] = Column("default", Text, nullable=True)
     is_pk: Mapped[bool] = Column(Boolean, nullable=False, default=False)
     is_fk: Mapped[bool] = Column(Boolean, nullable=False, default=False)
-    referenced_column: Mapped[int | None] = Column(Integer, ForeignKey("text_to_bi_column_dictionary.id", ondelete="SET NULL"), nullable=True)
+    referenced_column: Mapped[int | None] = Column(
+        Integer, ForeignKey("text_to_bi_column_dictionary.id", ondelete="SET NULL"), nullable=True
+    )
     is_unique: Mapped[bool] = Column(Boolean, nullable=False, default=False)
     unit: Mapped[str | None] = Column(String(128), nullable=True)
     format: Mapped[str | None] = Column(String(128), nullable=True)

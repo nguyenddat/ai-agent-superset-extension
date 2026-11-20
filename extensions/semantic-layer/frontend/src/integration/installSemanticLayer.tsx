@@ -28,7 +28,9 @@ import type { SemanticLayerAccess, SemanticLayerModule } from '../features/seman
 import { getDatasetName, groupDatasetsByLayer } from '../features/semantic-layer/datasets';
 import { HeaderPicker } from '../features/semantic-layer/HeaderPicker';
 import { LayersDialog } from '../features/semantic-layer/LayersDialog';
-import type { DashboardDataset, DataLayer, DatasetDictionary, SupersetDatabase, ThemeMode } from '../features/semantic-layer/types';
+import type {
+  DashboardDataset, DataLayer, DatasetDictionary, SupersetDatabase, ThemeMode
+} from '../features/semantic-layer/types';
 
 /** Connections marked `text_to_bi_internal` (the AI Agent reporting views) hold no business data to model. */
 function isInternalDatabase(database: SupersetDatabase): boolean {
@@ -91,7 +93,8 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
   }, []);
 
   const canLeaveDictionary = () => (
-    !dictionaryDirty || window.confirm('Bạn có thay đổi chưa lưu trong Data Dictionary. Tiếp tục và bỏ các thay đổi này?')
+    !dictionaryDirty ||
+    window.confirm('Bạn có thay đổi chưa lưu trong Data Dictionary. Tiếp tục và bỏ các thay đổi này?')
   );
 
   // The Superset navbar dropdown asks for a module change; the page owns the unsaved-changes check and the URL.
@@ -132,12 +135,15 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
     observer.observe(document.head, { childList: true });
     // The page fills the viewport and only its inner panes scroll. If focus or scrollIntoView moves the window or a
     // frame container, the header and Save button leave the screen with no way to scroll back, so undo it.
-    const frameSelector = '#app, .sl-page, .sl-panel, .sl-panel-workspace, .sl-content, .sl-dictionary-main, .sl-dictionary, .sl-details';
+    const frameSelector = '#app, .sl-page, .sl-panel, .sl-panel-workspace, .sl-content, .sl-dictionary-main, ' +
+      '.sl-dictionary, .sl-details';
     const resetFrameScroll = (event: Event) => {
       const target = event.target;
       if (target === document || target === document.documentElement || target === document.body) {
         if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-      } else if (target instanceof HTMLElement && target.matches(frameSelector) && (target.scrollTop || target.scrollLeft)) {
+      } else if (
+        target instanceof HTMLElement && target.matches(frameSelector) && (target.scrollTop || target.scrollLeft)
+      ) {
         target.scrollTop = 0;
         target.scrollLeft = 0;
       }
@@ -249,7 +255,9 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
       }
     })).then(dictionaries => {
       if (!active) return;
-      setDictionaryByDataset(Object.fromEntries(dictionaries.filter((item): item is DatasetDictionary => item !== null).map(item => [item.dataset_id, item])));
+      setDictionaryByDataset(Object.fromEntries(
+        dictionaries.filter((item): item is DatasetDictionary => item !== null).map(item => [item.dataset_id, item])
+      ));
     });
     return () => { active = false; };
   }, [datasets]);
@@ -282,7 +290,11 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
                   ariaLabel="Dataset"
                   icon={Table2}
                   caption={`Datasets (${datasets.length})`}
-                  items={groupDatasetsByLayer(datasets, layers, id => dictionaryByDataset[id]?.layer_id).flatMap(group => group.datasets.map(dataset => ({ value: dataset.id, label: getDatasetName(dataset), group: group.label })))}
+                  items={groupDatasetsByLayer(datasets, layers, id => dictionaryByDataset[id]?.layer_id).flatMap(
+                    group => group.datasets.map(
+                      dataset => ({ value: dataset.id, label: getDatasetName(dataset), group: group.label })
+                    )
+                  )}
                   value={selectedDataset}
                   onChange={selectDataset}
                   disabled={loading || datasets.length === 0}
@@ -312,12 +324,18 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
                 <main className="sl-details"><RoleAssignments /></main>
               ) : activeModule === 'metrics' ? (
                 <main className="sl-details">
-                  <MetricContracts databaseId={selectedDatabase} readOnly={!access.is_admin} canQuery={access.can_query} />
+                  <MetricContracts
+                    databaseId={selectedDatabase} readOnly={!access.is_admin} canQuery={access.can_query}
+                  />
                 </main>
               ) : currentDataset ? (
                 activeModule === 'dictionary' ? (
                   <main className="sl-dictionary-main">
-                    <DataDictionary key={currentDataset.id} dataset={currentDataset} layers={layers} onDirtyChange={setDictionaryDirty} onSaved={onDictionarySaved} onManageLayers={() => setLayersDialogOpen(true)} />
+                    <DataDictionary
+                      key={currentDataset.id} dataset={currentDataset} layers={layers}
+                      onDirtyChange={setDictionaryDirty} onSaved={onDictionarySaved}
+                      onManageLayers={() => setLayersDialogOpen(true)}
+                    />
                   </main>
                 ) : (
                 <main className="sl-details">
@@ -342,7 +360,9 @@ function SemanticLayerPage({ access }: { access: SemanticLayerAccess }) {
           )}
         </div>
       </section>
-      <LayersDialog open={layersDialogOpen} layers={layers} onOpenChange={setLayersDialogOpen} onSaved={() => void loadLayers()} />
+      <LayersDialog
+        open={layersDialogOpen} layers={layers} onOpenChange={setLayersDialogOpen} onSaved={() => void loadLayers()}
+      />
     </div>
     </PortalContainerContext.Provider>
   );

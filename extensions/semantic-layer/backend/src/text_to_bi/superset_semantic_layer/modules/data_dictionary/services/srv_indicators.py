@@ -48,7 +48,6 @@ def _checked_codes(value: Any, field: str, allowed: tuple[str, ...] | None, colu
 
 
 def checked_indicator_model(model: Any, column_names: set[str]) -> dict[str, Any] | None:
-    """The declaration to store, checked against the dataset's columns; None clears it. Raises ValueError."""
     if model is None:
         return None
     if not isinstance(model, dict) or model.get("kind") not in INDICATOR_KINDS:
@@ -93,7 +92,6 @@ def stored_indicator_model(value: Any) -> dict[str, Any] | None:
 
 
 def build_indicators_payload(dataset: Any, model: dict[str, Any]) -> dict[str, Any]:
-    """The only ChartData query the indicator list runs: the catalog's declared columns, grouped, bounded."""
     columns = [model[field] for field in CATALOG_COLUMNS if model.get(field)]
     if any(not SIMPLE_IDENTIFIER.match(name) for name in columns):
         raise DataDictionaryValidationError("Indicator columns must be plainly named.")
@@ -110,8 +108,6 @@ def build_indicators_payload(dataset: Any, model: dict[str, Any]) -> dict[str, A
 
 
 def indicators_from_rows(rows: list[dict[str, Any]], model: dict[str, Any]) -> dict[str, Any]:
-    """Each indicator with its aggregation mapped, the aggregation codes found, and whether there were more indicators
-    than the list keeps."""
     def value(row: dict[str, Any], field: str) -> Any:
         return row.get(model[field]) if model.get(field) else None
 
@@ -139,7 +135,6 @@ def indicators_from_rows(rows: list[dict[str, Any]], model: dict[str, Any]) -> d
 
 
 def read_indicators(dataset: Any, model: dict[str, Any]) -> dict[str, Any]:
-    """The indicators a catalog table names, read through ChartData as the caller. Raises on a failed query."""
     from superset.charts.schemas import ChartDataQueryContextSchema
     from superset.commands.chart.data.get_data_command import ChartDataCommand
 

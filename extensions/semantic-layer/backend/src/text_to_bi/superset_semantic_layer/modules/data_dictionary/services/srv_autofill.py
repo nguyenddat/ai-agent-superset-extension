@@ -26,11 +26,15 @@ class ColumnDictionarySuggestion(BaseModel):
     column_name: str = Field(description="Tên cột vật lý, giữ nguyên như đầu vào.")
     display_name: str = Field(description="Nhãn dễ hiểu bằng tiếng Việt, tối đa 255 ký tự.")
     unit: str | None = Field(default=None, description="Đơn vị đo nếu biết chắc, nếu không thì null.")
-    business_term: str | None = Field(default=None, description="Mô tả nghiệp vụ ngắn nếu đủ căn cứ, nếu không thì null.")
+    business_term: str | None = Field(
+        default=None, description="Mô tả nghiệp vụ ngắn nếu đủ căn cứ, nếu không thì null."
+    )
 
 
 class ColumnDictionarySuggestions(BaseModel):
-    suggestions: list[ColumnDictionarySuggestion] = Field(description="Đề xuất cho toàn bộ cột được gửi vào, mỗi tên cột xuất hiện đúng một lần.")
+    suggestions: list[ColumnDictionarySuggestion] = Field(
+        description="Đề xuất cho toàn bộ cột được gửi vào, mỗi tên cột xuất hiện đúng một lần."
+    )
 
 
 class DatasetDictionarySuggestion(BaseModel):
@@ -38,16 +42,13 @@ class DatasetDictionarySuggestion(BaseModel):
     description: str | None = Field(default=None, description="Mô tả dataset, null nếu thiếu căn cứ.")
     grain: str | None = Field(default=None, description="Mức độ chi tiết của một bản ghi, null nếu chưa rõ.")
     create_column: str | None = Field(
-        default=None, description="Tên cột phù hợp nhất để xác định thời điểm/tạo bản ghi, phải khớp tên cột đầu vào hoặc null."
+        default=None,
+        description="Tên cột phù hợp nhất để xác định thời điểm/tạo bản ghi, phải khớp tên cột đầu vào hoặc null."
     )
 
 
 # -------------------------STREAM-------------------------
 def start_autofill(dataset: SqlaTable) -> "AutoFillStream":
-    """Kiểm tra AutoFill chạy được cho dataset rồi trả luồng sự kiện SSE gợi ý và lưu metadata từ điển.
-
-    Các kiểm tra (cột, API key, lượt gợi ý đang chạy) ném lỗi ngay, trước khi luồng bắt đầu.
-    """
     if not dataset.columns:
         raise NoColumnsToDescribeError()
     try:
@@ -70,8 +71,9 @@ def start_autofill(dataset: SqlaTable) -> "AutoFillStream":
         raise
 
 
-def _autofill_events(dataset_id: int, table_name: str, agent_context: dict[str, Any], lease: AutoFillLease) -> Generator[str, None, None]:
-    """Gợi ý từng lô cột, lưu vào chỗ còn trống và commit mỗi lô, rồi gợi ý metadata của dataset."""
+def _autofill_events(
+    dataset_id: int, table_name: str, agent_context: dict[str, Any], lease: AutoFillLease
+) -> Generator[str, None, None]:
     column_repository = column_dictionary_repository()
     dataset_repository = dataset_dictionary_repository()
     total = len(agent_context["columns"])
@@ -95,12 +97,17 @@ def _autofill_events(dataset_id: int, table_name: str, agent_context: dict[str, 
                 if values:
                     column_repository.update(row, values)
                 saved_suggestions.append(
-                    {"column_name": row.column_name, "display_name": row.display_name, "unit": row.unit, "business_term": row.business_term}
+                    {
+                        "column_name": row.column_name, "display_name": row.display_name, "unit": row.unit,
+                        "business_term": row.business_term,
+                    }
                 )
             db.session.commit()
             processed += len(suggestions)
             yield sse_event("suggestions", {"suggestions": saved_suggestions, "processed": processed, "total": total})
-            yield sse_event("status", {"total": total, "processed": processed, "message": f"Đã xử lý {processed}/{total} cột"})
+            yield sse_event(
+                "status", {"total": total, "processed": processed, "message": f"Đã xử lý {processed}/{total} cột"}
+            )
         dataset_suggestion = suggest_dataset_dictionary(agent_context)
         dataset_record = dataset_repository.read(dataset_id)
         dataset_values = {}
@@ -176,12 +183,15 @@ class AutoFillStream:
 
 # -------------------------AGENT--------------------------
 def suggest_dataset_dictionary(dataset: dict[str, Any]) -> dict[str, Any]:
-    """Gợi ý metadata mô tả của dataset và cột ghi nhận thời điểm (nếu có)."""
-    result = _dataset_agent().invoke({"messages": [HumanMessage(content=json.dumps(dataset, ensure_ascii=False, indent=2))]})
+    result = _dataset_agent().invoke(
+        {"messages": [HumanMessage(content=json.dumps(dataset, ensure_ascii=False, indent=2))]}
+    )
     raw = result.get("structured_response") if isinstance(result, dict) else None
     if raw is None:
         raise RuntimeError("Agent không trả về structured response cho dataset.")
-    suggestion = raw if isinstance(raw, DatasetDictionarySuggestion) else DatasetDictionarySuggestion.model_validate(raw)
+    suggestion = (
+        raw if isinstance(raw, DatasetDictionarySuggestion) else DatasetDictionarySuggestion.model_validate(raw)
+    )
     suggestion.display_name = suggestion.display_name.strip()
     if not suggestion.display_name or len(suggestion.display_name) > 255:
         raise ValueError("Agent trả display_name dataset không hợp lệ.")
@@ -198,7 +208,6 @@ def suggest_dataset_dictionary(dataset: dict[str, Any]) -> dict[str, Any]:
 
 
 def suggest_column_dictionary_batches(dataset: dict[str, Any], batch_size: int = 4) -> Iterator[list[dict[str, Any]]]:
-    """Gợi ý theo từng lô nhỏ độc lập để stream dần."""
     columns = dataset.get("columns")
     if not isinstance(columns, list):
         raise ValueError("Dataset context must contain a columns list.")  # noqa: TRY004
@@ -209,13 +218,13 @@ def suggest_column_dictionary_batches(dataset: dict[str, Any], batch_size: int =
 
 
 def suggest_column_dictionary(dataset: dict[str, Any]) -> list[dict[str, Any]]:
-    """Gợi ý tên hiển thị, đơn vị và thuật ngữ nghiệp vụ cho mọi cột của dataset."""
     return [suggestion for batch in suggest_column_dictionary_batches(dataset) for suggestion in batch]
 
 
 def _suggest_column_batch(dataset: dict[str, Any]) -> list[dict[str, Any]]:
-    """Gợi ý tên hiển thị, đơn vị và thuật ngữ nghiệp vụ cho một lô cột."""
-    result = _column_agent().invoke({"messages": [HumanMessage(content=json.dumps(dataset, ensure_ascii=False, indent=2))]})
+    result = _column_agent().invoke(
+        {"messages": [HumanMessage(content=json.dumps(dataset, ensure_ascii=False, indent=2))]}
+    )
     raw = result.get("structured_response") if isinstance(result, dict) else None
     if raw is None:
         raise RuntimeError("Agent không trả về structured response.")
@@ -239,12 +248,14 @@ def _suggest_column_batch(dataset: dict[str, Any]) -> list[dict[str, Any]]:
 @lru_cache(maxsize=1)
 def _column_agent():
     return create_agent(
-        model=get_chat_model(), name="column-dictionary-agent", tools=[], response_format=ColumnDictionarySuggestions, system_prompt=system_prompt
+        model=get_chat_model(), name="column-dictionary-agent", tools=[], response_format=ColumnDictionarySuggestions,
+        system_prompt=system_prompt
     )
 
 
 @lru_cache(maxsize=1)
 def _dataset_agent():
     return create_agent(
-        model=get_chat_model(), name="dataset-dictionary-agent", tools=[], response_format=DatasetDictionarySuggestion, system_prompt=dataset_system_prompt
+        model=get_chat_model(), name="dataset-dictionary-agent", tools=[], response_format=DatasetDictionarySuggestion,
+        system_prompt=dataset_system_prompt
     )

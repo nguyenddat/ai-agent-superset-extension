@@ -21,11 +21,6 @@ class GrainRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def get_grain_profile(self, dataset: Any):
-        """Giá trị cột thời gian rơi thế nào ở mỗi loại dòng, kèm grain gợi ý.
-
-        Chỉ đọc, chỉ chạy khi quản trị viên yêu cầu. `time_column`, `row_kind_column` và `temporal_kind` lấy từ query
-        string, nên đọc được cả lựa chọn chưa lưu.
-        """
         require_admin()
         ensure_dictionary_tables()
         profile = read_grain_profile(

@@ -76,7 +76,6 @@ class ExpertRuleGroupService:
 
     # -------------------------UPDATE-------------------------
     def update(self, group_id: int, payload: Any) -> ExpertRuleGroup:
-        """Đổi tên hoặc mô tả nhóm; rule trong nhóm giữ nguyên và không cần duyệt lại."""
         group = self.require(group_id)
         if not isinstance(payload, dict):
             raise ExpertRuleValidationError("Nhóm rule chỉ có tên và mô tả.")
@@ -90,7 +89,6 @@ class ExpertRuleGroupService:
             raise ExpertRuleConflictError(GROUP_NAME_TAKEN) from error
 
     def move_rule(self, rule_id: int, group_id: int | None, actor_id: int) -> ExpertRule:
-        """Chuyển rule vào nhóm, hoặc bỏ khỏi mọi nhóm khi `group_id` là None."""
         rule = self.rules.read_for_update(rule_id)
         if rule is None:
             raise ExpertRuleNotFoundError()
@@ -98,7 +96,6 @@ class ExpertRuleGroupService:
         return rule
 
     def place_rule(self, rule: ExpertRule, group: ExpertRuleGroup | None, actor_id: int) -> None:
-        """Đặt rule vào nhóm và ghi sự kiện `moved`; phiên bản vòng đời giữ nguyên nên lượt duyệt đang chờ còn hợp lệ."""
         previous = rule.group
         if (previous.id if previous else None) == (group.id if group else None):
             return
@@ -112,7 +109,6 @@ class ExpertRuleGroupService:
 
     # -------------------------DELETE-------------------------
     def delete(self, group_id: int, actor_id: int) -> list[int]:
-        """Xóa nhóm, các rule trong nhóm thành chưa phân nhóm; trả về ID các rule đã chuyển."""
         group = self.require(group_id)
         rules = self.rules.read_in_group(group.id)
         for rule in rules:
@@ -122,7 +118,6 @@ class ExpertRuleGroupService:
 
     # -------------------------SUGGESTION---------------------
     def suggest(self) -> dict[str, Any]:
-        """Gợi ý nhóm cho rule chưa phân nhóm có nghĩa gần nhau, đọc từ bản hiện tại."""
         links, terms = expert_rule_link_repository(), glossary_term_repository()
         columns = column_dictionary_repository()
         candidates = []
@@ -142,7 +137,6 @@ class ExpertRuleGroupService:
         return suggest_groups(EXPERT_RULE_KIND, candidates, group_names)
 
     def apply_suggestion(self, payload: Any, actor_id: int) -> tuple[ExpertRuleGroup, list[int]]:
-        """Chuyển các rule quản trị viên giữ lại vào nhóm có sẵn hoặc nhóm mới; trả về nhóm và ID rule."""
         choice = grouping_choice(payload, ExpertRuleValidationError)
         if choice.group_id is not None:
             group = self.require(choice.group_id)
@@ -152,12 +146,10 @@ class ExpertRuleGroupService:
 
     @staticmethod
     def dismiss_suggestion(payload: Any, actor_id: int) -> str:
-        """Bỏ qua một gợi ý để không gợi ý lại; trả về fingerprint."""
         return dismiss_suggestion(EXPERT_RULE_KIND, payload, actor_id, ExpertRuleValidationError)
 
 
 def rule_text(name: str, term_names: list[str], conditions: list[str], examples: list[dict[str, Any]]) -> str:
-    """Nghĩa của rule để embedding: tên, thuật ngữ, điều kiện và câu hỏi ví dụ; bỏ ngoại lệ vì chỉ là ca biên."""
     questions = "; ".join(f"{example['question']} ({example['intent']})" for example in examples)
     return f"{name}. Thuật ngữ: {', '.join(term_names)}. Điều kiện: {'; '.join(conditions)}. Câu hỏi: {questions}"
 

@@ -26,8 +26,6 @@ class _Role:
 
 
 class _SecurityManager:
-    """Flask-AppBuilder's role calls on in-memory roles; a permission view is its (permission, view menu) pair."""
-
     ADMIN_ONLY_VIEW_MENUS = frozenset({"Security"})
 
     def __init__(self, current_user):
@@ -61,7 +59,6 @@ class _SecurityManager:
 
 @pytest.fixture
 def access(monkeypatch):
-    """core.security and the access_control services, imported against a fake Superset security manager."""
     current_user = SimpleNamespace(id=1, is_authenticated=True, roles=[])
     security_manager = _SecurityManager(current_user)
     superset_module = types.ModuleType("superset")
@@ -254,9 +251,13 @@ def test_the_access_probe_answers_200_even_without_the_view_permission(can_view,
 def test_assignment_routes_follow_the_route_conventions():
     methods = api_methods()
     expected_decorators = {
-        "list_role_assignments": ["expose('/role-assignments', methods=('GET',))", "protect()", "safe", "permission_name('read')", "handle_errors"],
+        "list_role_assignments": [
+            "expose('/role-assignments', methods=('GET',))", "protect()", "safe", "permission_name('read')",
+            "handle_errors",
+        ],
         "update_role_assignment": [
-            "expose('/role-assignments/<int:user_id>', methods=('PUT',))", "protect()", "safe", "permission_name('write')", "csrf_protected", "rollback_on_error", "handle_errors"
+            "expose('/role-assignments/<int:user_id>', methods=('PUT',))", "protect()", "safe",
+            "permission_name('write')", "csrf_protected", "rollback_on_error", "handle_errors"
         ],
     }
     for name, decorators_expected in expected_decorators.items():

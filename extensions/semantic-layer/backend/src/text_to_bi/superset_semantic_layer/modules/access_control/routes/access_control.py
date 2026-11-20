@@ -16,15 +16,12 @@ from ..services.roles import (
 
 
 class AccessControlRoutes:
-    """Routes of SemanticLayerAPI. Which users hold the Semantic Layer's Superset roles, set by an administrator."""
-
     @expose("/role-assignments", methods=("GET",))
     @protect()
     @safe
     @permission_name("read")
     @handle_errors
     def list_role_assignments(self):
-        """The Semantic Layer roles and every active user with the ones they hold."""
         require_admin()
         ensure_dictionary_tables()
         return self.response(
@@ -39,7 +36,6 @@ class AccessControlRoutes:
     @rollback_on_error
     @handle_errors
     def update_role_assignment(self, user_id: int):
-        """Give a user exactly the Semantic Layer roles in `{"roles": [...]}`; their other roles are kept."""
         require_admin()
         ensure_dictionary_tables()
         role_names = requested_role_names(request.get_json(silent=True))

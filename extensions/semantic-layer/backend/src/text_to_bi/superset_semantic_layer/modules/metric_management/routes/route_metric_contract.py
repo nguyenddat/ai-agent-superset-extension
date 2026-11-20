@@ -53,7 +53,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_database
     def read_metric_contracts(self, database: Any):
-        """Mọi metric của một database kèm trạng thái duyệt, định nghĩa và giá trị mặc định (`?database_id=`)."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         datasets = [dataset for dataset in datasets_on_database(database.id) if can_access_dataset(dataset)]
@@ -79,7 +78,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def read_metric_contract(self, dataset: Any, metric: Any):
-        """Bản duyệt và trạng thái duyệt của metric."""
         require_semantic_layer_view()
         require_dataset_access(dataset)
         ensure_dictionary_tables()
@@ -93,7 +91,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def read_metric_contract_events(self, dataset: Any, metric: Any):
-        """Lịch sử duyệt của metric, mới nhất trước."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         require_dataset_access(dataset)
@@ -109,7 +106,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def create_metric_contract(self, dataset: Any, metric: Any):
-        """Đề xuất metric: tạo bản nháp chờ duyệt từ công thức hiện tại."""
         require_admin()
         ensure_dictionary_tables()
         service = MetricContractService()
@@ -127,7 +123,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def approve_metric_contract(self, dataset: Any, metric: Any):
-        """Duyệt bản nháp của metric."""
         require_admin()
         ensure_dictionary_tables()
         service = MetricContractService()
@@ -144,7 +139,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def revoke_metric_contract(self, dataset: Any, metric: Any):
-        """Thu hồi metric, kèm lý do."""
         require_admin()
         ensure_dictionary_tables()
         service = MetricContractService()
@@ -162,7 +156,6 @@ class MetricContractRoutes(RouteMixin):
     @handle_errors
     @requires_metric
     def execute_metric_contract(self, dataset: Any, metric: Any):
-        """Chạy metric đã duyệt qua ChartData của Superset; admin chạy thử được bản nháp."""
         require_semantic_layer_query()
         ensure_dictionary_tables()
         require_dataset_access(dataset)

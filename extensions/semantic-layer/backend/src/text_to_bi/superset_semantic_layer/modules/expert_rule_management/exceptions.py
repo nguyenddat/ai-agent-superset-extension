@@ -7,18 +7,14 @@ from text_to_bi.superset_semantic_layer.common.exceptions import (
 
 
 class ExpertRuleValidationError(ValidationError):
-    """Safe, client-visible validation error."""
+    pass
 
 
 class ExpertRuleConflictError(ConflictError):
-    """Optimistic revision conflict."""
-
     message = "The expert rule changed; refresh and retry."
 
 
 class ExpertRuleSelfApprovalError(SelfApprovalError):
-    """The author of a revision tried to approve it; a second administrator must."""
-
     message = "Người soạn rule không thể tự duyệt; cần một quản trị viên khác duyệt."
 
 

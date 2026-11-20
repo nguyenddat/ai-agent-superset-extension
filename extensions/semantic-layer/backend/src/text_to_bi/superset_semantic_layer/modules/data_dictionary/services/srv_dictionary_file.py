@@ -31,11 +31,19 @@ LIST_FIELDS = ("aggregations", "synonyms")
 DICTIONARY_FILE_NAME = "data-dictionary"
 DICTIONARY_COLUMNS = (
     TemplateColumn("dataset", True, "Tên bảng của dataset nghiệp vụ trong Superset.", "tb_gia_tri_quan_sat"),
-    TemplateColumn("column", True, f"Tên cột của dataset; để trống thì dòng mô tả chính dataset và chỉ dùng {', '.join(DATASET_ROW_FIELDS)}.", "gia_tri_so"),
+    TemplateColumn(
+        "column", True,
+        f"Tên cột của dataset; để trống thì dòng mô tả chính dataset và chỉ dùng {', '.join(DATASET_ROW_FIELDS)}.",
+        "gia_tri_so"
+    ),
     TemplateColumn("display_name", False, "Tên hiển thị, tối đa 255 ký tự; không để trống.", "Giá trị đo"),
     TemplateColumn("description", False, "Mô tả nghiệp vụ.", "Giá trị số của chỉ số tại thời điểm quan sát."),
-    TemplateColumn("semantic_role", False, f"Một trong: {', '.join(ROLES)}; trống thì giữ vai trò hiện tại.", "measure"),
-    TemplateColumn("aggregations", False, f"Chỉ cho cột measure; cách nhau bằng ;: {', '.join(AGGREGATIONS)}.", "AVG; MIN; MAX"),
+    TemplateColumn(
+        "semantic_role", False, f"Một trong: {', '.join(ROLES)}; trống thì giữ vai trò hiện tại.", "measure"
+    ),
+    TemplateColumn(
+        "aggregations", False, f"Chỉ cho cột measure; cách nhau bằng ;: {', '.join(AGGREGATIONS)}.", "AVG; MIN; MAX"
+    ),
     TemplateColumn("synonyms", False, "Từ đồng nghĩa, cách nhau bằng ;", "giá trị; số đo"),
     TemplateColumn("unit", False, "Đơn vị đo.", "°C"),
     TemplateColumn("business_term", False, "Thuật ngữ nghiệp vụ của cột.", "Nhiệt độ"),
@@ -43,30 +51,28 @@ DICTIONARY_COLUMNS = (
 )
 # A dataset row then a column row, so the template shows both kinds.
 DICTIONARY_EXAMPLE_ROWS = (
-    ["tb_gia_tri_quan_sat", "", "Giá trị quan sát", "Mỗi dòng là giá trị một chỉ số thời tiết của một lần quan sát.", "", "", "", "", "", "false"],
+    [
+        "tb_gia_tri_quan_sat", "", "Giá trị quan sát", "Mỗi dòng là giá trị một chỉ số thời tiết của một lần quan sát.",
+        "", "", "", "", "", "false"
+    ],
     [column.example for column in DICTIONARY_COLUMNS],
 )
 
 
 @dataclass
 class DictionaryPlan:
-    """Dòng từ điển mà một dòng file cập nhật và các giá trị nó ghi, như trình soạn Data Dictionary lưu."""
-
     record: Any
     values: dict[str, Any]
     is_column: bool
 
 
 def export_dictionary_template() -> dict[str, str]:
-    """File Excel mẫu để nhập Data Dictionary: tiêu đề, một dòng dataset, một dòng cột và sheet hướng dẫn."""
-    return write_template(DICTIONARY_COLUMNS, DICTIONARY_EXAMPLE_ROWS, DICTIONARY_FILE_NAME, DataDictionaryValidationError)
+    return write_template(
+        DICTIONARY_COLUMNS, DICTIONARY_EXAMPLE_ROWS, DICTIONARY_FILE_NAME, DataDictionaryValidationError
+    )
 
 
 def export_dictionary() -> dict[str, str]:
-    """Mọi dataset nghiệp vụ và cột của chúng thành file Excel theo mẫu, import đọc lại không đổi.
-
-    Dòng còn thiếu dùng snapshot trong bộ nhớ như GET từ điển; không seed hay commit.
-    """
     rows = []
     for datasets in business_datasets_by_name().values():
         for dataset in datasets:
@@ -96,10 +102,6 @@ def export_dictionary() -> dict[str, str]:
 
 
 def preview_dictionary_import(payload: Any) -> list[ImportRow]:
-    """Import từng dòng sẽ đổi gì, kiểm tra như khi lưu trong Data Dictionary; không thay đổi gì.
-
-    Dòng gọi dataset theo tên bảng và cột theo tên cột; metadata còn thiếu dùng object tạm, không seed hay commit.
-    """
     datasets = business_datasets_by_name()
     first_rows: dict[tuple[int, str], int] = {}
     result = []
@@ -124,15 +126,14 @@ def preview_dictionary_import(payload: Any) -> list[ImportRow]:
 
 
 def apply_dictionary_import(payload: Any) -> list[ImportRow]:
-    """Ghi metadata dataset và cột của file; file có một dòng lỗi thì không đổi gì.
-
-    Metadata từ điển không cần duyệt nên mỗi dòng thay đổi được lưu như Data Dictionary lưu. Người gọi commit một lần.
-    """
     rows = preview_dictionary_import(payload)
     refusal = refusal_message(rows)
     if refusal:
         raise DataDictionaryValidationError(refusal)
-    dataset_ids = {item.plan.record.dataset_id if item.plan.is_column else item.plan.record.id for item in rows if item.plan is not None}
+    dataset_ids = {
+        item.plan.record.dataset_id if item.plan.is_column else item.plan.record.id
+        for item in rows if item.plan is not None
+    }
     for datasets in business_datasets_by_name().values():
         for dataset in datasets:
             if dataset.id in dataset_ids:
@@ -142,7 +143,10 @@ def apply_dictionary_import(payload: Any) -> list[ImportRow]:
         if item.action != "update":
             continue
         plan = item.plan
-        plan.record = column_repository.read_by_column_name(plan.record.dataset_id, plan.record.column_name) if plan.is_column else dataset_repository.read(plan.record.id)
+        plan.record = (
+            column_repository.read_by_column_name(plan.record.dataset_id, plan.record.column_name) if plan.is_column
+            else dataset_repository.read(plan.record.id)
+        )
         if not plan.is_column:
             dataset_repository.update(plan.record, plan.values)
             continue

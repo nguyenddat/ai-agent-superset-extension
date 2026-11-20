@@ -67,9 +67,6 @@ class Verdict:
 
 @dataclass(frozen=True)
 class SemanticOutcome:
-    """How the AI part of a check went: `checked`, `pending` (more pairs left), `unavailable` (no key), `failed`,
-    or `deferred` (a rule-only check left the pairs for the AI step that follows it)."""
-
     status: str
     unchecked: int = 0
     message: str | None = None
@@ -80,7 +77,6 @@ Judge = Callable[[list[Candidate]], dict[str, Verdict]]
 
 
 def judge_request(candidates: list[Candidate]) -> str:
-    """The message sent to the model: each pair with its question and both items, numbered by position."""
     pairs = [
         {"pair_id": str(index), "cau_hoi": KIND_QUESTIONS[candidate.kind], "muc_1": candidate.texts[0],
          "muc_2": candidate.texts[1]}
@@ -90,7 +86,6 @@ def judge_request(candidates: list[Candidate]) -> str:
 
 
 def parse_verdicts(raw: Any, candidates: list[Candidate]) -> dict[str, Verdict]:
-    """The model's answer by candidate fingerprint; a pair it skipped or answered malformed is left out to retry."""
     if raw is None:
         return {}
     try:
@@ -126,7 +121,6 @@ def _verdict_agent():
 
 
 def model_judge(candidates: list[Candidate]) -> dict[str, Verdict]:
-    """Ask the OpenRouter chat model the Data Dictionary's AutoFill uses about one batch of pairs."""
     from langchain_core.messages import HumanMessage
 
     result = _verdict_agent().invoke({"messages": [HumanMessage(content=judge_request(candidates))]})
@@ -134,7 +128,6 @@ def model_judge(candidates: list[Candidate]) -> dict[str, Verdict]:
 
 
 def semantic_judge() -> Judge | None:
-    """The model judge, or None when no OpenRouter key is configured."""
     return model_judge if settings.OPENROUTER_API_KEY else None
 
 
@@ -153,12 +146,6 @@ def _judged_safely(judge: Judge) -> Callable[[list[Candidate]], dict[str, Verdic
 def judge_candidates(
     candidates: list[Candidate], cached: dict[str, Verdict], judge: Judge | None, defer: bool = False
 ) -> tuple[dict[str, Verdict], dict[str, Verdict], SemanticOutcome]:
-    """The verdicts for the candidates: cached ones as they are, the rest asked of the model in parallel batches.
-
-    Returns every verdict known now, the new ones to cache, and how the AI part went. Without a judge, or when it
-    fails, the rule-based findings still stand and the pairs left are judged by a later check. With `defer`, nothing
-    is asked: the caller shows the rule-based findings first and asks the model in a second check.
-    """
     fingerprints = [candidate.fingerprint for candidate in candidates]
     known = {fingerprint: cached[fingerprint] for fingerprint in fingerprints if fingerprint in cached}
     pending = [candidate for candidate in candidates if candidate.fingerprint not in cached]
@@ -189,7 +176,6 @@ def judge_candidates(
 
 
 def semantic_findings(candidates: list[Candidate], verdicts: dict[str, Verdict]) -> list[Finding]:
-    """A finding for each candidate the model judged contradictory; its explanation is the model's."""
     findings = []
     for candidate in candidates:
         verdict = verdicts.get(candidate.fingerprint)

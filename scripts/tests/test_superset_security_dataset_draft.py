@@ -41,7 +41,10 @@ def draft_sources(attached_rules, for_agent, effective_filters=None):
         "get_rls_filters": effective_filters or (lambda dataset: []),
         "logger": logging.getLogger(__name__),
     }
-    exec(compile(ast.Module(body=[method], type_ignores=[]), str(MODULES / "routes/route_dataset_draft.py"), "exec"), namespace)  # noqa: S102
+    exec(  # noqa: S102
+        compile(ast.Module(body=[method], type_ignores=[]), str(MODULES / "routes/route_dataset_draft.py"), "exec"),
+        namespace,
+    )
     return namespace["_base_datasets"](None, for_agent)
 
 
@@ -75,7 +78,9 @@ def test_rls_inspection_failure_excludes_source(for_agent):
 def sql_validator():
     source = (MODULES / "services/srv_dataset_draft.py").read_text(encoding="utf-8")
     module = ast.parse(source)
-    method = next(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "checked_dataset_sql")
+    method = next(
+        node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "checked_dataset_sql"
+    )
 
     class DatasetDraftValidationError(Exception):
         status = 400
@@ -92,7 +97,10 @@ def sql_validator():
         "_IDENTIFIER": re.compile(r"^[a-z][a-z0-9_]*$"),
         "CheckedDatasetSql": lambda *values: values,
     }
-    exec(compile(ast.Module(body=[method], type_ignores=[]), str(MODULES / "services/srv_dataset_draft.py"), "exec"), namespace)  # noqa: S102
+    exec(  # noqa: S102
+        compile(ast.Module(body=[method], type_ignores=[]), str(MODULES / "services/srv_dataset_draft.py"), "exec"),
+        namespace,
+    )
     return namespace["checked_dataset_sql"], DatasetDraftValidationError
 
 
@@ -109,7 +117,10 @@ def test_excluded_source_produces_safe_validation_error():
 def test_cte_alias_cannot_hide_restricted_physical_table():
     checked_dataset_sql, DatasetDraftValidationError = sql_validator()
     allowed = draft_sources(lambda dataset: ["policy"] if dataset.id == 2 else [], True)
-    query = "WITH restricted_weather AS (SELECT temperature, id FROM restricted_weather) SELECT p.id FROM public_weather p JOIN restricted_weather r ON p.id = r.id"
+    query = (
+        "WITH restricted_weather AS (SELECT temperature, id FROM restricted_weather) "
+        "SELECT p.id FROM public_weather p JOIN restricted_weather r ON p.id = r.id"
+    )
     with pytest.raises(DatasetDraftValidationError) as error:
         checked_dataset_sql(query, allowed)
     assert error.value.status == 400
@@ -129,7 +140,20 @@ def test_ready_idempotent_retry_revalidates_source_before_returning_dataset():
     source = (MODULES / "routes/route_dataset_draft.py").read_text(encoding="utf-8")
     module = ast.parse(source)
     route = next(node for node in module.body if isinstance(node, ast.ClassDef) and node.name == "DatasetDraftRoutes")
-    create = next(node for node in route.body if isinstance(node, ast.FunctionDef) and node.name == "create_dataset_draft")
-    validation = next(node for node in ast.walk(create) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "checked_dataset_proposal")
-    ready_return = next(node for node in ast.walk(create) if isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and any(isinstance(keyword.value, ast.Call) and isinstance(keyword.value.func, ast.Name) and keyword.value.func.id == "public_payload" for keyword in node.value.keywords))
+    create = next(
+        node for node in route.body if isinstance(node, ast.FunctionDef) and node.name == "create_dataset_draft"
+    )
+    validation = next(
+        node for node in ast.walk(create)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "checked_dataset_proposal"
+    )
+    ready_return = next(
+        node for node in ast.walk(create)
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Call)
+        and any(
+            isinstance(keyword.value, ast.Call) and isinstance(keyword.value.func, ast.Name)
+            and keyword.value.func.id == "public_payload"
+            for keyword in node.value.keywords
+        )
+    )
     assert validation.lineno < ready_return.lineno

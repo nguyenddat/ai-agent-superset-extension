@@ -128,7 +128,9 @@ export type MetricReviewItem = {
   pseudo_code: string | null;
   ineligibility: string | null;
   state: MetricReviewState;
-  contract: (MetricContract & { owner_name: string | null; approver_name: string | null; revoker_name: string | null }) | null;
+  contract:
+    | (MetricContract & { owner_name: string | null; approver_name: string | null; revoker_name: string | null })
+    | null;
   definition: MetricDefinition | null;
   query_defaults: MetricQueryDefaults | null;
 };
@@ -166,7 +168,9 @@ export type MetricReviewList = {
 
 export type MetricFilterOperator = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'IN' | 'NOT IN';
 
-export type MetricQueryFilter = { column: string; operator: MetricFilterOperator; value: string | number | boolean | Array<string | number> };
+export type MetricQueryFilter = {
+  column: string; operator: MetricFilterOperator; value: string | number | boolean | Array<string | number>;
+};
 
 export type MetricGrain = 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 export type MetricTimeAnchor = 'now' | 'latest_data';
@@ -522,7 +526,10 @@ export type BusinessDomain = {
 };
 
 /** "flow": data moves from source into target. "relation": source references target inside one layer. */
-/** `flow` and `relation` are reference edges from PK/FK; `transform` edges come from declared column transformations. */
+/**
+ * `flow` and `relation` are reference edges from PK/FK; `transform` edges come from declared column
+ * transformations.
+ */
 export type LineageEdgeKind = 'flow' | 'relation' | 'transform';
 
 export type LineageEdge = {

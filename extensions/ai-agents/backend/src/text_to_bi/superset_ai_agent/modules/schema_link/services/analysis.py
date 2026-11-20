@@ -50,7 +50,6 @@ def _node_reasons(goal: Goal) -> dict[int, list[str]]:
 
 
 def graph_view(graph: SchemaGraph) -> dict[str, Any]:
-    """The tables and edges the page draws, without the columns, and coded values the search reads."""
     return {
         "tables": [
             {"dataset_id": table_id, "table": table["table"], "label": table.get("label"), "layer": table.get("layer")}
@@ -86,7 +85,6 @@ def _path_view(tree: JoinTree, graph: SchemaGraph) -> dict[str, Any]:
 
 
 def analyze(raw_goal: dict[str, Any], graph: SchemaGraph) -> dict[str, Any]:
-    """The trace of one analysis; `status` is `ok` with SQL, or why it stopped, with `message`."""
     trace: dict[str, Any] = {
         "status": "ok", "message": None, "sql": None,
         "stages": {name: {"status": "pending", "ms": None} for name in STAGES},

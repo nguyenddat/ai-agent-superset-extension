@@ -8,7 +8,12 @@ from superset import db
 from text_to_bi.superset_semantic_layer.common.exceptions import SemanticLayerError
 from text_to_bi.superset_semantic_layer.core.database import handle_errors, rollback_on_error
 from text_to_bi.superset_semantic_layer.core.routing import RouteMixin
-from text_to_bi.superset_semantic_layer.core.security import csrf_protected, require_admin, require_dataset_access, require_semantic_layer_view
+from text_to_bi.superset_semantic_layer.core.security import (
+    csrf_protected,
+    require_admin,
+    require_dataset_access,
+    require_semantic_layer_view,
+)
 from text_to_bi.superset_semantic_layer.migrations import ensure_dictionary_tables
 from text_to_bi.superset_semantic_layer.modules.superset import requires_dataset
 
@@ -27,7 +32,6 @@ class DataDictionaryRoutes(RouteMixin):
     @permission_name("read")
     @handle_errors
     def get_reference_options(self):
-        """Dataset Superset và cột của chúng để chọn đích khóa ngoại."""
         require_admin()
         ensure_dictionary_tables()
         return self.response(200, datasets=DataDictionaryService().read_reference_options())
@@ -39,7 +43,6 @@ class DataDictionaryRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def get_dataset_dictionary(self, dataset: Any):
-        """Metadata từ điển theo đúng thứ tự cột Superset của dataset."""
         require_semantic_layer_view()
         ensure_dictionary_tables()
         require_dataset_access(dataset)
@@ -61,7 +64,6 @@ class DataDictionaryRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def update_dataset_dictionary(self, dataset: Any):
-        """Lưu hàng loạt metadata của dataset và các cột của nó."""
         require_admin()
         ensure_dictionary_tables()
         try:
@@ -84,10 +86,12 @@ class DataDictionaryRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def suggest_dataset_dictionary(self, dataset: Any):
-        """Stream gợi ý AI AutoFill cho dataset và các cột, lưu vào chỗ còn trống."""
         require_admin()
         ensure_dictionary_tables()
         events = start_autofill(dataset)
-        response = Response(stream_with_context(events), mimetype="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        response = Response(
+            stream_with_context(events), mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        )
         response.call_on_close(events.close)
         return response

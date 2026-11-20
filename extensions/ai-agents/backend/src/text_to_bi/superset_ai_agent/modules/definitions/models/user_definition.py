@@ -6,14 +6,6 @@ from ....common.base_model import BaseModel
 
 
 class AgentUserDefinition(BaseModel):
-    """What a user confirmed a glossary term or qualitative concept means to them, on one dashboard.
-
-    The agent uses it in every conversation that user has about that dashboard, unless an approved business term or
-    rule covers the concept. Administrators only read these as a signal of what people ask about: they either cover
-    the concept with a shared term or rule set by the business's experts (`promoted`) or leave it as the user's own
-    sense (`ignored`); editing a definition puts it back to `pending`.
-    """
-
     __table_args__ = ({"extend_existing": True},)
 
     id = Column(Integer, primary_key=True)

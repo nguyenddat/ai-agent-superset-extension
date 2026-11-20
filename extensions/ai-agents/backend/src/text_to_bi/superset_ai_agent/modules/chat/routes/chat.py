@@ -48,12 +48,6 @@ class TextToBIAgentAPI(RestApi):
     @rollback_on_error
     @handle_errors
     def stream_chat(self):
-        """Answer one question in a conversation; without `session_id` it starts one about `dashboard_id`.
-
-        With `retry_of`, the conversation's earlier question is answered again, after the user confirmed definitions.
-        The reply streams as SSE: `session` first, then each step as a tool call, the answer, and `done`, which carries
-        the definitions the user is asked to confirm.
-        """
         require_semantic_layer_query()
         asked = parse_chat_request(request.get_json(silent=True))
         user_id = int(current_user.id)

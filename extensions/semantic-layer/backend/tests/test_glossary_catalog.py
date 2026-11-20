@@ -15,7 +15,6 @@ def _discovery_method():
 
 
 def _discovery_source():
-    """The endpoint, the helper it shares with the semantic catalog, and the repository query that filters rows."""
     repository = ast.parse(REVISION_REPOSITORY_PATH.read_text(encoding="utf-8"))
     functions = (node for node in ast.walk(repository) if isinstance(node, ast.FunctionDef))
     serving = next(node for node in functions if node.name == "read_all_serving")
@@ -39,7 +38,6 @@ class _DiscoveryResponseAPI:
 
 
 def _discovery_handler(revisions, datasets, links_by_revision, allowed_dataset_ids):
-    """Execute the real discovery handler, without importing Superset."""
     method = _discovery_method()
     method.decorator_list = []
     helper = module_function("discoverable_glossary_terms")
@@ -87,7 +85,6 @@ def test_discovery_filters_to_serving_live_links_before_serialization():
 
 
 def test_discovery_contract_redacts_denied_dataset_b_and_hides_terms_without_allowed_links():
-    """The handler must redact at link level; merely filtering term rows leaks B's identifiers."""
     source = _discovery_source()
     # The serializer must construct a filtered link collection and gate the term on it.
     assert "visible_links" in source or "authorized_links" in source or "allowed_links" in source
@@ -97,7 +94,6 @@ def test_discovery_contract_redacts_denied_dataset_b_and_hides_terms_without_all
 
 
 def test_discovery_cannot_accept_a_client_selected_dataset_or_link_id_scope():
-    """A valid ID from dataset B must never widen discovery for a caller allowed only dataset A."""
     source = _discovery_source()
     assert "request.args" not in source
     assert "request.get_json" not in source

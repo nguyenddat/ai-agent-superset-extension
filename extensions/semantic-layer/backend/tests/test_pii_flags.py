@@ -7,7 +7,10 @@ from catalog_source import MODULES_PATH, compile_into, module_function
 from test_glossary_bootstrap import _migration_namespace
 
 from text_to_bi.superset_semantic_layer.modules.data_dictionary.exceptions import DataDictionaryValidationError
-from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_pii import checked_pii_flag, mark_catalog_pii
+from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_pii import (
+    checked_pii_flag,
+    mark_catalog_pii,
+)
 
 
 def test_a_pii_mark_is_true_or_false():
@@ -19,7 +22,6 @@ def test_a_pii_mark_is_true_or_false():
 
 
 def _dictionary_constants() -> list[ast.Assign]:
-    """The module-level field lists of services/dictionary.py, which imports Superset and so cannot be imported here."""
     tree = ast.parse((MODULES_PATH / "data_dictionary" / "services" / "srv_dictionary.py").read_text(encoding="utf-8"))
     return [node for node in tree.body if isinstance(node, ast.Assign) and node.targets[0].id.isupper()]
 

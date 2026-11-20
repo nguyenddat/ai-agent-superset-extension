@@ -322,7 +322,6 @@ def reporting_uri() -> str:
 
 
 def create_reporting_views(engine: Any) -> None:
-    """Create the views and the read-only role; the metadata database owner runs this, the role only reads."""
     from psycopg2 import sql
 
     database = os.getenv("SUPERSET_DB", "superset")
@@ -385,12 +384,11 @@ def _position_json(rows: list[list[tuple[Any, int, int]]]) -> dict[str, Any]:
 def bootstrap() -> None:
     app = create_app()
     with app.app_context():
+        from superset import db, security_manager
         from superset.connectors.sqla.models import SqlaTable, SqlMetric
         from superset.models.core import Database
         from superset.models.dashboard import Dashboard
         from superset.models.slice import Slice
-
-        from superset import db, security_manager
 
         create_reporting_views(db.engine)
 

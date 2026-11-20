@@ -104,14 +104,15 @@ def _bundle_state_failures(
     deployed_hash: str | None,
     bundle_name: str = BUNDLE_PATH.name,
 ) -> list[str]:
-    """Return release-gate failures for missing or stale host and deployed bundles."""
     failures = []
     if not bundle_exists:
         failures.append(f"{bundle_name} does not exist; run `uv run scripts/build.py`")
     elif source_drift:
         failures.append("the host bundle is stale; run `uv run scripts/build.py`")
     if bundle_exists and deployed_hash != host_hash:
-        failures.append("the deployed bundle is missing or differs from the host bundle; run `uv run scripts/deploy.py`")
+        failures.append(
+            "the deployed bundle is missing or differs from the host bundle; run `uv run scripts/deploy.py`"
+        )
     return failures
 
 
@@ -125,7 +126,12 @@ def main(argv: list[str] | None = None) -> None:
         print("\n".join(source_drift) if source_drift else "Host bundle matches source and staged assets.")
         host_hash = sha256_file(extension.bundle) if extension.bundle.exists() else None
         deployed_hash = container_sha256(extension.container_bundle) if extension.bundle.exists() else None
-        failures.extend(f"{extension.name}: {failure}" for failure in _bundle_state_failures(extension.bundle.exists(), source_drift, host_hash, deployed_hash, extension.bundle.name))
+        failures.extend(
+            f"{extension.name}: {failure}"
+            for failure in _bundle_state_failures(
+                extension.bundle.exists(), source_drift, host_hash, deployed_hash, extension.bundle.name
+            )
+        )
 
         step(f"Compiling and importing {extension.name} against Superset")
         container_source = f"/tmp/{extension.name}-compat"
@@ -133,7 +139,10 @@ def main(argv: list[str] | None = None) -> None:
         package = "text_to_bi.superset_ai_agent" if extension.name == "superset-ai-agent" else PACKAGE
         compose("exec", "-T", "-u", "root", SUPERSET_SERVICE, "rm", "-rf", container_source)
         compose("cp", str(backend_source), f"{SUPERSET_SERVICE}:{container_source}")
-        result = compose("exec", "-T", SUPERSET_SERVICE, "python", "-", container_source, package, stdin=CONTAINER_SCRIPT, check=False, capture=True)
+        result = compose(
+            "exec", "-T", SUPERSET_SERVICE, "python", "-", container_source, package,
+            stdin=CONTAINER_SCRIPT, check=False, capture=True,
+        )
         report = [line for line in result.stdout.splitlines() if line.startswith(REPORT_PREFIXES)]
         print("\n".join(report))
         if result.returncode != 0:

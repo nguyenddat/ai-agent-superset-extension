@@ -3,9 +3,8 @@
 Usage: uv run scripts/smoke.py
 
 Logs in through the Superset login form as the admin (SUPERSET_ADMIN_USERNAME / SUPERSET_ADMIN_PASSWORD, default
-admin/admin), then calls
-the read-only endpoints and checks that each answers 200 with a JSON object and the public v1 envelope where applicable. Run it
-after scripts/deploy.py; it does not change any data.
+admin/admin), then calls the read-only endpoints and checks that each answers 200 with a JSON object and the public
+v1 envelope where applicable. Run it after scripts/deploy.py; it does not change any data.
 """
 
 import argparse
@@ -54,7 +53,6 @@ def _request(opener: urllib.request.OpenerDirector, path: str, form: dict | None
 
 
 def _login() -> urllib.request.OpenerDirector:
-    """Log in through the /login/ form, because the extension reads the admin role from the browser session."""
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
     status, page = _request(opener, "/login/")
     match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', page if isinstance(page, str) else "")
@@ -100,9 +98,15 @@ def main(argv: list[str] | None = None) -> None:
     for path in endpoints:
         status, payload = _request(opener, path)
         ok = status == 200 and isinstance(payload, dict)
-        public = path.startswith(AGENT_QUERY_API) or "/query-metadata" in path or path.endswith(("/relationships/approved", "/glossary/discovery", "/expert-rules/discover"))
+        public = (
+            path.startswith(AGENT_QUERY_API) or "/query-metadata" in path
+            or path.endswith(("/relationships/approved", "/glossary/discovery", "/expert-rules/discover"))
+        )
         if ok and public:
-            ok = type(payload.get("schema_version")) is int and payload["schema_version"] == 1 and isinstance(payload.get("result"), dict)
+            ok = (
+                type(payload.get("schema_version")) is int and payload["schema_version"] == 1
+                and isinstance(payload.get("result"), dict)
+            )
         print(f"{'ok  ' if ok else 'FAIL'} {status} GET {path}")
         if not ok:
             failures.append(path)

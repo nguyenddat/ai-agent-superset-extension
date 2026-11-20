@@ -18,8 +18,6 @@ class Edge:
 
 @dataclass(frozen=True)
 class Step:
-    """One edge as a path walks it: `forward` follows the key from `edge.from_table` to `edge.to_table`."""
-
     edge: Edge
     forward: bool
 
@@ -82,7 +80,6 @@ class SchemaGraph:
         return cls(dialect=dialect, tables=tables, edges=edges, excluded=payload.get("excluded", []))
 
     def steps_from(self, table_id: int, allow_fanout: bool) -> list[Step]:
-        """The steps leaving a table, every way an edge may be walked; fan-out steps only when allowed."""
         return [step for step in self._steps.get(table_id, []) if allow_fanout or not step.fanout]
 
     def column(self, table_id: int, name: str) -> dict[str, Any] | None:

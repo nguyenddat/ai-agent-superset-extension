@@ -26,7 +26,6 @@ def require_admin() -> None:
 
 
 def can_query_semantic_layer() -> bool:
-    """Asking the agent runs the Semantic Layer's catalog and metrics as the user, so it needs their query permission."""
     if is_admin():
         return True
     if not getattr(current_user, "is_authenticated", False):
@@ -42,8 +41,6 @@ def require_semantic_layer_query() -> None:
 
 
 def csrf_protected(method):
-    """Reject a state-changing request that does not carry a valid CSRF token."""
-
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         try:

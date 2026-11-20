@@ -20,12 +20,12 @@ class DatasetGrainRepository(BaseRepository[DatasetGrain]):
         return self.query().filter(DatasetGrain.dataset_id.in_(list(dataset_ids))).all()
 
     def read_by_row_kind(self, dataset_id: int) -> list[DatasetGrain]:
-        """Grain của dataset, sắp theo giá trị loại dòng."""
         return self.query().filter(DatasetGrain.dataset_id == dataset_id).order_by(DatasetGrain.row_kind_value).all()
 
     # -------------------------UPDATE-------------------------
-    def update_dataset_grains(self, stored: Iterable[DatasetGrain], dataset_id: int, grains: Iterable[dict[str, Any]]) -> None:
-        """Thay toàn bộ grain của một dataset bằng danh sách mới."""
+    def update_dataset_grains(
+        self, stored: Iterable[DatasetGrain], dataset_id: int, grains: Iterable[dict[str, Any]]
+    ) -> None:
         for item in stored:
             self.delete(item)
         # The unique row kind constraint must see the old rows gone before the new ones arrive.

@@ -47,15 +47,27 @@ export function HeaderPicker({
     return [...byGroup];
   }, [items]);
   const selectItems = useMemo(
-    () => [{ label: placeholder, value: null as number | null }, ...items.map(item => ({ label: item.label, value: item.value as number | null }))],
+    () => [
+      { label: placeholder, value: null as number | null },
+      ...items.map(item => ({ label: item.label, value: item.value as number | null })),
+    ],
     [items, placeholder],
   );
 
   return (
-    <Select items={selectItems} value={value} disabled={disabled} onValueChange={next => { if (next != null) onChange(next); }}>
+    <Select
+      items={selectItems} value={value} disabled={disabled}
+      onValueChange={next => { if (next != null) onChange(next); }}
+    >
       <SelectTrigger aria-label={ariaLabel} className="h-9 w-full min-w-0 bg-card">
         <Icon className="text-primary" />
-        {caption ? <span className="shrink-0 border-r border-border pr-2 text-xs font-semibold text-muted-foreground max-md:hidden">{caption}</span> : null}
+        {caption ? (
+          <span
+            className="shrink-0 border-r border-border pr-2 text-xs font-semibold text-muted-foreground max-md:hidden"
+          >
+            {caption}
+          </span>
+        ) : null}
         <SelectValue className="min-w-0 truncate" />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false} align="end" className="min-w-72">

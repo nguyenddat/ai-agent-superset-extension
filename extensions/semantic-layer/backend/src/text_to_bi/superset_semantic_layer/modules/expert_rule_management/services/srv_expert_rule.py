@@ -47,7 +47,6 @@ class ExpertRuleService:
 
     # -------------------------CREATE-------------------------
     def create(self, payload: Any, actor_id: int) -> ExpertRuleRevision:
-        """Tạo rule mới với bản nháp đầu tiên; metric của rule lấy từ thuật ngữ của nó."""
         payload = with_term_metrics(payload)
         group_id = group_id_of(payload)
         values = normalize_rule_payload(without_group(payload), column_resolver(payload.get("dataset_id")))
@@ -76,7 +75,6 @@ class ExpertRuleService:
         return self.links.read_by_revision(revision.id)
 
     def read_for_review(self) -> list[tuple[ExpertRule, ExpertRuleRevision]]:
-        """Bản hiện tại của mỗi rule người gọi được đọc; rule bị thu hồi khi chưa có bản hiện tại lấy bản mới nhất."""
         latest: dict[int, ExpertRuleRevision] = {}
         for revision in self.revisions.read_all():
             kept = latest.get(revision.rule_id)
@@ -93,7 +91,6 @@ class ExpertRuleService:
         return result
 
     def read_discoverable(self) -> list[tuple[ExpertRule, ExpertRuleRevision, list[ExpertRuleLink]]]:
-        """Rule đã duyệt mà người gọi được đọc, với mọi liên kết còn hợp lệ."""
         result = []
         for revision in self.revisions.read_all_approved_current():
             rule = self.rules.read(revision.rule_id)
@@ -107,7 +104,6 @@ class ExpertRuleService:
 
     @staticmethod
     def review_state(revision: ExpertRuleRevision, links: list[ExpertRuleLink]) -> str:
-        """Trạng thái hiển thị; rule đã duyệt mà thuật ngữ hoặc metric đã đổi là `outdated`."""
         if revision.status != ReviewStatus.APPROVED:
             return revision.status
         return ReviewStatus.APPROVED.value if rule_is_discoverable(revision, links) else OUTDATED
@@ -121,7 +117,6 @@ class ExpertRuleService:
 
     # -------------------------UPDATE-------------------------
     def update(self, rule_id: int, payload: Any, expected_revision: int, actor_id: int) -> ExpertRuleRevision:
-        """Lưu chỉnh sửa thành bản nháp kế tiếp; `group_id` trong payload chuyển nhóm ngay, ngoài bản nháp."""
         revision = self._locked_current(rule_id, expected_revision)
         content = with_term_metrics({key: value for key, value in payload.items() if key != "expected_revision"})
         group_given = "group_id" in content
@@ -149,7 +144,6 @@ class ExpertRuleService:
     def approve(
         self, rule_id: int, expected_revision: int, actor_id: int, reason: Any, require_second_reviewer: bool
     ) -> ExpertRuleRevision:
-        """Duyệt bản nháp hiện tại; khi cần người duyệt thứ hai, tác giả không được tự duyệt."""
         revision = self._locked_current(rule_id, expected_revision)
         clean_reason = review_reason(reason)
         if revision.status != ReviewStatus.DRAFT:
@@ -166,7 +160,6 @@ class ExpertRuleService:
         return revision
 
     def revoke(self, rule_id: int, expected_revision: int, actor_id: int, reason: Any) -> ExpertRuleRevision:
-        """Thu hồi rule đã duyệt; bắt buộc có lý do."""
         revision = self._locked_current(rule_id, expected_revision)
         clean_reason = review_reason(reason)
         if revision.status != ReviewStatus.APPROVED or not clean_reason:
@@ -181,7 +174,6 @@ class ExpertRuleService:
     def _create_revision(
         self, rule_id: int, revision_number: int, lifecycle_version: int, values: dict[str, Any]
     ) -> ExpertRuleRevision:
-        """Bản nháp hiện tại mới cùng liên kết tới dataset, thuật ngữ và metric."""
         revision = self.revisions.create(
             {
                 "rule_id": rule_id,
@@ -201,7 +193,6 @@ class ExpertRuleService:
         return revision
 
     def _locked_current(self, rule_id: int, expected_revision: int) -> ExpertRuleRevision:
-        """Khóa rule rồi đọc lại bản hiện tại; phiên bản vòng đời đã đổi là xung đột."""
         if self.revisions.read_current(rule_id) is None:
             raise ExpertRuleNotFoundError()
         rule = self.rules.read_for_update(rule_id)

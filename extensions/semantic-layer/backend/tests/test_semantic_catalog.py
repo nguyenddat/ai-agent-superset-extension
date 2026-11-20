@@ -5,9 +5,15 @@ from text_to_bi.superset_semantic_layer.modules.data_dictionary.services.srv_rel
     RelationshipEnd,
     relationship_contract_hash,
 )
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import metric_contract_hash
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import MetricQueryDefaults
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_public_metadata import build_semantic_catalog
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import (
+    metric_contract_hash,
+)
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import (
+    MetricQueryDefaults,
+)
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_public_metadata import (
+    build_semantic_catalog,
+)
 
 
 def _dataset(dataset_id, name, columns, metrics):

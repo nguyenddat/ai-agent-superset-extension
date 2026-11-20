@@ -6,7 +6,9 @@
 /** How much of each table the lineage cards show: the name only, the key columns, or every column. */
 export type DetailLevel = 'name' | 'keys' | 'all';
 
-export const DETAIL_LEVELS: Array<[DetailLevel, string]> = [['name', 'Tên bảng'], ['keys', 'Cột khóa'], ['all', 'Tất cả cột']];
+export const DETAIL_LEVELS: Array<[DetailLevel, string]> = [
+  ['name', 'Tên bảng'], ['keys', 'Cột khóa'], ['all', 'Tất cả cột'],
+];
 
 export const CARD_WIDTH = 264;
 /** The card border, drawn inside the card's height. */
@@ -27,7 +29,9 @@ export type CardColumn = { name: string; type: string; pk: boolean; fk: boolean;
  * of them (a count of the rows that meet a condition). Empty when its columns are unknown; its arrow then leaves the
  * card's metrics row.
  */
-export function metricSources(metric: { columns: Array<{ name: string; role: 'measure' | 'filter' }> | null }): string[] {
+export function metricSources(
+  metric: { columns: Array<{ name: string; role: 'measure' | 'filter' }> | null }
+): string[] {
   const columns = metric.columns ?? [];
   const measures = columns.filter(column => column.role === 'measure');
   return (measures.length > 0 ? measures : columns).map(column => column.name);
@@ -44,7 +48,10 @@ export function cardHeight(content: CardContent): number {
     + (content.metrics > 0 ? CARD_METRICS : 0);
 }
 
-/** Height on the card where an edge joining `column` meets it: that column's row, or the header when it is not listed. */
+/**
+ * Height on the card where an edge joining `column` meets it: that column's row, or the header when it is not
+ * listed.
+ */
 export function portY(content: CardContent, column: string | null): number {
   const index = column === null ? -1 : content.columns.findIndex(item => item.name === column);
   return index < 0 ? CARD_BORDER + CARD_HEADER / 2 : CARD_BORDER + CARD_HEADER + index * CARD_ROW + CARD_ROW / 2;

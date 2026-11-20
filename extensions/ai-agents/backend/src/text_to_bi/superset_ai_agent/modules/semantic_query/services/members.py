@@ -19,7 +19,6 @@ def _physical_columns(dataset: Any) -> list[str]:
 
 
 def labelled_key_columns(dataset: Any) -> list[tuple[str, str]]:
-    """`(key_column, label_column)` for each groupable calculated column that reads exactly one physical column."""
     table = re.escape(str(dataset.table_name))
     physical = _physical_columns(dataset)
     pairs = []
@@ -35,14 +34,6 @@ def labelled_key_columns(dataset: Any) -> list[tuple[str, str]]:
 
 
 def stored_label_candidates(dataset: Any, entries: dict[str, Any]) -> list[tuple[str, list[str]]]:
-    """`(key_column, text_columns)` for each physical key column and the physical text columns that may name it.
-
-    A table can store a name next to its key, as fact_tong_hop_thoi_tiet stores ten_thanh_pho next to thanh_pho_key.
-    Nothing declares that pairing, so `labels_from_rows` keeps a text column only when the data gives each key one
-    value.
-    A key is a column the data dictionary marks as a key or foreign key; primary, unique and date keys name single rows
-    or days, not members, and are left out. `entries` are the dataset's data dictionary rows by column name.
-    """
     groupable = [
         column for column in getattr(dataset, "columns", [])
         if getattr(column, "is_active", None) is True and getattr(column, "groupby", None) is True
@@ -67,7 +58,6 @@ def stored_label_candidates(dataset: Any, entries: dict[str, Any]) -> list[tuple
 
 
 def build_members_payload(dataset: Any, key_column: str, label_columns: list[str]) -> dict[str, Any]:
-    """The only ChartData query this lookup runs: distinct key and label rows, counted so they are grouped."""
     return {
         "datasource": {"id": dataset.id, "type": "table"},
         "queries": [{
@@ -81,7 +71,6 @@ def build_members_payload(dataset: Any, key_column: str, label_columns: list[str
 
 
 def members_from_rows(rows: list[dict[str, Any]], key_column: str, label_column: str) -> list[dict[str, Any]]:
-    """The pairs sorted by label; a row without a key or a label names nothing a user could ask about."""
     members = {
         row[key_column]: str(row[label_column])
         for row in rows[:MAX_MEMBERS]
@@ -93,10 +82,6 @@ def members_from_rows(rows: list[dict[str, Any]], key_column: str, label_column:
 def labels_from_rows(
     rows: list[dict[str, Any]], key_column: str, text_columns: list[str]
 ) -> dict[str, list[dict[str, Any]]]:
-    """The members of each text column that gives every key one value, by text column.
-
-    Rows past the limit leave the pairing unknown, so nothing is returned for them.
-    """
     if len(rows) > MAX_MEMBERS:
         return {}
     labelled = {}
@@ -113,12 +98,6 @@ def labels_from_rows(
 def stored_label_members(
     dataset: Any, entries: dict[str, Any], read_rows: Callable[[str, list[str]], list[dict[str, Any]] | None]
 ) -> list[tuple[str, str, list[dict[str, Any]]]]:
-    """`(key_column, label_column, members)` for each physical text column that gives each key one value.
-
-    `read_rows(key_column, label_columns)` reads the distinct rows. Each text column is read on its own: grouping a
-    key by every text column at once multiplies the rows, so one varying column would push them past the limit and
-    lose the labels of the others.
-    """
     found = []
     for key_column, text_columns in stored_label_candidates(dataset, entries):
         for text_column in text_columns:
@@ -129,13 +108,11 @@ def stored_label_members(
 
 
 def temporal_columns(dataset: Any) -> list[str]:
-    """Physical date columns a metric query can filter, named simply enough to read their range with MIN and MAX."""
     dated = {getattr(column, "column_name", None) for column in dataset.columns if getattr(column, "is_dttm", False)}
     return [name for name in _physical_columns(dataset) if name in dated and SIMPLE_IDENTIFIER.match(name)]
 
 
 def build_time_range_payload(dataset: Any, columns: list[str]) -> dict[str, Any]:
-    """One aggregate row: the first and last value of each date column."""
     metrics = [
         {"expressionType": "SQL", "sqlExpression": f"{function}({name})", "label": f"{function.lower()}__{name}"}
         for name in columns for function in ("MIN", "MAX")
@@ -149,8 +126,6 @@ def build_time_range_payload(dataset: Any, columns: list[str]) -> dict[str, Any]
 
 
 def build_latest_time_payload(dataset: Any, column: str, filters: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """One aggregate row: the latest value of a time column among the rows the filters keep; None for a column whose
-    name is not simple enough to write into MAX()."""
     if not SIMPLE_IDENTIFIER.match(column):
         return None
     metric = {"expressionType": "SQL", "sqlExpression": f"MAX({column})", "label": "latest_moment"}
@@ -176,10 +151,6 @@ MAX_CODE_LENGTH = 60
 
 
 def coded_value_columns(dataset: Any, entries: dict[str, Any]) -> list[str]:
-    """Text columns that hold codes such as a status, whose stored values a formula must spell exactly.
-
-    Keys and unique columns are left out: their values identify rows rather than name a kind of row.
-    """
     text_columns = {
         str(column.column_name)
         for column in getattr(dataset, "columns", [])
@@ -197,7 +168,6 @@ def coded_value_columns(dataset: Any, entries: dict[str, Any]) -> list[str]:
 
 
 def build_values_payload(dataset: Any, columns: list[str]) -> dict[str, Any]:
-    """One grouped query per column, each stopping one row past the limit so a free-text column shows as too many."""
     return {
         "datasource": {"id": dataset.id, "type": "table"},
         "queries": [
@@ -214,7 +184,6 @@ def build_values_payload(dataset: Any, columns: list[str]) -> dict[str, Any]:
 
 
 def coded_values_from_rows(rows: list[dict[str, Any]], column: str) -> list[str] | None:
-    """The column's distinct values, sorted; None when it has more, or longer ones, than a code list would."""
     values = {str(row[column]) for row in rows if row.get(column) not in (None, "")}
     if len(rows) > MAX_CODED_VALUES or any(len(value) > MAX_CODE_LENGTH for value in values):
         return None

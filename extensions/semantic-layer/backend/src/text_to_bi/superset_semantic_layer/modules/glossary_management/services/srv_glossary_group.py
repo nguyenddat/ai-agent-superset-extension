@@ -47,7 +47,6 @@ class GlossaryGroupService:
 
     # -------------------------UPDATE-------------------------
     def update(self, group_id: int, payload: Any) -> GlossaryTermGroup:
-        """Đổi tên hoặc mô tả nhóm; thuật ngữ trong nhóm giữ nguyên và không cần duyệt lại."""
         group = self.require(group_id)
         values = normalize_group_payload(payload)
         same_name = self.groups.read_by_normalized_name(values["normalized_name"])
@@ -59,7 +58,6 @@ class GlossaryGroupService:
             raise GlossaryConflictError(GROUP_NAME_TAKEN) from error
 
     def move_term(self, term_id: int, group_id: int | None, actor_id: int) -> GlossaryTerm:
-        """Chuyển thuật ngữ vào nhóm, hoặc bỏ khỏi mọi nhóm khi `group_id` là None."""
         term = self.terms.read_for_update(term_id)
         if term is None:
             raise GlossaryTermNotFoundError()
@@ -67,7 +65,6 @@ class GlossaryGroupService:
         return term
 
     def place_term(self, term: GlossaryTerm, group: GlossaryTermGroup | None, actor_id: int) -> None:
-        """Đặt thuật ngữ vào nhóm và ghi sự kiện `moved`; không cần duyệt, bản đã duyệt vẫn được dùng."""
         previous = term.group
         if (previous.id if previous else None) == (group.id if group else None):
             return
@@ -81,7 +78,6 @@ class GlossaryGroupService:
 
     # -------------------------DELETE-------------------------
     def delete(self, group_id: int, actor_id: int) -> list[int]:
-        """Xóa nhóm, các thuật ngữ trong nhóm thành chưa phân nhóm; trả về ID các thuật ngữ đã chuyển."""
         group = self.require(group_id)
         terms = self.terms.read_in_group(group.id)
         for term in terms:
@@ -91,7 +87,6 @@ class GlossaryGroupService:
 
     # -------------------------SUGGESTION---------------------
     def suggest(self) -> dict[str, Any]:
-        """Gợi ý nhóm cho thuật ngữ chưa phân nhóm có nghĩa gần nhau, đọc từ bản hiện tại."""
         candidates = []
         for term in self.terms.read_all():
             revision = self.revisions.read_current(term.id)
@@ -102,7 +97,6 @@ class GlossaryGroupService:
         return suggest_groups(GLOSSARY_KIND, candidates, group_names)
 
     def apply_suggestion(self, payload: Any, actor_id: int) -> tuple[GlossaryTermGroup, list[int]]:
-        """Chuyển các thuật ngữ quản trị viên giữ lại vào nhóm có sẵn hoặc nhóm mới; trả về nhóm và ID thuật ngữ."""
         choice = grouping_choice(payload, GlossaryValidationError)
         if choice.group_id is not None:
             group = self.require(choice.group_id)
@@ -112,14 +106,9 @@ class GlossaryGroupService:
 
     @staticmethod
     def dismiss_suggestion(payload: Any, actor_id: int) -> str:
-        """Bỏ qua một gợi ý để không gợi ý lại; trả về fingerprint."""
         return dismiss_suggestion(GLOSSARY_KIND, payload, actor_id, GlossaryValidationError)
 
 
 def term_text(canonical_name: str, synonyms: list[str], definition: str) -> str:
-    """Nghĩa của thuật ngữ để embedding: tên, từ đồng nghĩa và định nghĩa.
-
-    Links are left out: they say where the data lives, and terms on one dataset would look alike for that alone.
-    """
     synonym_text = f" Đồng nghĩa: {'; '.join(synonyms)}." if synonyms else ""
     return f"{canonical_name}.{synonym_text} {definition}"

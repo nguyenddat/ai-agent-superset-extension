@@ -15,12 +15,15 @@ from ..services.srv_transformation import stored_transformations
 
 
 # -------------------------DICTIONARY---------------------
-def serialize_dictionary(dataset: SqlaTable, dictionary: DatasetDictionary, columns: list[ColumnDictionary]) -> dict[str, Any]:
-    """Từ điển của dataset, cột theo đúng thứ tự cột Superset, kèm khóa ngoại, grain và phép biến đổi."""
+def serialize_dictionary(
+    dataset: SqlaTable, dictionary: DatasetDictionary, columns: list[ColumnDictionary]
+) -> dict[str, Any]:
     records = {column.column_name: column for column in columns}
     # One query per kind of record, not one per referenced column.
     referenced_ids = {row.referenced_column for row in columns if row.referenced_column is not None}
-    references_by_id = {row.id: row for row in column_dictionary_repository().read_by_ids(referenced_ids)} if referenced_ids else {}
+    references_by_id = (
+        {row.id: row for row in column_dictionary_repository().read_by_ids(referenced_ids)} if referenced_ids else {}
+    )
     referenced_dataset_ids = {row.dataset_id for row in references_by_id.values()}
     datasets_by_id = {row.id: row for row in get_datasets(referenced_dataset_ids)}
 
@@ -78,7 +81,9 @@ def serialize_dictionary(dataset: SqlaTable, dictionary: DatasetDictionary, colu
         "time_column": dictionary.time_column,
         "row_kind_column": dictionary.row_kind_column,
         "contains_pii": bool(dictionary.contains_pii),
-        "grains": [{"row_kind_value": item.row_kind_value, "label": item.label, "grain": item.grain} for item in grains],
+        "grains": [
+            {"row_kind_value": item.row_kind_value, "label": item.label, "grain": item.grain} for item in grains
+        ],
         "read_only": not is_admin(),
         "columns": [column_values(actual) for actual in dataset.columns],
     }
@@ -86,7 +91,6 @@ def serialize_dictionary(dataset: SqlaTable, dictionary: DatasetDictionary, colu
 
 # -------------------------RELATIONSHIP-------------------
 def serialize_relationship_contract_fields(contract: RelationshipContract) -> dict[str, Any]:
-    """Các trường đã lưu của contract; kết quả kiểm tra dữ liệu chỉ tính khi làm trên bản chụp hiện tại."""
     verification = current_verification(contract)
     verified_at = getattr(contract, "verified_at", None)
     return {
@@ -108,15 +112,15 @@ def serialize_relationship_contract_fields(contract: RelationshipContract) -> di
     }
 
 
-def serialize_relationship_contract(contract: RelationshipContract, source: RelationshipEnd, target: RelationshipEnd) -> dict[str, Any]:
-    """Contract kèm việc nó còn là bản đã duyệt hiện tại hay không."""
+def serialize_relationship_contract(
+    contract: RelationshipContract, source: RelationshipEnd, target: RelationshipEnd
+) -> dict[str, Any]:
     # Metric execution never joins; a current approved contract on base tables is an edge for schema link instead.
     current = relationship_is_approved_current(contract, source, target)
     return {**serialize_relationship_contract_fields(contract), "current": current, "executable": False}
 
 
 def serialize_revoked_contract(contract: RelationshipContract, entry: ColumnDictionary | None) -> dict[str, Any]:
-    """Contract vừa thu hồi; khi khóa ngoại không còn hai đầu thì chỉ các trường đã lưu."""
     ends = relationship_ends(entry) if entry is not None else None
     if ends is None:
         return {**serialize_relationship_contract_fields(contract), "current": False, "executable": False}

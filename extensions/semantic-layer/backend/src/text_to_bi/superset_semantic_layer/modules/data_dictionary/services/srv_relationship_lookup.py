@@ -9,7 +9,6 @@ from .srv_relationship_contract import RelationshipEnd
 
 
 def relationship_ends(fk_entry: ColumnDictionary) -> tuple[RelationshipEnd, RelationshipEnd] | None:
-    """Hai đầu hiện tại của một khóa ngoại trong từ điển, kèm số cột khóa chính của mỗi bảng; None nếu mất một đầu."""
     if not fk_entry.referenced_column:
         return None
     column_repository = column_dictionary_repository()
@@ -30,6 +29,5 @@ def relationship_ends(fk_entry: ColumnDictionary) -> tuple[RelationshipEnd, Rela
 
 
 def base_tables(database_id: int) -> list[SqlaTable]:
-    """Dataset vật lý loại base trên một database: các bảng schema link được join."""
     rows = dataset_dictionary_repository().read_datasets_of_type(database_id, BASE_DATASET)
     return [dataset for dataset, _dictionary in rows if not dataset.sql]

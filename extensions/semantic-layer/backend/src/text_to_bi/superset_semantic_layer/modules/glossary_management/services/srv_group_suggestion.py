@@ -28,8 +28,6 @@ _FINGERPRINT = re.compile(r"[0-9a-f]{64}")
 
 @dataclass(frozen=True)
 class GroupingCandidate:
-    """A term or rule as grouping compares it: its name, the text its meaning is read from, and its group."""
-
     id: int
     name: str
     text: str
@@ -38,8 +36,6 @@ class GroupingCandidate:
 
 @dataclass(frozen=True)
 class GroupingChoice:
-    """What an administrator applies: the members to move, into an existing group or a new one with this name."""
-
     member_ids: list[int]
     group_id: int | None
     group_name: str | None
@@ -47,11 +43,6 @@ class GroupingChoice:
 
 # -------------------------READ---------------------------
 def suggest_groups(kind: str, candidates: list[GroupingCandidate], group_names: dict[int, str]) -> dict[str, Any]:
-    """Gợi ý nhóm cho các mục chưa phân nhóm có nghĩa gần nhau, bỏ các gợi ý quản trị viên đã bỏ qua.
-
-    Each suggestion puts members in an existing group they are close to, or in a new group named after its most
-    central member, and shows how similar each member is to the rest and to its closest neighbour.
-    """
     vectors = text_vectors([candidate.text for candidate in candidates])
     threshold = THRESHOLDS[vectors.method]
     similarity = similarity_matrix(vectors.vectors)
@@ -66,13 +57,11 @@ def suggest_groups(kind: str, candidates: list[GroupingCandidate], group_names: 
 
 
 def suggestion_fingerprint(group_id: int | None, member_ids: Sequence[int]) -> str:
-    """Định danh của gợi ý: nhóm đích (None nếu nhóm mới) và các mục được chuyển."""
     return hashlib.sha256(compact_json({"group_id": group_id, "member_ids": sorted(member_ids)}).encode()).hexdigest()
 
 
 # -------------------------CREATE-------------------------
 def dismiss_suggestion(kind: str, payload: Any, actor_id: int, invalid: type[Exception]) -> str:
-    """Ghi nhận gợi ý bị bỏ qua để không gợi ý lại; trả về fingerprint."""
     fingerprint = payload.get("fingerprint") if isinstance(payload, dict) else None
     if not isinstance(fingerprint, str) or not _FINGERPRINT.fullmatch(fingerprint):
         raise invalid("Gợi ý gom nhóm không hợp lệ.")
@@ -90,7 +79,6 @@ def dismiss_suggestion(kind: str, payload: Any, actor_id: int, invalid: type[Exc
 
 # -------------------------CHECK--------------------------
 def grouping_choice(payload: Any, invalid: type[Exception]) -> GroupingChoice:
-    """Các mục quản trị viên giữ lại từ gợi ý và nhóm đích: `group_id` nhóm có sẵn, hoặc `group_name` nhóm mới."""
     if not isinstance(payload, dict):
         raise invalid("Gợi ý gom nhóm không hợp lệ.")
     member_ids = payload.get("member_ids")

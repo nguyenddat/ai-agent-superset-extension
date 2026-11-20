@@ -2,8 +2,6 @@ from enum import Enum
 
 
 class ReviewStatus(str, Enum):
-    """Trạng thái duyệt chung của metric, thuật ngữ và quy tắc chuyên gia."""
-
     DRAFT = "draft"
     APPROVED = "approved"
     REVOKED = "revoked"

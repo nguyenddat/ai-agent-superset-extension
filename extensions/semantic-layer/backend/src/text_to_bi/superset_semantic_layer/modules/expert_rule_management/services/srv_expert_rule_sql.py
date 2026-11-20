@@ -29,7 +29,6 @@ _STATEMENT_TYPES = (
 
 
 def _command_is_documented_control(node: exp.Command) -> bool:
-    """Classify SQLGlot's deliberate Command fallback, never free text alone."""
     command = str(node.args.get("this") or "").upper()
     expression_node = node.args.get("expression")
     expression = str(getattr(expression_node, "this", expression_node) or "").strip()
@@ -46,11 +45,6 @@ def _command_is_documented_control(node: exp.Command) -> bool:
 
 
 def _tokens_are_dialect_control(tokens: list[Token]) -> bool:
-    """Recognize the small documented control grammar SQLGlot cannot parse.
-
-    This is token-structure classification after PostgreSQL parsing failed, not
-    a text keyword detector: each branch requires its complete command shape.
-    """
     words = [token.text.upper() for token in tokens]
     first = words[0] if words else ""
     # Every rule is a complete token grammar supplied to cover PostgreSQL and
@@ -110,7 +104,6 @@ def _is_sql_ast(node: exp.Expression) -> bool:
 
 
 def contains_sql_or_control(value: str) -> bool:
-    """Return whether PostgreSQL SQL/control syntax occurs at a token boundary."""
     if any(marker in value for marker in _LEXICAL_FORBIDDEN):
         return True
     try:

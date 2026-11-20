@@ -37,7 +37,6 @@ KIND_ORDER = {kind: index for index, kind in enumerate((*RULE_KINDS, *SEMANTIC_K
 
 
 def _governed_terms() -> tuple[list[TermItem], dict[int, int]]:
-    """Each term's current draft or approved revision, and the dataset of each metric they link."""
     revision_repository, link_repository = glossary_revision_repository(), glossary_link_repository()
     terms, metric_datasets = [], {}
     for term in glossary_term_repository().read_all():
@@ -62,7 +61,6 @@ def _governed_terms() -> tuple[list[TermItem], dict[int, int]]:
 
 
 def _linked_metrics(metric_datasets: dict[int, int]) -> list[MetricItem]:
-    """The metrics the terms link, each with its SQL formula."""
     metrics = []
     for metric_id, dataset_id in sorted(metric_datasets.items()):
         dataset = get_dataset(dataset_id)
@@ -83,7 +81,6 @@ def _linked_metrics(metric_datasets: dict[int, int]) -> list[MetricItem]:
 
 
 def _governed_rules() -> list[RuleItem]:
-    """Each rule's current draft or approved revision, with the labels of the columns its conditions use."""
     rule_repository, link_repository = expert_rule_repository(), expert_rule_link_repository()
     column_repository = column_dictionary_repository()
     rules = []
@@ -118,18 +115,11 @@ def _governed_rules() -> list[RuleItem]:
 
 
 def governed_items() -> tuple[list[TermItem], list[RuleItem], list[MetricItem]]:
-    """The terms, rules and linked metrics a check reads."""
     terms, metric_datasets = _governed_terms()
     return terms, _governed_rules(), _linked_metrics(metric_datasets)
 
 
 def refresh_contradictions(judge: Judge | None, defer_model: bool = False) -> SemanticOutcome:
-    """Check every current term and rule and store what is found; the caller commits.
-
-    Rule-based checks always run. The AI model judges only candidate pairs it has not judged with the same content,
-    and its verdicts are kept for the next check; with `defer_model` it is not asked yet. Returns how the AI part
-    went.
-    """
     terms, rules, metrics = governed_items()
     findings = detect(terms, rules)
     candidates = semantic_candidates(terms, rules, metrics, findings)
@@ -163,13 +153,11 @@ def refresh_contradictions(judge: Judge | None, defer_model: bool = False) -> Se
 
 
 def contradictions_for_review() -> list[Contradiction]:
-    """Open contradictions first, then dismissed ones, each by kind."""
     rows = contradiction_repository().read_all()
     return sorted(rows, key=lambda row: (row.status != "open", KIND_ORDER.get(row.kind, len(KIND_ORDER)), row.id))
 
 
 def mark_contradiction_dismissed(contradiction_id: int, reason: str, actor_id: int) -> Contradiction:
-    """Accept a contradiction as it is; it stays dismissed until either item's content changes."""
     row = contradiction_repository().read(contradiction_id)
     if row is None:
         raise ContradictionNotFoundError()

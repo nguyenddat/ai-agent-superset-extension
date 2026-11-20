@@ -42,11 +42,6 @@ _PHRASES = (
 
 
 def main_clause(text: str) -> str:
-    """The first clause of a text, up to a semicolon or the end of a sentence.
-
-    A definition states its own threshold first and may name a stronger grade after it, as in "trên 50 mm; trên 100 mm
-    là mưa rất to", so only the first clause is read.
-    """
     # A dot ends a sentence only before a space or the end, so a decimal such as 1.5 stays whole.
     return " ".join(re.split(r";|\n|\.(?:\s|$)", text, maxsplit=1)[0].split())
 
@@ -56,7 +51,6 @@ def _number(text: str) -> float:
 
 
 def threshold_phrases(text: str) -> list[tuple[int, Interval]]:
-    """Every threshold phrase of a text with where it starts, read left to right without overlaps."""
     normalized = unicodedata.normalize("NFC", text).casefold()
     matches = []
     for pattern, side, inclusive in _PHRASES:
@@ -83,10 +77,6 @@ def threshold_phrases(text: str) -> list[tuple[int, Interval]]:
 
 
 def stated_interval(text: str | None) -> Interval | None:
-    """The numeric range the first clause of a text states, such as > 50 for "Ngày có tổng lượng mưa trên 50 mm".
-
-    None when the clause states no threshold, or thresholds that cannot hold together.
-    """
     if not text:
         return None
     phrases = threshold_phrases(main_clause(text))

@@ -4,7 +4,9 @@ import pytest
 
 from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions import ApprovedMetricContractRequiredError
 from text_to_bi.superset_semantic_layer.modules.metric_management.services import srv_metric_execute
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import metric_contract_hash
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import (
+    metric_contract_hash,
+)
 from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_execute import (
     build_metric_chart_payload,
     execute_approved_chart_query,
@@ -157,10 +159,13 @@ def test_only_the_supplied_chartdata_runner_validates_and_runs_after_approval():
 
 @pytest.mark.parametrize(
     "status, stale, origin, admin, allowed",
-    [("draft", False, "manual", True, True), ("draft", False, "manual", False, False), ("draft", False, "ai_agent", False, True),
-     ("draft", True, "ai_agent", False, False), ("revoked", False, "ai_agent", True, False)],
+    [("draft", False, "manual", True, True), ("draft", False, "manual", False, False),
+     ("draft", False, "ai_agent", False, True), ("draft", True, "ai_agent", False, False),
+     ("revoked", False, "ai_agent", True, False)],
 )
-def test_draft_preview_runs_only_for_admin_or_agent_origin_and_unchanged_contract(monkeypatch, status, stale, origin, admin, allowed):
+def test_draft_preview_runs_only_for_admin_or_agent_origin_and_unchanged_contract(
+    monkeypatch, status, stale, origin, admin, allowed,
+):
     dataset = _dataset()
     dataset.catalog = dataset.schema = dataset.table_name = dataset.sql = None
     dataset.database = SimpleNamespace(database_name="warehouse")
@@ -177,7 +182,9 @@ def test_draft_preview_runs_only_for_admin_or_agent_origin_and_unchanged_contrac
     monkeypatch.setattr(srv_metric_execute, "is_admin", lambda: admin)
     monkeypatch.setattr(srv_metric_execute, "semantic_query_row_cap", lambda: 1000)
     calls = []
-    run = lambda payload: calls.append(payload) or {"data": [{"average_temperature": 28}], "colnames": ["average_temperature"]}
+    run = lambda payload: calls.append(payload) or {
+        "data": [{"average_temperature": 28}], "colnames": ["average_temperature"],
+    }
     if allowed:
         result = service.execute(dataset, metric, {"dimensions": []}, run)
         assert result["preview"] is True

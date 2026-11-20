@@ -1,7 +1,10 @@
 from types import SimpleNamespace
 from typing import Any
 
-from text_to_bi.superset_ai_agent.modules.semantic_layer.services.public_metadata import dictionary_metadata, metric_metadata
+from text_to_bi.superset_ai_agent.modules.semantic_layer.services.public_metadata import (
+    dictionary_metadata,
+    metric_metadata,
+)
 
 from .metadata import coded_values, dataset_context
 
@@ -19,18 +22,28 @@ def read_sources(cookie: str) -> dict[str, Any]:
         source_metrics = []
         if dictionary.dataset_type == "aggregate":
             for metric in metrics:
-                if metric["dataset_id"] != dataset.id or metric["metric_name"] == "count" or (metric["expression"] or "").replace(" ", "").upper() == "COUNT(*)":
+                if (
+                    metric["dataset_id"] != dataset.id or metric["metric_name"] == "count"
+                    or (metric["expression"] or "").replace(" ", "").upper() == "COUNT(*)"
+                ):
                     continue
-                live = SimpleNamespace(id=metric["metric_id"], metric_name=metric["metric_name"], verbose_name=metric["label"], expression=metric["expression"])
+                live = SimpleNamespace(
+                    id=metric["metric_id"], metric_name=metric["metric_name"], verbose_name=metric["label"],
+                    expression=metric["expression"],
+                )
                 definition = SimpleNamespace(business_definition=metric["definition"], unit=metric["unit"])
                 source_metrics.append(source_metric(live, metric["state"], metric["origin"], definition))
-        described.append({"id": dataset.id, "name": dataset.table_name, "label": dictionary.display_name, "dataset_type": dictionary.dataset_type,
-                          "description": dictionary.description, "grain": dictionary.grain, "columns": columns, "metrics": source_metrics})
+        described.append(
+            {
+                "id": dataset.id, "name": dataset.table_name, "label": dictionary.display_name,
+                "dataset_type": dictionary.dataset_type, "description": dictionary.description,
+                "grain": dictionary.grain, "columns": columns, "metrics": source_metrics,
+            },
+        )
     return {"datasets": sorted(described, key=lambda dataset: dataset["name"])}
 
 
 def is_default_count(metric: Any) -> bool:
-    """Superset's own COUNT(*) metric on every dataset, which measures nothing in particular."""
     expression = str(getattr(metric, "expression", "") or "").replace(" ", "").upper()
     return getattr(metric, "metric_name", None) == "count" or expression == "COUNT(*)"
 
@@ -38,12 +51,6 @@ def source_columns(
     dataset: Any, entries: dict[str, Any], referenced: dict[int, tuple[int, str]],
     coded_values: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """The physical columns the agent may measure, group or filter by, named and explained by the data dictionary.
-
-    `referenced` maps a dictionary column ID to the (dataset ID, column name) it is; a foreign key names its target so
-    the agent can join base datasets. `coded_values` gives the stored values of code columns such as a status, so a
-    formula filters on `THAT_BAI` rather than a guessed "lỗi".
-    """
     columns = []
     for column in getattr(dataset, "columns", []):
         if getattr(column, "is_active", None) is not True or getattr(column, "expression", None):
@@ -71,7 +78,6 @@ def source_columns(
     return columns
 
 def source_metric(metric: Any, state: str, origin: str | None, definition: Any) -> dict[str, Any]:
-    """A saved metric with its formula and review state, so the agent follows the dataset's conventions."""
     described = {
         "metric_id": metric.id,
         "metric_name": metric.metric_name,

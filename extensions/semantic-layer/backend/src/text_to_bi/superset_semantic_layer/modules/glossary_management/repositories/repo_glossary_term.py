@@ -20,7 +20,6 @@ class GlossaryTermRepository(BaseRepository[GlossaryTerm]):
         return self.get(term_id)
 
     def read_all(self) -> list[GlossaryTerm]:
-        """Mọi thuật ngữ, theo tên."""
         return self.query().order_by(GlossaryTerm.canonical_name).all()
 
     def read_by_normalized_name(self, normalized_name: str) -> GlossaryTerm | None:
@@ -30,5 +29,4 @@ class GlossaryTermRepository(BaseRepository[GlossaryTerm]):
         return self.query().filter_by(group_id=group_id).order_by(GlossaryTerm.id).all()
 
     def read_for_update(self, term_id: int) -> GlossaryTerm | None:
-        """Đọc lại thuật ngữ và giữ khóa dòng tới hết transaction."""
         return self.query().filter(GlossaryTerm.id == term_id).populate_existing().with_for_update().one_or_none()

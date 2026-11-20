@@ -15,12 +15,6 @@ from text_to_bi.superset_semantic_layer.common.base_model import BaseModel
 
 
 class Contradiction(BaseModel):
-    """A contradiction between glossary terms, expert rules and metrics, or inside one rule, for an administrator.
-
-    `pair_key` names the kind and the items, so each check finds the same row again. `fingerprint` hashes the items'
-    content: a dismissal holds while it is unchanged, and a check that finds changed content opens the row again.
-    """
-
     __table_args__ = (
         UniqueConstraint("pair_key", name="uq_text_to_bi_contradiction_pair_key"),
         CheckConstraint("status IN ('open', 'dismissed')", name="ck_text_to_bi_contradiction_status"),
@@ -43,8 +37,6 @@ class Contradiction(BaseModel):
 
 
 class ContradictionJudgement(BaseModel):
-    """The AI model's verdict on one pair's content, kept so an unchanged pair is never judged again."""
-
     __table_args__ = (
         UniqueConstraint("fingerprint", name="uq_text_to_bi_contradiction_judgement_fingerprint"),
         {"extend_existing": True},

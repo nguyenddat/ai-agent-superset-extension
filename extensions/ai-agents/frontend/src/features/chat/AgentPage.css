@@ -517,7 +517,9 @@ header#main-menu.top > .ant-row > .ant-col-md-8 { flex: 0 0 auto; max-width: non
   border: 1px solid var(--ai-border); border-radius: 8px; display: grid; gap: 4px; padding: 8px 10px;
 }
 .ai-result-formula-heading { align-items: center; display: flex; justify-content: space-between; gap: 8px; }
-.ai-result-formula-heading span { color: var(--ai-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.ai-result-formula-heading span {
+  color: var(--ai-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
 .ai-result-formula-heading button {
   background: transparent; border: 0; color: var(--ai-accent); cursor: pointer; font-size: 12px; padding: 0;
 }
@@ -552,7 +554,9 @@ header#main-menu.top > .ant-row > .ant-col-md-8 { flex: 0 0 auto; max-width: non
 /* Small multiples: a panel per group, in the first series colour, captioned by the group's name. */
 .ai-result-multiples { display: grid; gap: 6px; margin: 0; }
 .ai-result-multiples > figcaption { color: var(--ai-text-secondary); font-size: 12px; font-weight: 600; }
-.ai-result-multiples-grid { display: grid; gap: 8px 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.ai-result-multiples-grid {
+  display: grid; gap: 8px 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
 .ai-result-chart.is-panel figcaption { color: var(--ai-text); font-weight: 500; }
 .ai-result-chart svg { display: block; overflow: visible; }
 .ai-result-grid line { stroke: var(--ai-border-soft); stroke-width: 1; }

@@ -33,11 +33,6 @@ class ContradictionRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def check_contradictions(self):
-        """Kiểm tra lại mọi thuật ngữ và quy tắc hiện tại, trả về các mâu thuẫn, cái đang mở trước.
-
-        With `{"rules_only": true}` the AI model is not asked; the screen shows the rule-based findings at once and
-        then checks again with the model.
-        """
         require_admin()
         ensure_dictionary_tables()
         payload = request.get_json(silent=True)
@@ -64,7 +59,6 @@ class ContradictionRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def dismiss_contradiction(self, contradiction_id: int):
-        """Chấp nhận mâu thuẫn kèm lý do; nó quay lại khi nội dung một trong hai mục thay đổi."""
         require_admin()
         ensure_dictionary_tables()
         reason = dismissal_reason(request.get_json(silent=True))

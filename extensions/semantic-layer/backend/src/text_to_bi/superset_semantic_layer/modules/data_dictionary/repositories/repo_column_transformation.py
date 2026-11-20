@@ -25,7 +25,6 @@ class ColumnTransformationRepository(BaseRepository[ColumnTransformation]):
         return self.query().filter(ColumnTransformation.column_id.in_(list(column_ids))).all()
 
     def read_sources(self, column_ids: Iterable[int]) -> list[Any]:
-        """(dòng nguồn, cột nguồn) của phép biến đổi trên các cột này, theo thứ tự đã khai báo."""
         return self.session.execute(
             select(ColumnTransformationSource, ColumnDictionary)
             .join(ColumnDictionary, ColumnTransformationSource.source_column_id == ColumnDictionary.id)
@@ -34,7 +33,6 @@ class ColumnTransformationRepository(BaseRepository[ColumnTransformation]):
         ).all()
 
     def read_into_datasets(self, dataset_ids: Iterable[int]) -> list[Any]:
-        """(cột đích, biểu thức, cột nguồn) của mỗi đầu vào khai báo cho một cột của các dataset này."""
         target = aliased(ColumnDictionary)
         source = aliased(ColumnDictionary)
         return self.session.execute(
@@ -48,8 +46,9 @@ class ColumnTransformationRepository(BaseRepository[ColumnTransformation]):
 
     # -------------------------UPDATE-------------------------
     def update_sources(self, column_id: int, source_column_ids: list[int]) -> None:
-        """Thay các cột đầu vào của một phép biến đổi, giữ thứ tự."""
-        stored = self.session.scalars(select(ColumnTransformationSource).where(ColumnTransformationSource.column_id == column_id)).all()
+        stored = self.session.scalars(
+            select(ColumnTransformationSource).where(ColumnTransformationSource.column_id == column_id)
+        ).all()
         for item in stored:
             self.session.delete(item)
         # The unique source constraint must see the old rows gone before the new ones arrive.

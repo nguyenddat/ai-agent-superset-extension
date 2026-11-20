@@ -5,7 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from text_to_bi.superset_ai_agent.modules.agent_ladder.exceptions import DatasetProposalNotFoundError, ProposalAlreadyReviewedError
+from text_to_bi.superset_ai_agent.modules.agent_ladder.exceptions import (
+    DatasetProposalNotFoundError,
+    ProposalAlreadyReviewedError,
+)
 
 SOURCE = Path(__file__).parents[1] / 'src/text_to_bi/superset_ai_agent/modules/agent_ladder/services/proposals.py'
 
@@ -13,14 +16,23 @@ SOURCE = Path(__file__).parents[1] / 'src/text_to_bi/superset_ai_agent/modules/a
 def service(**bindings):
     tree = ast.parse(SOURCE.read_text(encoding='utf-8'))
     declaration = next(node for node in tree.body if isinstance(node, ast.ClassDef))
-    module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0), declaration], type_ignores=[])
-    namespace = {'datetime': datetime, 'timezone': timezone, 'DatasetProposalNotFoundError': DatasetProposalNotFoundError, 'ProposalAlreadyReviewedError': ProposalAlreadyReviewedError, **bindings}
+    module = ast.Module(
+        body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0), declaration],
+        type_ignores=[],
+    )
+    namespace = {
+        'datetime': datetime, 'timezone': timezone, 'DatasetProposalNotFoundError': DatasetProposalNotFoundError,
+        'ProposalAlreadyReviewedError': ProposalAlreadyReviewedError, **bindings,
+    }
     exec(compile(ast.fix_missing_locations(module), str(SOURCE), 'exec'), namespace)  # noqa: S102
     return namespace['DatasetProposalService']()
 
 
 def proposal(**fields):
-    return SimpleNamespace(id=17, name='proposed', label='Proposed', description=None, sql='SELECT id FROM base', metric={}, question='Question', status='pending', proposer_id=2, **fields)
+    return SimpleNamespace(
+        id=17, name='proposed', label='Proposed', description=None, sql='SELECT id FROM base', metric={},
+        question='Question', status='pending', proposer_id=2, **fields,
+    )
 
 
 def test_create_forwards_original_author_and_stable_retry_key():
@@ -42,14 +54,19 @@ def test_http_failure_keeps_proposal_pending():
     def fail(*_):
         raise ConnectionError('disconnected')
 
-    workflow = service(dataset_proposal_repository=lambda: SimpleNamespace(read_for_update=lambda _: saved), create_dataset_draft=fail)
+    workflow = service(
+        dataset_proposal_repository=lambda: SimpleNamespace(read_for_update=lambda _: saved), create_dataset_draft=fail,
+    )
     with pytest.raises(ConnectionError):
         workflow.create(17, 3, 'session', 'csrf')
     assert saved.status == 'pending'
     assert not hasattr(saved, 'dataset_id')
 
 
-@pytest.mark.parametrize('saved, error', [(None, DatasetProposalNotFoundError), (SimpleNamespace(status='created'), ProposalAlreadyReviewedError)])
+@pytest.mark.parametrize(
+    'saved, error',
+    [(None, DatasetProposalNotFoundError), (SimpleNamespace(status='created'), ProposalAlreadyReviewedError)],
+)
 def test_review_requires_existing_pending_proposal(saved, error):
     workflow = service(dataset_proposal_repository=lambda: SimpleNamespace(read_for_update=lambda _: saved))
     with pytest.raises(error):
@@ -59,7 +76,9 @@ def test_review_requires_existing_pending_proposal(saved, error):
 def test_duplicate_sql_reuses_pending_proposal():
     saved = proposal()
     repository = SimpleNamespace(pending_with_fingerprint=lambda _: saved)
-    workflow = service(dataset_proposal_repository=lambda: repository, validate_dataset_draft=lambda *_: {'sql_fingerprint': 'same'})
+    workflow = service(
+        dataset_proposal_repository=lambda: repository, validate_dataset_draft=lambda *_: {'sql_fingerprint': 'same'},
+    )
     assert workflow.propose({}, 2, 'session', 'csrf') == (saved, False)
 
 

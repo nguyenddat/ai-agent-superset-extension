@@ -27,12 +27,13 @@ class RelationshipRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def create_relationship_contract_candidate(self, dataset_id: int, column_id: int):
-        """Chụp một khóa ngoại đủ điều kiện thành contract đề xuất chờ quản trị viên duyệt."""
         require_admin()
         ensure_dictionary_tables()
         body = request.get_json(silent=True)
         origin = body.get("source") if isinstance(body, dict) else None
-        contract, source, target = RelationshipService().create_candidate(dataset_id, column_id, origin, current_user.id)
+        contract, source, target = RelationshipService().create_candidate(
+            dataset_id, column_id, origin, current_user.id
+        )
         db.session.commit()
         return self.response(201, contract=serialize_relationship_contract(contract, source, target))
 
@@ -45,7 +46,6 @@ class RelationshipRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def apply_relationship_suggestion(self, dataset: Any):
-        """Khai báo một quan hệ được gợi ý vào Data Dictionary và chụp nó thành contract đề xuất."""
         require_admin()
         ensure_dictionary_tables()
         relationship = RelationshipService().apply_suggestion(dataset, request.get_json(silent=True), current_user.id)
@@ -60,7 +60,6 @@ class RelationshipRoutes(RouteMixin):
     @handle_errors
     @requires_dataset
     def list_relationships(self, dataset: Any):
-        """Quan hệ đi ra và đi vào của dataset, kèm contract; `suggest=1` thêm các quan hệ được gợi ý."""
         require_admin()
         ensure_dictionary_tables()
         return self.response(200, **RelationshipService().read_all(dataset, request.args.get("suggest") == "1"))
@@ -74,7 +73,6 @@ class RelationshipRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def verify_relationship(self, dataset_id: int, column_id: int):
-        """Kiểm tra dữ liệu có đúng quan hệ không và lưu kết quả lên contract."""
         require_admin()
         ensure_dictionary_tables()
         verified = RelationshipService().verify(dataset_id, column_id)
@@ -93,7 +91,6 @@ class RelationshipRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def approve_relationship_contract(self, dataset_id: int, column_id: int):
-        """Duyệt contract đề xuất đã qua kiểm tra dữ liệu."""
         require_admin()
         ensure_dictionary_tables()
         contract, source, target = RelationshipService().approve(dataset_id, column_id, current_user.id)
@@ -108,9 +105,10 @@ class RelationshipRoutes(RouteMixin):
     @rollback_on_error
     @handle_errors
     def revoke_relationship_contract(self, dataset_id: int, column_id: int):
-        """Thu hồi contract của khóa ngoại; `?contract_id=` chọn đúng contract khi cột đã đổi."""
         require_admin()
         ensure_dictionary_tables()
-        contract, entry = RelationshipService().revoke(dataset_id, column_id, request.args.get("contract_id", type=int), current_user.id)
+        contract, entry = RelationshipService().revoke(
+            dataset_id, column_id, request.args.get("contract_id", type=int), current_user.id
+        )
         db.session.commit()
         return self.response(200, contract=serialize_revoked_contract(contract, entry))

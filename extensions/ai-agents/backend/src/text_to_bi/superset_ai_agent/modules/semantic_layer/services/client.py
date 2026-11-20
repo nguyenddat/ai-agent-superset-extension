@@ -21,12 +21,10 @@ _cache_lock = threading.Lock()
 
 
 def internal_superset_url() -> str:
-    """Superset as seen from inside its own container; the Compose service listens on 8088."""
     return settings.TEXT_TO_BI_SUPERSET_INTERNAL_URL.rstrip("/")
 
 
 def get_json(path: str, cookie_header: str, *, preserve_status: bool = False) -> dict[str, Any]:
-    """GET as the asking user; raises SemanticLayerUnavailableError when the answer is not a 200."""
     try:
         response = requests.get(
             internal_superset_url() + path,
@@ -55,7 +53,6 @@ def get_json(path: str, cookie_header: str, *, preserve_status: bool = False) ->
 
 
 def post_json(path: str, body: dict[str, Any], cookie_header: str, csrf_token: str, action: str) -> dict[str, Any]:
-    """POST as the asking user to `action` (\"chạy truy vấn\"); a refusal carries the Semantic Layer's own message."""
     try:
         response = requests.post(
             internal_superset_url() + path,
@@ -78,14 +75,16 @@ def post_json(path: str, body: dict[str, Any], cookie_header: str, csrf_token: s
     if response.status_code not in (200, 201):
         message = answer.get("message") if isinstance(answer.get("message"), str) else None
         preserved = response.status_code in (400, 401, 403, 404, 409, 429)
-        error = SemanticLayerRefusedError((message or f"Semantic Layer trả về lỗi {response.status_code} khi {action}.") if preserved else "Semantic Layer chưa sẵn sàng.")
+        error = SemanticLayerRefusedError(
+            (message or f"Semantic Layer trả về lỗi {response.status_code} khi {action}.") if preserved
+            else "Semantic Layer chưa sẵn sàng.",
+        )
         error.status = response.status_code if preserved else 503
         raise error
     return answer
 
 
 def cached(store: dict, key: Any, load: Callable[[], Any]) -> Any:
-    """What `load` returns for `key`, read again after `CACHE_SECONDS`; keyed by user because access differs."""
     now = time.monotonic()
     with _cache_lock:
         entry = store.get(key)

@@ -6,7 +6,11 @@ from text_to_bi.superset_semantic_layer.modules.metric_management.exceptions imp
     MetricContractValidationError,
     MetricSelfApprovalError,
 )
-from text_to_bi.superset_semantic_layer.modules.metric_management.services import srv_metric_contract, srv_metric_def, srv_metric_event
+from text_to_bi.superset_semantic_layer.modules.metric_management.services import (
+    srv_metric_contract,
+    srv_metric_def,
+    srv_metric_event,
+)
 from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_contract import (
     MetricContractService,
     contract_is_approved_current,
@@ -14,7 +18,9 @@ from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_m
     metric_contract_state,
 )
 from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_def import MetricDefService
-from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import DatasetTimeContext
+from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_query_defaults import (
+    DatasetTimeContext,
+)
 from text_to_bi.superset_semantic_layer.modules.metric_management.services.srv_metric_validation import (
     METRIC_CONTRACT_RULE,
     metric_contract_ineligibility,
@@ -31,7 +37,9 @@ def _objects():
         schema="public",
         table_name="weather_daily",
         sql=None,
-        database=SimpleNamespace(id=3, database_name="warehouse", sqlalchemy_uri="postgresql://user:secret@db:5432/warehouse"),
+        database=SimpleNamespace(
+            id=3, database_name="warehouse", sqlalchemy_uri="postgresql://user:secret@db:5432/warehouse",
+        ),
         columns=[SimpleNamespace(column_name="temperature_c", is_active=True, expression=None)],
     )
     metric = SimpleNamespace(id=19, metric_name="average_temperature", expression="AVG(temperature_c)")
@@ -380,8 +388,12 @@ def test_metric_definition_and_query_defaults_updates_persist_and_create_audit_e
     assert state.events[-1].action == "definition"
 
     dataset.columns = [
-        SimpleNamespace(column_name="date", is_active=True, expression=None, type="DATE", groupby=True, filterable=True),
-        SimpleNamespace(column_name="temperature_c", is_active=True, expression=None, type="FLOAT", groupby=True, filterable=True),
+        SimpleNamespace(
+            column_name="date", is_active=True, expression=None, type="DATE", groupby=True, filterable=True,
+        ),
+        SimpleNamespace(
+            column_name="temperature_c", is_active=True, expression=None, type="FLOAT", groupby=True, filterable=True,
+        ),
     ]
     time_context = DatasetTimeContext("date", None, {None: "day"}, {"date"})
     monkeypatch.setattr(srv_metric_def, "dataset_time_context", lambda _: time_context)

@@ -132,8 +132,6 @@ class DatasetDraft(BaseModel):
 
 @dataclass
 class MetricBuilder:
-    """The data model steps taken when no approved metric answers: read its aggregate datasets, save a built metric."""
-
     load_sources: Callable[[], DataModelSources]
     # Saves a metric draft; returns the metric in the Semantic Layer's shape and whether it still waits for approval.
     create_metric: Callable[[dict[str, Any]], tuple[dict[str, Any], bool]]
@@ -161,12 +159,6 @@ class AgentOutcome:
 
     @property
     def missing(self) -> list[str]:
-        """What the semantic layer lacks for this question.
-
-        A glossary term is missing only for a concept nothing defines: a question fully described by an approved
-        metric, such as "nhiệt độ trung bình tháng này", needs no term of its own. A concept the user confirmed on this
-        dashboard counts as the question's expert rule.
-        """
         has_user_rule = any(item["kind"] == "expert_rule" for item in self.user_definitions)
         gaps = {
             "glossary": bool(self.undefined_concepts),
@@ -182,7 +174,6 @@ class AgentOutcome:
 
 
 def recent_history(history: Any) -> list[dict[str, str]]:
-    """The last few user and assistant turns, trimmed; anything malformed from the browser is dropped."""
     if not isinstance(history, list):
         return []
     messages = [
@@ -199,7 +190,6 @@ def _data_block(label: str, value: Any) -> str:
 
 
 def _described(items: list[dict[str, Any]], fields: tuple[str, ...]) -> list[dict[str, Any]]:
-    """Catalog items reduced to the fields a step needs to judge them."""
     return [{key: item.get(key) for key in fields if item.get(key) not in (None, "", [])} for item in items]
 
 
@@ -210,14 +200,12 @@ RULE_FIELDS = ("id", "name", "dataset_id", "conditions", "exceptions", "metric_i
 
 
 def _known(ids: list[int], items_by_id: dict[int, dict[str, Any]]) -> list[int]:
-    """The IDs the model returned that are real candidates, de-duplicated in the model's order."""
     return [item_id for item_id in dict.fromkeys(ids) if item_id in items_by_id]
 
 
 def _tool_call(
     index: int, name: str, arguments: dict[str, Any], action: Callable[[], Any], shown: Callable[[Any], Any]
 ):
-    """Run one step as a reported tool call; `shown` turns the step's return value into the result the UI displays."""
     call_id = f"call_{index}"
     yield "tool_start", {"id": call_id, "name": name, "arguments": arguments}
     started = time.monotonic()
@@ -244,7 +232,6 @@ MAX_OPTIONS = 4
 
 
 def _clarifications(proposals: MissingProposals, missing: list[str]) -> list[dict[str, Any]]:
-    """The questions the user is asked: only for a missing term or rule, named, with at least one usable option."""
     drafts: dict[tuple[str, str], dict[str, Any]] = {}
     for draft in proposals.definitions:
         name = draft.name.strip()
@@ -262,7 +249,6 @@ def _clarifications(proposals: MissingProposals, missing: list[str]) -> list[dic
 
 
 def _suggestions(proposals: MissingProposals, missing: list[str]) -> dict[str, dict[str, Any]]:
-    """The metric proposed to administrators, when a metric is missing and the model named one."""
     metric = proposals.metric
     return {"metric": metric.model_dump()} if "metric" in missing and metric and metric.name.strip() else {}
 
@@ -305,7 +291,6 @@ def _understanding_shown(
 
 
 def _run_metrics(planned: Any, run_metric: MetricRunner) -> dict[str, Any]:
-    """Each metric is its own governed query, once per period; they share dimensions, so they all run side by side."""
     periods = [False, True] if planned.comparison else [False]
     calls = [(compared, metric) for compared in periods for metric in planned.metrics]
     with ThreadPoolExecutor(max_workers=len(calls)) as pool:
@@ -318,7 +303,6 @@ def _run_metrics(planned: Any, run_metric: MetricRunner) -> dict[str, Any]:
 
 
 def _stored_conditions(definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The user's definitions that carry stored conditions, in the shape the query planner adds them."""
     return [
         {"name": item["name"], "dataset_id": item["conditions"]["dataset_id"], "filters": item["conditions"]["filters"],
          "source": "user_definition"}
@@ -350,7 +334,6 @@ def _draft_shown(draft: MetricDraft) -> dict[str, Any]:
 
 
 def _built_plan(draft: MetricDraft, metric_id: int) -> dict[str, Any] | None:
-    """The draft's query, aimed at the metric the Semantic Layer saved."""
     if draft.query is None:
         return None
     plan = {**draft.query.model_dump(), "dataset_id": draft.dataset_id, "metric_ids": [metric_id]}
@@ -371,10 +354,6 @@ def _build_metric(
     rules: list[dict[str, Any]],
     outcome: AgentOutcome,
 ):
-    """Step 3: build a metric on an aggregate dataset and answer with it, provisionally until it is approved.
-
-    Returns the next step number and the metric used, or None when no aggregate dataset measures what was asked.
-    """
     if not sources.aggregates:
         return step, None
     draft_input = "\n\n".join((
@@ -431,7 +410,6 @@ def _build_metric(
 
 
 def _confirmed_doubt(result: dict[str, Any], metric: dict[str, Any], run_metric: MetricRunner) -> str | None:
-    """Doubt a provisional figure of nothing or zero only when the metric gives nothing over all the data either."""
     doubt = doubtful_result(result)
     if doubt is None:
         return None
@@ -452,10 +430,6 @@ def _propose_dataset(
     builder: MetricBuilder,
     outcome: AgentOutcome,
 ):
-    """Step 4: no aggregate dataset measures it, so draft a dataset over base datasets for an administrator to create.
-
-    Nothing runs: the asker is told a dataset was proposed. Returns the next step number.
-    """
     if builder.propose_dataset is None:
         return step
     draft_input = "\n\n".join((
@@ -499,10 +473,6 @@ def run_agent(
     today: date | None = None,
     builder: MetricBuilder | None = None,
 ) -> Iterator[Event]:
-    """Run one question; `user_definitions` are what the user confirmed on this dashboard.
-
-    With a `builder`, a question that only lacks a metric climbs to the data model and builds one (step 3).
-    """
     today = today or date.today()
     outcome = AgentOutcome()
     definitions_by_id = {item["id"]: item for item in user_definitions}

@@ -11,7 +11,6 @@ class ExpertRuleEventService:
 
     # -------------------------CREATE-------------------------
     def create(self, revision: ExpertRuleRevision, event_type: str, actor_id: int, reason: str | None = None) -> None:
-        """Ghi một sự kiện vào lịch sử rule; sự kiện không bao giờ bị sửa."""
         values = {
             "rule_id": revision.rule_id,
             "revision_id": revision.id,
@@ -29,6 +28,5 @@ class ExpertRuleEventService:
         return self.events.read_history(rule_id)
 
     def read_author_id(self, revision: ExpertRuleRevision) -> int | None:
-        """Người soạn một bản: người thực hiện sự kiện tạo hoặc sửa của bản đó."""
         event = self.events.read_latest_authoring(revision.id)
         return event.actor_id if event else None

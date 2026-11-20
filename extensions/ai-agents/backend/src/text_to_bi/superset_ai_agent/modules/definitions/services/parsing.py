@@ -27,7 +27,6 @@ def _text(item: dict[str, Any], key: str, label: str, max_length: int, required:
 
 
 def parse_definition(item: Any) -> dict[str, Any]:
-    """One definition as `{kind, name, concept, definition}`, trimmed."""
     if not isinstance(item, dict):
         raise UserDefinitionValidationError("Mỗi định nghĩa phải là JSON object.")
     if item.get("kind") not in DEFINITION_KINDS:
@@ -41,7 +40,6 @@ def parse_definition(item: Any) -> dict[str, Any]:
 
 
 def parse_definitions(items: Any) -> list[dict[str, Any]]:
-    """The definitions a user confirms at once; at least one, and one per kind and name."""
     if not isinstance(items, list) or not items:
         raise UserDefinitionValidationError("Cần ít nhất một định nghĩa để xác nhận.")
     if len(items) > MAX_DEFINITIONS:
@@ -54,7 +52,6 @@ def parse_definitions(items: Any) -> list[dict[str, Any]]:
 
 
 def parse_clarification(body: Any) -> tuple[str, list[dict[str, Any]]]:
-    """The user's answer to a question's clarifications: `confirmed` with the definitions they chose, or `dismissed`."""
     body = body if isinstance(body, dict) else {}
     state = body.get("state")
     if state not in CLARIFICATION_STATES:
@@ -63,7 +60,6 @@ def parse_clarification(body: Any) -> tuple[str, list[dict[str, Any]]]:
 
 
 def parse_review(body: Any) -> tuple[list[int], str]:
-    """An administrator's `{ids, status}` decision on users' definitions."""
     body = body if isinstance(body, dict) else {}
     definition_ids, status = body.get("ids"), body.get("status")
     if status not in REVIEW_STATUSES:

@@ -5,7 +5,6 @@ logger = logging.getLogger(__name__)
 
 
 def read_chart_queries(payload: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """Read through Superset ChartData validation under the current user's datasource and RLS permissions."""
     from superset.charts.schemas import ChartDataQueryContextSchema
     from superset.commands.chart.data.get_data_command import ChartDataCommand
 
@@ -14,6 +13,8 @@ def read_chart_queries(payload: dict[str, Any]) -> list[dict[str, Any]] | None:
         command.validate()
         return command.run()["queries"]
     except Exception as error:
-        if not any(word in error.__class__.__name__.lower() for word in ("access", "forbidden", "permission", "security")):
+        if not any(
+            word in error.__class__.__name__.lower() for word in ("access", "forbidden", "permission", "security")
+        ):
             logger.exception("Reading query metadata values through Superset failed")
         return None

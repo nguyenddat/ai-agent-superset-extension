@@ -28,12 +28,10 @@ def serialize_definition(definition: AgentUserDefinition) -> dict[str, Any]:
 
 
 def definitions_on_dashboard(user_id: int, dashboard_id: int) -> list[AgentUserDefinition]:
-    """What one user confirmed concepts mean on one dashboard, oldest first."""
     return user_definition_repository().for_dashboard(user_id, dashboard_id)
 
 
 def definitions_for_agent(user_id: int, dashboard_id: int) -> list[dict[str, Any]]:
-    """The user's definitions on this dashboard, in the shape the agent reads."""
     keys = ("id", "kind", "name", "concept", "definition", "conditions")
     return [{key: getattr(item, key) for key in keys} for item in definitions_on_dashboard(user_id, dashboard_id)]
 
@@ -46,7 +44,6 @@ def require_own_definition(definition_id: int, user_id: int) -> AgentUserDefinit
 
 
 def _reopen(definition: AgentUserDefinition) -> None:
-    """A changed definition goes back to administrators as not yet reviewed."""
     definition.review_status = "pending"
     definition.reviewed_by = None
     definition.reviewed_on = None
@@ -62,10 +59,6 @@ def save_confirmed_definitions(
     session_id: int,
     cookie_header: str,
 ) -> None:
-    """Keep what the user chose for every conversation they have about the dashboard.
-
-    Confirming a concept again replaces what the user said about it before on this dashboard.
-    """
     repository = user_definition_repository()
     existing = {(item.kind, item.name.casefold()): item for item in repository.for_dashboard(user_id, dashboard_id)}
     conditions = conditions_for(confirmed, user_id, cookie_header)
@@ -85,7 +78,6 @@ def save_confirmed_definitions(
 
 
 def update_definition(definition: AgentUserDefinition, body: Any, cookie_header: str) -> AgentUserDefinition:
-    """Change what the user's definition says; administrators see it again as not yet reviewed."""
     item = parse_definition({**(body if isinstance(body, dict) else {}), "kind": definition.kind})
     if item["definition"] != definition.definition or definition.conditions is None:
         # New words may mean a new threshold, so the conditions are worked out again from them.
@@ -99,7 +91,6 @@ def update_definition(definition: AgentUserDefinition, body: Any, cookie_header:
 
 
 def definitions_for_review() -> list[dict[str, Any]]:
-    """Every user's definitions, most recently changed first, with who wrote them and the question that asked."""
     definitions = user_definition_repository().recently_changed()
     user_name = user_names()
     dashboards = dashboard_titles({item.dashboard_id for item in definitions})
@@ -119,7 +110,6 @@ def definitions_for_review() -> list[dict[str, Any]]:
 
 
 def set_review_status(definition_ids: list[int], status: str, reviewer_id: int) -> int:
-    """Record that a shared term or rule now covers the concepts, that they stay personal, or reopen them."""
     reviewed = status != "pending"
     return user_definition_repository().update_by_ids(definition_ids, {
         "review_status": status,

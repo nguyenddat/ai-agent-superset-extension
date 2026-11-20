@@ -52,11 +52,6 @@ def declare_semantic_layer_admin_only() -> None:
 
 
 def ensure_semantic_layer_roles() -> None:
-    """Create the Semantic Layer roles and their permissions; the Semantic Layer permissions reach no built-in role.
-
-    Idempotent: it only adds what is missing, and strips the two Semantic Layer permissions from a built-in role that
-    an earlier role sync, run before the view menu was declared admin-only, handed them to.
-    """
     declare_semantic_layer_admin_only()
     for role_name, definition in SEMANTIC_LAYER_ROLES.items():
         ensure_role(role_name, definition["permissions"])
@@ -70,7 +65,6 @@ def semantic_layer_role_options() -> list[dict[str, str]]:
 
 
 def requested_role_names(body: Any) -> list[str]:
-    """The Semantic Layer role names an administrator asks a user to hold, from `{"roles": [...]}`."""
     role_names = body.get("roles") if isinstance(body, dict) else None
     if not isinstance(role_names, list) or not all(name in SEMANTIC_LAYER_ROLES for name in role_names):
         raise RoleAssignmentError()
@@ -78,7 +72,6 @@ def requested_role_names(body: Any) -> list[str]:
 
 
 def assign_semantic_layer_roles(user: Any, role_names: list[str]) -> None:
-    """Give the user exactly these Semantic Layer roles; their other Superset roles are left as they are."""
     replace_user_roles(user, SEMANTIC_LAYER_ROLES, [require_role(name) for name in role_names])
 
 

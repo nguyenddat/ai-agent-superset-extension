@@ -121,7 +121,9 @@ function rememberedTab(): DictionaryTab {
 }
 
 function timeSemanticsOf(dictionary: DatasetDictionary): TimeSemantics {
-  return { time_column: dictionary.time_column, row_kind_column: dictionary.row_kind_column, grains: dictionary.grains ?? [] };
+  return {
+    time_column: dictionary.time_column, row_kind_column: dictionary.row_kind_column, grains: dictionary.grains ?? [],
+  };
 }
 
 function normalizeNullableText(value: string | null): string | null {
@@ -197,7 +199,8 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
     || dictionary.layer_id !== datasetBaseline.layer_id
     || (dictionary.contains_pii ?? false) !== datasetBaseline.contains_pii
   );
-  const timeDirty = dictionary !== null && JSON.stringify(timeSemanticsOf(dictionary)) !== datasetBaseline.timeSemantics;
+  const timeDirty = dictionary !== null &&
+    JSON.stringify(timeSemanticsOf(dictionary)) !== datasetBaseline.timeSemantics;
   const columnsDirty = useMemo(() => comparableColumns(columns) !== comparableColumns(baseline), [baseline, columns]);
   const dirty = generalDirty || timeDirty || columnsDirty;
   const selectTab = (next: DictionaryTab) => {
@@ -236,7 +239,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         headers: { Accept: 'application/json' },
         signal,
       });
-      if (!response.ok) throw new Error(await responseMessage(response, `Không tải được data dictionary (${response.status}).`));
+      if (!response.ok) throw new Error(
+        await responseMessage(response, `Không tải được data dictionary (${response.status}).`)
+      );
       const payload = await response.json() as DatasetDictionary;
       if (!Array.isArray(payload.columns)) throw new Error('Data dictionary trả về dữ liệu không hợp lệ.');
       setDictionary(payload);
@@ -282,7 +287,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         setReferenceDatasets(Array.isArray(payload.datasets) ? payload.datasets : []);
       } catch (reason) {
         if ((reason as Error).name !== 'AbortError') {
-          setReferenceOptionsError(reason instanceof Error ? reason.message : 'Không tải được danh sách bảng tham chiếu.');
+          setReferenceOptionsError(
+            reason instanceof Error ? reason.message : 'Không tải được danh sách bảng tham chiếu.'
+          );
         }
       }
     };
@@ -368,7 +375,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           const isDefaultDisplayName = !column.display_name.trim() || column.display_name.trim() === column.column_name;
           return {
             ...column,
-            display_name: isDefaultDisplayName && suggestion.display_name ? suggestion.display_name : column.display_name,
+            display_name: isDefaultDisplayName && suggestion.display_name
+              ? suggestion.display_name
+              : column.display_name,
             unit: column.unit?.trim() ? column.unit : suggestion.unit,
             business_term: column.business_term?.trim() ? column.business_term : suggestion.business_term,
           };
@@ -385,7 +394,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         };
         if (name === 'error') throw new Error(payload.message || 'Agent không thể tạo gợi ý.');
         if (name === 'status') {
-          setSuggestProgress(payload.message || `Đang xử lý ${payload.processed ?? 0}/${payload.total ?? columns.length} columns…`);
+          setSuggestProgress(
+            payload.message || `Đang xử lý ${payload.processed ?? 0}/${payload.total ?? columns.length} columns…`
+          );
         } else if (name === 'suggestions') {
           if (!Array.isArray(payload.suggestions)) throw new Error('Agent trả về dữ liệu gợi ý không hợp lệ.');
           const suggestions = payload.suggestions;
@@ -397,7 +408,10 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           setBaseline(current => mergeSuggestions(current, suggestions));
           setSaved(false);
           setSuggested(true);
-          setSuggestProgress(`Đã xử lý ${payload.processed ?? payload.total ?? columns.length}/${payload.total ?? columns.length} columns · đã lưu AutoFill.`);
+          setSuggestProgress(
+            `Đã xử lý ${payload.processed ?? payload.total ?? columns.length}/${payload.total ?? columns.length} ` +
+            'columns · đã lưu AutoFill.'
+          );
         } else if (name === 'dataset_suggestion') {
           if (!payload.dataset) throw new Error('Agent trả về dictionary dataset không hợp lệ.');
           const datasetSuggestion = payload.dataset;
@@ -415,7 +429,10 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           setSuggested(true);
           setSuggestProgress('Đã lưu AutoFill cho dictionary dataset.');
         } else if (name === 'done') {
-          setSuggestProgress(`Hoàn tất AutoFill dataset và ${payload.processed ?? payload.total ?? columns.length}/${payload.total ?? columns.length} columns.`);
+          setSuggestProgress(
+            `Hoàn tất AutoFill dataset và ${payload.processed ?? payload.total ?? columns.length}/` +
+            `${payload.total ?? columns.length} columns.`
+          );
           setSuggested(receivedSuggestions);
         }
       };
@@ -488,7 +505,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
             layer_id: dictionary.layer_id ?? null,
             time_column: dictionary.time_column,
             row_kind_column: dictionary.row_kind_column,
-            grains: dictionary.grains.map(item => ({ ...item, label: normalizeNullableText(item.label?.trim() ?? '') })),
+            grains: dictionary.grains.map(
+              item => ({ ...item, label: normalizeNullableText(item.label?.trim() ?? '') })
+            ),
             contains_pii: dictionary.contains_pii ?? false,
           },
           columns: columns.map(({ column_name, ...column }) => ({
@@ -501,7 +520,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
           })),
         }),
       });
-      if (!response.ok) throw new Error(await responseMessage(response, `Không lưu được data dictionary (${response.status}).`));
+      if (!response.ok) throw new Error(
+        await responseMessage(response, `Không lưu được data dictionary (${response.status}).`)
+      );
       const payload = await response.json() as DatasetDictionary;
       setDictionary(payload);
       setBaseline(payload.columns);
@@ -526,7 +547,11 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
   };
 
   if (loading) {
-    return <div className="sl-dictionary-state"><LoaderCircle className="sl-spin" /><span>Đang tải data dictionary…</span></div>;
+    return (
+      <div className="sl-dictionary-state">
+        <LoaderCircle className="sl-spin" /><span>Đang tải data dictionary…</span>
+      </div>
+    );
   }
 
   if (error) {
@@ -553,7 +578,9 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
   const readOnly = dictionary.read_only === true;
   const layerItems: Array<{ label: string; value: number | null }> = [
     { label: 'Chưa phân tầng', value: null },
-    ...layerLevels(layers).flatMap((level, index) => level.map(layer => ({ label: `${layer.name} · Cấp ${index + 1}`, value: layer.id }))),
+    ...layerLevels(layers).flatMap((level, index) => (
+      level.map(layer => ({ label: `${layer.name} · Cấp ${index + 1}`, value: layer.id }))
+    )),
   ];
   const createColumnItems: Array<{ label: string; value: string | null }> = [
     { label: 'Chưa chọn', value: null },
@@ -581,13 +608,20 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
             />
           ) : null}
           {!readOnly ? (
-            <Button variant="outline" disabled={saving || suggesting} onClick={() => void suggestDictionary()} title="Điền metadata còn trống; classification do người dùng chọn">
-              {suggesting ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Sparkles data-icon="inline-start" />}
+            <Button
+              variant="outline" disabled={saving || suggesting} onClick={() => void suggestDictionary()}
+              title="Điền metadata còn trống; classification do người dùng chọn"
+            >
+              {suggesting
+                ? <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                : <Sparkles data-icon="inline-start" />}
               {suggesting ? 'Đang điền…' : 'AutoFill'}
             </Button>
           ) : null}
           <Button disabled={!dirty || saving || suggesting || readOnly} onClick={() => void saveChanges()}>
-            {saving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}
+            {saving
+              ? <LoaderCircle data-icon="inline-start" className="animate-spin" />
+              : <Save data-icon="inline-start" />}
             {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
           </Button>
         </div>
@@ -601,53 +635,88 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
         ] as const).map(([id, label, tabDirty]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => selectTab(id)}>
             {label}
-            {tabDirty ? <span className="sl-tab-dirty" title="Có thay đổi chưa lưu" aria-label="Có thay đổi chưa lưu" /> : null}
+            {tabDirty
+              ? <span className="sl-tab-dirty" title="Có thay đổi chưa lưu" aria-label="Có thay đổi chưa lưu" />
+              : null}
           </button>
         ))}
       </div>
       <div className="sl-dictionary-body" role="tabpanel">
         {saveError ? <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {saveError}</div> : null}
-        {referenceOptionsError && tab === 'columns' ? <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {referenceOptionsError}</div> : null}
-        {suggestError ? <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {suggestError}</div> : null}
-        {suggestProgress ? <div className="sl-dictionary-suggestion-status" role="status">{suggestProgress}{suggested && !suggesting ? ' Chỉnh sửa thêm thì bấm Lưu thay đổi.' : ''}</div> : null}
+        {referenceOptionsError && tab === 'columns' ? (
+          <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {referenceOptionsError}</div>
+        ) : null}
+        {suggestError ? (
+          <div className="sl-dictionary-save-error" role="alert"><AlertCircle /> {suggestError}</div>
+        ) : null}
+        {suggestProgress ? (
+          <div className="sl-dictionary-suggestion-status" role="status">
+            {suggestProgress}{suggested && !suggesting ? ' Chỉnh sửa thêm thì bấm Lưu thay đổi.' : ''}
+          </div>
+        ) : null}
         {tab === 'general' ? (
           <div className="sl-dataset-dictionary-fields">
             <Field>
               <FieldLabel htmlFor="sl-dataset-display-name">Dataset name</FieldLabel>
-              <Input id="sl-dataset-display-name" disabled={readOnly || saving} value={dictionary.display_name} onChange={event => updateDataset('display_name', event.target.value)} />
+              <Input
+                id="sl-dataset-display-name" disabled={readOnly || saving} value={dictionary.display_name}
+                onChange={event => updateDataset('display_name', event.target.value)}
+              />
             </Field>
             <Field>
               <FieldLabel>Tầng dữ liệu</FieldLabel>
               <div className="flex gap-1.5">
-                <Select items={layerItems} value={dictionary.layer_id ?? null} disabled={readOnly || saving} onValueChange={value => updateDataset('layer_id', value)}>
+                <Select
+                  items={layerItems} value={dictionary.layer_id ?? null} disabled={readOnly || saving}
+                  onValueChange={value => updateDataset('layer_id', value)}
+                >
                   <SelectTrigger aria-label="Tầng dữ liệu" className="min-w-0 flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     <SelectGroup>
-                      {layerItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                      {layerItems.map(item => (
+                        <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="icon" aria-label="Quản lý tầng dữ liệu" title="Quản lý tầng dữ liệu" onClick={onManageLayers}><Settings2 /></Button>
+                <Button
+                  variant="outline" size="icon" aria-label="Quản lý tầng dữ liệu" title="Quản lý tầng dữ liệu"
+                  onClick={onManageLayers}
+                >
+                  <Settings2 />
+                </Button>
               </div>
             </Field>
             <Field>
               <FieldLabel>Classification</FieldLabel>
-              <Select items={datasetTypeItems} value={dictionary.dataset_type} disabled={readOnly || saving} onValueChange={value => updateDataset('dataset_type', value)}>
+              <Select
+                items={datasetTypeItems} value={dictionary.dataset_type} disabled={readOnly || saving}
+                onValueChange={value => updateDataset('dataset_type', value)}
+              >
                 <SelectTrigger aria-label="Dataset classification" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
                   <SelectGroup>
-                    {datasetTypeItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                    {datasetTypeItems.map(item => (
+                      <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
             <Field>
-              <FieldLabel title="Cột ghi nhận thời điểm tạo bản ghi, dùng để lọc theo thời gian">Cột thời gian tạo</FieldLabel>
-              <Select items={createColumnItems} value={dictionary.create_column} disabled={readOnly || saving} onValueChange={value => updateDataset('create_column', value)}>
+              <FieldLabel title="Cột ghi nhận thời điểm tạo bản ghi, dùng để lọc theo thời gian">
+                Cột thời gian tạo
+              </FieldLabel>
+              <Select
+                items={createColumnItems} value={dictionary.create_column} disabled={readOnly || saving}
+                onValueChange={value => updateDataset('create_column', value)}
+              >
                 <SelectTrigger aria-label="Dataset create column" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
                   <SelectGroup>
-                    {createColumnItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                    {createColumnItems.map(item => (
+                      <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -666,11 +735,26 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
             </Field>
             <Field className="sl-field-wide">
               <FieldLabel htmlFor="sl-dataset-description">Description</FieldLabel>
-              <Textarea id="sl-dataset-description" className="max-h-36" disabled={readOnly || saving} value={dictionary.description ?? ''} onChange={event => updateDataset('description', normalizeNullableText(event.target.value))} />
+              <Textarea
+                id="sl-dataset-description" className="max-h-36" disabled={readOnly || saving}
+                value={dictionary.description ?? ''}
+                onChange={event => updateDataset('description', normalizeNullableText(event.target.value))}
+              />
             </Field>
             <Field className="sl-field-wide">
-              <FieldLabel htmlFor="sl-dataset-grain" title="Mô tả bằng lời một dòng đại diện cho điều gì; grain dùng để truy vấn khai báo ở mục Thời gian và grain">Mô tả grain</FieldLabel>
-              <Textarea id="sl-dataset-grain" className="max-h-36" disabled={readOnly || saving} value={dictionary.grain ?? ''} onChange={event => updateDataset('grain', normalizeNullableText(event.target.value))} />
+              <FieldLabel
+                htmlFor="sl-dataset-grain"
+                title={
+                  'Mô tả bằng lời một dòng đại diện cho điều gì; ' +
+                  'grain dùng để truy vấn khai báo ở mục Thời gian và grain'
+                }
+              >
+                Mô tả grain
+              </FieldLabel>
+              <Textarea
+                id="sl-dataset-grain" className="max-h-36" disabled={readOnly || saving} value={dictionary.grain ?? ''}
+                onChange={event => updateDataset('grain', normalizeNullableText(event.target.value))}
+              />
             </Field>
           </div>
         ) : null}
@@ -710,23 +794,42 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                 const disabled = readOnly || saving;
                 const detailsId = `sl-column-details-${encodeURIComponent(column.column_name)}`;
                 const reference = column.referenced_column_name
-                  ? `${referenceDatasets.find(item => item.id === column.referenced_dataset_id)?.dataset_name ?? column.referenced_dataset_label ?? ''}.${column.referenced_column_name}`
+                  ? (
+                    referenceDatasets.find(item => item.id === column.referenced_dataset_id)?.dataset_name ??
+                    column.referenced_dataset_label ?? ''
+                  ) + `.${column.referenced_column_name}`
                   : null;
                 return (
                   <React.Fragment key={column.column_name}>
                     <tr className={expanded ? 'is-expanded' : undefined}>
                       <td className="sl-expand-cell">
-                        <button type="button" aria-expanded={expanded} aria-controls={detailsId} aria-label={`Chi tiết của ${column.column_name}`} onClick={() => toggleExpanded(column.column_name)}>
+                        <button
+                          type="button" aria-expanded={expanded} aria-controls={detailsId}
+                          aria-label={`Chi tiết của ${column.column_name}`}
+                          onClick={() => toggleExpanded(column.column_name)}
+                        >
                           {expanded ? <ChevronDown /> : <ChevronRight />}
                         </button>
                       </td>
                       <th scope="row">
                         <code title={column.column_name}>{column.column_name}</code>
                         <span className="sl-type-badge" title={column.data_type}>{column.data_type}</span>
-                        {column.temporal_kind ? <span className="sl-type-badge is-temporal">{TEMPORAL_KIND_LABELS[column.temporal_kind]}</span> : null}
-                        {column.contains_pii ? <span className="sl-type-badge is-pii" title="Chứa dữ liệu nhạy cảm (PII)">PII</span> : null}
+                        {column.temporal_kind ? (
+                          <span className="sl-type-badge is-temporal">
+                            {TEMPORAL_KIND_LABELS[column.temporal_kind]}
+                          </span>
+                        ) : null}
+                        {column.contains_pii ? (
+                          <span className="sl-type-badge is-pii" title="Chứa dữ liệu nhạy cảm (PII)">PII</span>
+                        ) : null}
                       </th>
-                      <td><Input aria-label={`Display name của ${column.column_name}`} disabled={disabled} value={column.display_name} onChange={event => updateColumn(column.column_name, 'display_name', event.target.value)} /></td>
+                      <td>
+                        <Input
+                          aria-label={`Display name của ${column.column_name}`} disabled={disabled}
+                          value={column.display_name}
+                          onChange={event => updateColumn(column.column_name, 'display_name', event.target.value)}
+                        />
+                      </td>
                       <td>
                         <OptionSelect
                           label={`Vai trò của ${column.column_name}`} items={roleItems} value={column.semantic_role}
@@ -737,21 +840,48 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                           }}
                         />
                       </td>
-                      <td><Textarea aria-label={`Business term của ${column.column_name}`} className="min-h-8 max-h-24 resize-none py-1" disabled={disabled} value={column.business_term ?? ''} onChange={event => updateColumn(column.column_name, 'business_term', normalizeNullableText(event.target.value))} /></td>
+                      <td>
+                        <Textarea
+                          aria-label={`Business term của ${column.column_name}`}
+                          className="min-h-8 max-h-24 resize-none py-1" disabled={disabled}
+                          value={column.business_term ?? ''}
+                          onChange={event => updateColumn(
+                            column.column_name, 'business_term', normalizeNullableText(event.target.value)
+                          )}
+                        />
+                      </td>
                       <td>
                         <div className="sl-key-toggles">
-                          <label className={column.is_pk ? 'is-on' : undefined} title="Primary key"><input aria-label={`${column.column_name} là primary key`} type="checkbox" disabled={disabled} checked={column.is_pk} onChange={event => updateColumn(column.column_name, 'is_pk', event.target.checked)} />PK</label>
-                          <label className={column.is_fk ? 'is-on' : undefined} title="Foreign key"><input aria-label={`${column.column_name} là foreign key`} type="checkbox" disabled={disabled} checked={column.is_fk} onChange={event => {
-                            const checked = event.target.checked;
-                            updateColumn(column.column_name, 'is_fk', checked);
-                            if (!checked) {
-                              updateColumn(column.column_name, 'referenced_dataset_id', null);
-                              updateColumn(column.column_name, 'referenced_column_name', null);
-                            } else if (!expanded) {
-                              toggleExpanded(column.column_name);
-                            }
-                          }} />FK</label>
-                          <label className={column.is_unique ? 'is-on' : undefined} title="Unique"><input aria-label={`${column.column_name} là unique`} type="checkbox" disabled={disabled} checked={column.is_unique} onChange={event => updateColumn(column.column_name, 'is_unique', event.target.checked)} />UQ</label>
+                          <label className={column.is_pk ? 'is-on' : undefined} title="Primary key">
+                            <input
+                              aria-label={`${column.column_name} là primary key`} type="checkbox" disabled={disabled}
+                              checked={column.is_pk}
+                              onChange={event => updateColumn(column.column_name, 'is_pk', event.target.checked)}
+                            />PK
+                          </label>
+                          <label className={column.is_fk ? 'is-on' : undefined} title="Foreign key">
+                            <input
+                              aria-label={`${column.column_name} là foreign key`} type="checkbox" disabled={disabled}
+                              checked={column.is_fk}
+                              onChange={event => {
+                                const checked = event.target.checked;
+                                updateColumn(column.column_name, 'is_fk', checked);
+                                if (!checked) {
+                                  updateColumn(column.column_name, 'referenced_dataset_id', null);
+                                  updateColumn(column.column_name, 'referenced_column_name', null);
+                                } else if (!expanded) {
+                                  toggleExpanded(column.column_name);
+                                }
+                              }}
+                            />FK
+                          </label>
+                          <label className={column.is_unique ? 'is-on' : undefined} title="Unique">
+                            <input
+                              aria-label={`${column.column_name} là unique`} type="checkbox" disabled={disabled}
+                              checked={column.is_unique}
+                              onChange={event => updateColumn(column.column_name, 'is_unique', event.target.checked)}
+                            />UQ
+                          </label>
                         </div>
                         {reference ? <span className="sl-key-reference" title={reference}>→ {reference}</span> : null}
                       </td>
@@ -819,7 +949,8 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                             columnName={column.column_name}
                             value={column.transformation ?? null}
                             disabled={disabled}
-                            onChange={transformation => updateColumn(column.column_name, 'transformation', transformation)}
+                            onChange={transformation =>
+                              updateColumn(column.column_name, 'transformation', transformation)}
                           />
                           <div className="sl-column-details">
                             <ReferenceFields
@@ -837,24 +968,69 @@ export function DataDictionary({ dataset, layers, onDirtyChange, onSaved, onMana
                                 updateColumn(column.column_name, 'referenced_column_name', referencedColumnName);
                               }}
                             />
-                            <label className="sl-column-detail">Default<Input aria-label={`Default value của ${column.column_name}`} disabled={disabled} value={column.default_value ?? ''} onChange={event => updateColumn(column.column_name, 'default_value', normalizeNullableText(event.target.value))} /></label>
-                            <label className="sl-column-detail">Unit<Input aria-label={`Unit của ${column.column_name}`} disabled={disabled} value={column.unit ?? ''} onChange={event => updateColumn(column.column_name, 'unit', normalizeNullableText(event.target.value))} /></label>
-                            <label className="sl-column-detail">Format<Input aria-label={`Format của ${column.column_name}`} disabled={disabled} value={column.format ?? ''} onChange={event => updateColumn(column.column_name, 'format', normalizeNullableText(event.target.value))} /></label>
+                            <label className="sl-column-detail">
+                              Default
+                              <Input
+                                aria-label={`Default value của ${column.column_name}`} disabled={disabled}
+                                value={column.default_value ?? ''}
+                                onChange={event => updateColumn(
+                                  column.column_name, 'default_value', normalizeNullableText(event.target.value)
+                                )}
+                              />
+                            </label>
+                            <label className="sl-column-detail">
+                              Unit
+                              <Input
+                                aria-label={`Unit của ${column.column_name}`} disabled={disabled}
+                                value={column.unit ?? ''}
+                                onChange={event => updateColumn(
+                                  column.column_name, 'unit', normalizeNullableText(event.target.value)
+                                )}
+                              />
+                            </label>
+                            <label className="sl-column-detail">
+                              Format
+                              <Input
+                                aria-label={`Format của ${column.column_name}`} disabled={disabled}
+                                value={column.format ?? ''}
+                                onChange={event => updateColumn(
+                                  column.column_name, 'format', normalizeNullableText(event.target.value)
+                                )}
+                              />
+                            </label>
                             <label className="sl-column-detail">
                               Kiểu thời gian
-                              <Select items={temporalKindItems} value={column.temporal_kind} disabled={disabled} onValueChange={value => updateColumn(column.column_name, 'temporal_kind', value)}>
-                                <SelectTrigger aria-label={`Kiểu thời gian của ${column.column_name}`} className="w-full"><SelectValue /></SelectTrigger>
+                              <Select
+                                items={temporalKindItems} value={column.temporal_kind} disabled={disabled}
+                                onValueChange={value => updateColumn(column.column_name, 'temporal_kind', value)}
+                              >
+                                <SelectTrigger
+                                  aria-label={`Kiểu thời gian của ${column.column_name}`} className="w-full"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
                                 <SelectContent alignItemWithTrigger={false}>
                                   <SelectGroup>
-                                    {temporalKindItems.map(item => <SelectItem key={item.value ?? 'none'} value={item.value}>{item.label}</SelectItem>)}
+                                    {temporalKindItems.map(item => (
+                                      <SelectItem key={item.value ?? 'none'} value={item.value}>
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
                                   </SelectGroup>
                                 </SelectContent>
                               </Select>
                             </label>
-                            <label className="sl-column-detail is-check"><input aria-label={`${column.column_name} nullable`} disabled={disabled} type="checkbox" checked={column.nullable} onChange={event => updateColumn(column.column_name, 'nullable', event.target.checked)} />Nullable</label>
+                            <label className="sl-column-detail is-check">
+                              <input
+                                aria-label={`${column.column_name} nullable`} disabled={disabled} type="checkbox"
+                                checked={column.nullable}
+                                onChange={event => updateColumn(column.column_name, 'nullable', event.target.checked)}
+                              />Nullable
+                            </label>
                             <label className="sl-column-detail is-check">
                               <Checkbox
-                                aria-label={`${column.column_name} là PII`} disabled={disabled} checked={column.contains_pii ?? false}
+                                aria-label={`${column.column_name} là PII`} disabled={disabled}
+                                checked={column.contains_pii ?? false}
                                 onCheckedChange={checked => updateColumn(column.column_name, 'contains_pii', checked)}
                               />
                               PII

@@ -9,7 +9,7 @@ from text_to_bi.superset_semantic_layer.common.exceptions import (
 
 
 class MetricContractValidationError(ValidationError):
-    """A metric contract, its review or its business definition breaks a rule."""
+    pass
 
 
 class MetricDefinitionNotFoundError(NotFoundError):

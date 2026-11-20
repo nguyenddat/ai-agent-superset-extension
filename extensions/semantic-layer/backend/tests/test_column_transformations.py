@@ -27,7 +27,6 @@ LIVE_COLUMNS = {
 
 
 def _constants(file_name: str) -> list[ast.Assign]:
-    """The module-level limits of a data_dictionary service, which imports Superset and so cannot be imported here."""
     path = MODULES_PATH / "data_dictionary" / "services" / file_name
     tree = ast.parse(path.read_text(encoding="utf-8"))
     return [node for node in tree.body if isinstance(node, ast.Assign) and node.targets[0].id.isupper()]
@@ -101,7 +100,8 @@ def test_the_dictionary_save_checks_a_column_transformation_against_other_datase
         "DataDictionaryValidationError": DataDictionaryValidationError,
     }
     validate = compile_into(
-        namespace, *constants, module_function("checked_transformation"), module_function("_checked_reference"), module_function("validate_dictionary_payload")
+        namespace, *constants, module_function("checked_transformation"), module_function("_checked_reference"),
+        module_function("validate_dictionary_payload")
     )["validate_dictionary_payload"]
     source = {"dataset_id": 9, "column_name": "nhiet_do"}
     payload = {
@@ -239,7 +239,6 @@ class _ResponseAPI:
 
 
 def _edge_removal_api(body, inferred):
-    """remove_lineage_edge on fakes; `inferred` is what the Data Dictionary implies for datasets 9 and 12."""
     added, commits = [], []
     namespace = {
         "RestApi": _ResponseAPI,
@@ -274,7 +273,6 @@ def test_a_reference_edge_inferred_from_a_foreign_key_is_still_hidden():
 
 
 def _lineage_edges(edges, overrides):
-    """services/business_model.py's lineage_edges, which imports Superset, run on fakes of what it reads."""
     path = MODULES_PATH / "business_model" / "services" / "business_model.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "lineage_edges")
