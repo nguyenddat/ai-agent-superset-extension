@@ -7,7 +7,6 @@ from text_to_bi.superset_text_to_bi.core.database import handle_errors, rollback
 from text_to_bi.superset_text_to_bi.core.routing import API_CLASS_PERMISSION, OPENAPI_TAG
 from text_to_bi.superset_text_to_bi.core.security import csrf_protected
 from text_to_bi.superset_text_to_bi.core.validation import request_body
-from text_to_bi.superset_text_to_bi.migrations import ensure_tables
 from text_to_bi.superset_text_to_bi.modules.superset.services.srv_user import (
     active_users,
     require_user,
@@ -67,10 +66,9 @@ class AuthAPI(RestApi):
             "is_admin": is_admin(), "can_view": can_view(), "can_edit": can_edit_datasets(),
             "can_query": can_query_datasets(), "can_review": can_review_semantic_layer(),
         }
-        # The page opens with this call, so the first user with any access bootstraps the tables and roles.
+        # The first request by a user with access bootstraps the Superset roles.
         if any(access.values()):
             ensure_auth_roles()
-            ensure_tables()
         current = CurrentUserOut(user_id=user.id, username=user.username, name=user_display_name(user), **access)
         return self.response(200, **current.model_dump(mode="json"))
 
@@ -82,7 +80,6 @@ class AuthAPI(RestApi):
     def list_role_assignments(self):
         require_admin()
         ensure_auth_roles()
-        ensure_tables()
         assignments = RoleAssignmentsOut(
             roles=text_to_bi_role_options(), users=[role_assignment(user) for user in active_users()]
         )
@@ -100,7 +97,6 @@ class AuthAPI(RestApi):
         require_admin()
         body = request_body(RoleAssignmentIn)
         ensure_auth_roles()
-        ensure_tables()
         user = require_user(user_id)
         assign_text_to_bi_roles(user, body.roles)
         db.session.commit()

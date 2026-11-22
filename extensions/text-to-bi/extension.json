@@ -1,0 +1,8 @@
+{
+  "publisher": "text-to-bi",
+  "name": "superset-text-to-bi",
+  "displayName": "Superset Text to BI",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "permissions": []
+}

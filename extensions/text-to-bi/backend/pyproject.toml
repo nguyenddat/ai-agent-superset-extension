@@ -1,0 +1,28 @@
+[project]
+name = "superset-text-to-bi"
+version = "0.1.0"
+license = "Apache-2.0"
+requires-python = ">=3.10,<3.11"
+# langchain, langchain-openai and pydantic-settings come with the Superset image (simulation/superset/Dockerfile).
+dependencies = []
+
+[tool.ruff]
+line-length = 120
+# Superset 6.1 runs extension backends on Python 3.10.
+target-version = "py310"
+
+[tool.ruff.lint]
+extend-select = ["E501", "I"]
+ignore = ["D100"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompt text is sent to the model as written, so its lines are not wrapped.
+"src/text_to_bi/superset_text_to_bi/agent_package/prompts/*.py" = ["E501"]
+
+[tool.apache_superset_extensions.build]
+include = [
+    "src/text_to_bi/superset_text_to_bi/**/*.py",
+    "src/text_to_bi/superset_text_to_bi/**/*.json",
+    "src/text_to_bi/superset_text_to_bi/**/*.md",
+]
+exclude = []
