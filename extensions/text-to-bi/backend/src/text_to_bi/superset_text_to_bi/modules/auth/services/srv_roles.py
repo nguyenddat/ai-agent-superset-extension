@@ -1,6 +1,7 @@
 from typing import Any
 
 from sqlalchemy.orm import Session
+
 from text_to_bi.superset_text_to_bi.core.routing import API_CLASS_PERMISSION
 from text_to_bi.superset_text_to_bi.modules.superset.services.srv_role import (
     declare_admin_only_view_menu,
@@ -101,6 +102,32 @@ class RoleService:
         roles = [require_role(name) for name in checked_names]
         replace_user_roles(user, TEXT_TO_BI_ROLES, roles)
 
+    def assign_user_roles(self, user: Any, role_ids: list[int]) -> None:
+        unique_ids = list(dict.fromkeys(role_ids))
+        roles = [self.repository.read_by_id(role_id) for role_id in unique_ids]
+        if any(role is None for role in roles):
+            raise RoleAssignmentError()
+        user.roles = roles
+
+    @staticmethod
+    def add_user_role(user: Any, role: Role) -> None:
+        if all(existing.id != role.id for existing in user.roles):
+            user.roles = [*user.roles, role]
+
+    @staticmethod
+    def remove_user_role(user: Any, role: Role) -> None:
+        user.roles = [existing for existing in user.roles if existing.id != role.id]
+
+    @staticmethod
+    def user_roles(user: Any) -> dict[str, Any]:
+        roles = sorted(user.roles, key=lambda item: item.name)
+        return {
+            "user_id": user.id,
+            "username": user.username,
+            "role_ids": [role.id for role in roles],
+            "roles": [role.name for role in roles],
+        }
+
     @staticmethod
     def checked_role_names(role_names: list[str]) -> list[str]:
         if not all(name in TEXT_TO_BI_ROLES for name in role_names):
@@ -132,3 +159,23 @@ def assign_text_to_bi_roles(user: Any, role_names: list[str]) -> None:
 
 def role_assignment(user: Any) -> dict[str, Any]:
     return _role_service().role_assignment(user)
+
+
+def assign_user_roles(user: Any, role_ids: list[int]) -> None:
+    _role_service().assign_user_roles(user, role_ids)
+
+
+def add_user_role(user: Any, role: Role) -> None:
+    RoleService.add_user_role(user, role)
+
+
+def remove_user_role(user: Any, role: Role) -> None:
+    RoleService.remove_user_role(user, role)
+
+
+def user_roles(user: Any) -> dict[str, Any]:
+    return RoleService.user_roles(user)
+
+
+def get_role(role_id: int) -> Role | None:
+    return _role_service().get_role(role_id)

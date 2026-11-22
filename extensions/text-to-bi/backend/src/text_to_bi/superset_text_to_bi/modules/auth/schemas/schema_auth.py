@@ -35,3 +35,16 @@ class RoleAssignmentIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     roles: list[str] = Field(max_length=10)
+
+
+class UserRolesIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_ids: list[int] = Field(max_length=100)
+
+
+class UserRolesOut(BaseModel):
+    user_id: int
+    username: str
+    role_ids: list[int]
+    roles: list[str]

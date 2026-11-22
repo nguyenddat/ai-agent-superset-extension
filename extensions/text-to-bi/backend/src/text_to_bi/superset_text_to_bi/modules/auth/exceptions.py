@@ -44,4 +44,4 @@ class DatasetAccessError(NotAuthorizedError):
 
 class RoleAssignmentError(ValidationError):
     code = "invalid_role_assignment"
-    message = "Danh sách nhóm quyền không hợp lệ: chỉ gửi tên nhóm quyền của Text to BI."
+    message = "Nhóm quyền không hợp lệ: một hoặc nhiều role không tồn tại."

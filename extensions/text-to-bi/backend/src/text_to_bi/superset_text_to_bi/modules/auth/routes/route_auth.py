@@ -2,6 +2,7 @@ from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset.extensions import db
 from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
+
 from text_to_bi.superset_text_to_bi.core.database import handle_errors, rollback_on_error
 from text_to_bi.superset_text_to_bi.core.routing import API_CLASS_PERMISSION, OPENAPI_TAG
 from text_to_bi.superset_text_to_bi.core.security import csrf_protected
@@ -13,7 +14,16 @@ from text_to_bi.superset_text_to_bi.modules.superset.services.srv_user import (
     user_display_name,
 )
 
-from ..schemas.schema_auth import CurrentUserOut, RoleAssignmentIn, RoleAssignmentOut, RoleAssignmentsOut
+from ..exceptions import RoleAssignmentError
+from ..migrations import ensure_auth_roles
+from ..schemas.schema_auth import (
+    CurrentUserOut,
+    RoleAssignmentIn,
+    RoleAssignmentOut,
+    RoleAssignmentsOut,
+    UserRolesIn,
+    UserRolesOut,
+)
 from ..services.srv_access import (
     can_edit_datasets,
     can_query_datasets,
@@ -23,7 +33,16 @@ from ..services.srv_access import (
     is_admin,
     require_admin,
 )
-from ..services.srv_roles import assign_text_to_bi_roles, role_assignment, text_to_bi_role_options
+from ..services.srv_roles import (
+    add_user_role,
+    assign_text_to_bi_roles,
+    assign_user_roles,
+    get_role,
+    remove_user_role,
+    role_assignment,
+    text_to_bi_role_options,
+    user_roles,
+)
 
 
 @api(
@@ -50,6 +69,7 @@ class AuthAPI(RestApi):
         }
         # The page opens with this call, so the first user with any access bootstraps the tables and roles.
         if any(access.values()):
+            ensure_auth_roles()
             ensure_tables()
         current = CurrentUserOut(user_id=user.id, username=user.username, name=user_display_name(user), **access)
         return self.response(200, **current.model_dump(mode="json"))
@@ -61,6 +81,7 @@ class AuthAPI(RestApi):
     @handle_errors
     def list_role_assignments(self):
         require_admin()
+        ensure_auth_roles()
         ensure_tables()
         assignments = RoleAssignmentsOut(
             roles=text_to_bi_role_options(), users=[role_assignment(user) for user in active_users()]
@@ -78,8 +99,74 @@ class AuthAPI(RestApi):
     def update_role_assignment(self, user_id: int):
         require_admin()
         body = request_body(RoleAssignmentIn)
+        ensure_auth_roles()
         ensure_tables()
         user = require_user(user_id)
         assign_text_to_bi_roles(user, body.roles)
         db.session.commit()
         return self.response(200, **RoleAssignmentOut.model_validate(role_assignment(user)).model_dump(mode="json"))
+
+    # Superset follows RBAC: users receive capabilities through roles. These endpoints
+    # operate on FAB's existing ab_user_role association, using Superset role IDs.
+    @expose("/users/<int:user_id>/roles", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def get_user_roles(self, user_id: int):
+        require_admin()
+        ensure_auth_roles()
+        user = require_user(user_id)
+        return self.response(200, **UserRolesOut.model_validate(user_roles(user)).model_dump(mode="json"))
+
+    @expose("/users/<int:user_id>/roles", methods=("PUT",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def replace_user_roles(self, user_id: int):
+        require_admin()
+        body = request_body(UserRolesIn)
+        ensure_auth_roles()
+        user = require_user(user_id)
+        assign_user_roles(user, body.role_ids)
+        db.session.commit()
+        return self.response(200, **UserRolesOut.model_validate(user_roles(user)).model_dump(mode="json"))
+
+    @expose("/users/<int:user_id>/roles/<int:role_id>", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def add_role_to_user(self, user_id: int, role_id: int):
+        require_admin()
+        ensure_auth_roles()
+        user = require_user(user_id)
+        role = get_role(role_id)
+        if role is None:
+            raise RoleAssignmentError()
+        add_user_role(user, role)
+        db.session.commit()
+        return self.response(200, **UserRolesOut.model_validate(user_roles(user)).model_dump(mode="json"))
+
+    @expose("/users/<int:user_id>/roles/<int:role_id>", methods=("DELETE",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def remove_role_from_user(self, user_id: int, role_id: int):
+        require_admin()
+        ensure_auth_roles()
+        user = require_user(user_id)
+        role = get_role(role_id)
+        if role is None:
+            raise RoleAssignmentError()
+        remove_user_role(user, role)
+        db.session.commit()
+        return self.response(200, **UserRolesOut.model_validate(user_roles(user)).model_dump(mode="json"))

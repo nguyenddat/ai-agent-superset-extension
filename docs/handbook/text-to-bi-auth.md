@@ -1,42 +1,30 @@
 # Module `auth` của Text to BI
 
-Module nằm tại `extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/` và phụ trách danh tính,
-quyền truy cập Text to BI, cùng các role riêng của extension. User và role nền tảng vẫn do Superset quản lý.
+Module nằm tại `extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/`, quản lý danh tính hiện tại, quyền truy cập Text to BI và các role của extension. Superset tiếp tục quản lý user, role, permission và các bảng liên quan.
 
-## User model và lưu trữ
+## Model và migration
 
-`models/model_user.py` export trực tiếp `User` từ `flask_appbuilder.security.sqla.models`; `models/model_role.py` export
-các model `Role`, `Permission`, `PermissionView`, `ViewMenu` từ cùng package. Đây là các model Superset dùng cho
-`ab_user`, `ab_role`, `ab_permission`, `ab_permission_view` và `ab_view_menu`. Module không định nghĩa bản sao model,
-không tạo bảng user/role/quyền khác và không thêm model Superset vào danh sách migration của extension.
+`models/model_user.py` và `models/model_role.py` export các model Flask-AppBuilder của Superset: `User`, `Role`, `Permission`, `PermissionView`, `ViewMenu` và association tables. Chúng ánh xạ tới `ab_user`, `ab_role`, `ab_permission`, `ab_permission_view`, `ab_view_menu`, `ab_user_role` và `ab_permission_view_role`. Module không định nghĩa hay tạo bảng auth riêng.
 
-Superset sở hữu vòng đời user, role và permission. Các bảng nối `ab_user_role` và `ab_permission_view_role` cũng do
-Flask-AppBuilder quản lý. Vì thế các model này không nằm trong `migrations.EXTENSION_MODELS`; module auth không có
-migration riêng. Mọi ID user được lưu ở module khác phải tham chiếu `ab_user.id` theo kiểu số nguyên.
+`modules/auth/migrations.py` là migration nội bộ của auth: `ensure_auth_roles()` idempotent, seed các role/permission Text to BI vào bảng Superset hiện có. Không chạy DDL. Migration tổng thể `migrations.py` chỉ quản lý bảng dữ liệu extension và không seed role.
 
 ## Các lớp
 
 | Thành phần | Trách nhiệm |
 | --- | --- |
-| `models/model_user.py`, `models/model_role.py` | Export các model user, role, permission và view menu gốc |
-| `repositories/repo_user.py`, `repositories/repo_role.py` | Đọc user và role qua SQLAlchemy session |
-| `services/srv_user.py`, `services/srv_roles.py` | `UserService`, `RoleService`: tra cứu, bootstrap role/permission và gán role |
-| `dependencies.py` | Tạo service với `superset.extensions.db.session` hiện hành |
-| `services/srv_access.py` | Kiểm tra đăng nhập, role, permission Text to BI và quyền dataset Superset |
-| `services/srv_roles.py` | Khai báo và đồng bộ các role/permission riêng của Text to BI |
-| `routes/route_auth.py` | API `/me` và gán role Text to BI; không cung cấp CRUD cho user Superset |
+| `models/` | Export model Superset |
+| `repositories/` | Truy vấn user và role bằng SQLAlchemy session |
+| `services/srv_user.py`, `services/srv_roles.py` | Tra cứu user/role, seed role và gán role |
+| `services/srv_access.py` | Kiểm tra đăng nhập, quyền Text to BI và quyền dataset Superset |
+| `routes/route_auth.py` | `/me`, gán role Text to BI và CRUD liên kết user-role |
+| `dependencies.py` | Cung cấp service dùng `superset.extensions.db.session` |
 
-Repository và service chỉ đọc user; transaction xác thực, thêm, sửa, khóa hoặc xóa user thuộc Superset. `require_user`
-ném `UserNotFoundError` nếu ID không tồn tại. Dependency `user_service()` lấy session từ Superset để truy vấn cùng metadata
-database và transaction hiện hành.
+Auth API không tạo, sửa hồ sơ, khóa hay xóa user Superset. `require_user` báo lỗi nếu user ID không tồn tại.
 
 ## Role và quyền
 
-Superset tiếp tục xác thực người dùng và lưu role. Extension khai báo `Text to BI Viewer`, `Text to BI Editor`,
-`Text to BI Steward` và `Text to BI Query`, cùng permission trên view menu `Text to BI`. `Steward` có quyền sửa và
-permission `can_review` để duyệt/thu hồi, xóa nội dung đã duyệt. Mọi thao tác trên dataset vẫn kiểm tra quyền dataset
-Superset. Role bootstrap chạy idempotent; permission của extension được giữ admin-only khỏi các role Superset mặc định.
+Extension khai báo `Text to BI Viewer`, `Text to BI Editor`, `Text to BI Steward` và `Text to BI Query`, cùng permission trên view menu `Text to BI`. Steward có quyền sửa và `can_review` để duyệt, thu hồi hoặc xóa nội dung đã duyệt. Quyền dataset vẫn do Superset kiểm tra. Permission riêng của extension được giữ admin-only, không cấp cho các role Superset mặc định.
 
-`/auth/me` trả user hiện tại và quyền hiệu lực. `/auth/role-assignments` chỉ cho Admin xem danh sách user hoạt động và thay
-thế các role Text to BI của user; các role Superset khác của user được giữ nguyên. Route không quản lý mật khẩu hay vòng đời
-user. Mọi truy cập dataset còn phải qua kiểm tra quyền dataset của Superset.
+Superset dùng RBAC: permission được gán cho role, user nhận quyền thông qua role. Auth API vì vậy chỉ quản lý liên kết `ab_user_role`, không gán permission trực tiếp cho user. Các route `/auth/users/<user_id>/roles` hỗ trợ GET (xem danh sách), PUT (thay thế toàn bộ role IDs); `/auth/users/<user_id>/roles/<role_id>` hỗ trợ POST (gán) và DELETE (thu hồi). Chỉ Superset Admin được gọi. Đây là thao tác toàn bộ role Superset; PUT thay thế cả role ngoài Text to BI.
+
+`/auth/role-assignments` tiếp tục là giao diện hẹp cho Admin quản lý các role Text to BI và giữ nguyên các role Superset khác của user. `/auth/me` trả user hiện tại cùng quyền hiệu lực.
