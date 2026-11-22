@@ -1,12 +1,18 @@
 # Handbook
 
-Tài liệu module: [Text2SQL trong Text to BI](text-to-bi-text2sql.md),
-[Data Lineage trong Text to BI](text-to-bi-data-lineage.md),
-[Metric Management trong Text to BI](text-to-bi-metric-management.md),
-[Glossary Management trong Text to BI](text-to-bi-glossary-management.md),
-[Expert Rule Management trong Text to BI](text-to-bi-expert-rule-management.md),
-[Own Knowledge trong Text to BI](text-to-bi-own-knowledge.md),
-[Conversation trong Text to BI](text-to-bi-conversation.md).
+Tài liệu module: [Auth](text-to-bi-auth.md), [Data Dictionary](text-to-bi-data-dictionary.md),
+[Data Lineage](text-to-bi-data-lineage.md), [Metric Management](text-to-bi-metric-management.md),
+[Glossary Management](text-to-bi-glossary-management.md), [Expert Rule Management](text-to-bi-expert-rule-management.md),
+[Own Knowledge](text-to-bi-own-knowledge.md), [Conversation](text-to-bi-conversation.md),
+[Text2SQL](text-to-bi-text2sql.md).
+
+Tài liệu API theo module:
+[Auth](text-to-bi-auth-api.md), [Data Dictionary](text-to-bi-data-dictionary-api.md),
+[Data Lineage](text-to-bi-data-lineage-api.md), [Metric Management](text-to-bi-metric-management-api.md),
+[Glossary Management](text-to-bi-glossary-management-api.md),
+[Expert Rule Management](text-to-bi-expert-rule-management-api.md),
+[Own Knowledge](text-to-bi-own-knowledge-api.md), [Conversation](text-to-bi-conversation-api.md),
+[Text2SQL](text-to-bi-text2sql-api.md), [Superset integration](text-to-bi-superset-api.md).
 
 Handbook ghi những gì cả nhóm đã thống nhất khi viết code trong repository này: quy ước code, kiến trúc backend và hành
 vi chung của API. Người và agent viết code đều đọc nó trước khi sửa code; khi một quy ước đổi, sửa handbook trong cùng
