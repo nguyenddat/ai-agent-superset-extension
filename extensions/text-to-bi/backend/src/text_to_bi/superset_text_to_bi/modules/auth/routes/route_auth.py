@@ -2,7 +2,6 @@ from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset.extensions import db
 from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
-
 from text_to_bi.superset_text_to_bi.core.database import handle_errors, rollback_on_error
 from text_to_bi.superset_text_to_bi.core.routing import API_CLASS_PERMISSION, OPENAPI_TAG
 from text_to_bi.superset_text_to_bi.core.security import csrf_protected
@@ -15,7 +14,15 @@ from text_to_bi.superset_text_to_bi.modules.superset.services.srv_user import (
 )
 
 from ..schemas.schema_auth import CurrentUserOut, RoleAssignmentIn, RoleAssignmentOut, RoleAssignmentsOut
-from ..services.srv_access import can_edit_datasets, can_query_datasets, can_view, current_user, is_admin, require_admin
+from ..services.srv_access import (
+    can_edit_datasets,
+    can_query_datasets,
+    can_review_semantic_layer,
+    can_view,
+    current_user,
+    is_admin,
+    require_admin,
+)
 from ..services.srv_roles import assign_text_to_bi_roles, role_assignment, text_to_bi_role_options
 
 
@@ -39,7 +46,7 @@ class AuthAPI(RestApi):
         user = current_user()
         access = {
             "is_admin": is_admin(), "can_view": can_view(), "can_edit": can_edit_datasets(),
-            "can_query": can_query_datasets(),
+            "can_query": can_query_datasets(), "can_review": can_review_semantic_layer(),
         }
         # The page opens with this call, so the first user with any access bootstraps the tables and roles.
         if any(access.values()):

@@ -24,6 +24,14 @@ class EditRequiredError(NotAuthorizedError):
     message = "Bạn chưa có quyền sửa Text to BI. Hãy nhờ quản trị viên gán nhóm quyền Text to BI Editor."
 
 
+class ReviewRequiredError(NotAuthorizedError):
+    code = "review_permission_required"
+    message = (
+        "Báº¡n chÆ°a cÃ³ quyá»n duyá»‡t semantic layer. HÃ£y nhá» quáº£n trá»‹ viÃªn "
+        "gÃ¡n nhÃ³m quyá»n Text to BI Steward."
+    )
+
+
 class QueryRequiredError(NotAuthorizedError):
     code = "query_permission_required"
     message = "Bạn chưa có quyền hỏi dữ liệu. Hãy nhờ quản trị viên gán nhóm quyền Text to BI Query."

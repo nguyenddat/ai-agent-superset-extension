@@ -1,7 +1,6 @@
 from typing import Any
 
 from superset.extensions import security_manager
-
 from text_to_bi.superset_text_to_bi.common.utils.request_user import request_user
 from text_to_bi.superset_text_to_bi.modules.superset.services.srv_dataset import can_access_dataset
 
@@ -10,6 +9,7 @@ from ..exceptions import (
     DatasetAccessError,
     EditRequiredError,
     QueryRequiredError,
+    ReviewRequiredError,
     SignInRequiredError,
     ViewRequiredError,
 )
@@ -20,6 +20,7 @@ TEXT_TO_BI_VIEW_MENU = "Text to BI"
 VIEW_PERMISSION = "can_view"
 EDIT_PERMISSION = "can_edit"
 QUERY_PERMISSION = "can_query"
+REVIEW_PERMISSION = "can_review"
 ADMIN_ROLE = "Admin"
 
 
@@ -55,6 +56,10 @@ def can_query_datasets() -> bool:
     return is_admin() or has_permission(QUERY_PERMISSION)
 
 
+def can_review_semantic_layer() -> bool:
+    return is_admin() or has_permission(REVIEW_PERMISSION)
+
+
 # Superset's own dataset access applies on top of every Text to BI role, the Admin included.
 def can_edit(dataset: Any) -> bool:
     return can_edit_datasets() and can_access_dataset(dataset)
@@ -63,6 +68,11 @@ def can_edit(dataset: Any) -> bool:
 def require_admin() -> None:
     if not is_admin():
         raise AdminRequiredError()
+
+
+def require_review() -> None:
+    if not can_review_semantic_layer():
+        raise ReviewRequiredError()
 
 
 def require_view() -> None:

@@ -9,6 +9,7 @@ class CurrentUserOut(BaseModel):
     can_view: bool
     can_edit: bool
     can_query: bool
+    can_review: bool
 
 
 class RoleOptionOut(BaseModel):
