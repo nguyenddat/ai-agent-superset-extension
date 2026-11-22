@@ -3,7 +3,8 @@
 Tài liệu module: [Data Lineage trong Text to BI](text-to-bi-data-lineage.md),
 [Metric Management trong Text to BI](text-to-bi-metric-management.md),
 [Glossary Management trong Text to BI](text-to-bi-glossary-management.md),
-[Expert Rule Management trong Text to BI](text-to-bi-expert-rule-management.md).
+[Expert Rule Management trong Text to BI](text-to-bi-expert-rule-management.md),
+[Own Knowledge trong Text to BI](text-to-bi-own-knowledge.md).
 
 Handbook ghi những gì cả nhóm đã thống nhất khi viết code trong repository này: quy ước code, kiến trúc backend và hành
 vi chung của API. Người và agent viết code đều đọc nó trước khi sửa code; khi một quy ước đổi, sửa handbook trong cùng
