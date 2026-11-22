@@ -25,6 +25,7 @@ from ..repositories import (
 )
 
 COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}\Z")
+MAX_LAYOUT_BYTES = 1_000_000
 
 def _name(value: str) -> str:
     value = value.strip()
@@ -36,6 +37,12 @@ def _color(value: str | None) -> str | None:
     if value is not None and not COLOR_PATTERN.fullmatch(value):
         raise BusinessModelValidationError("Color must use #RRGGBB format.")
     return value
+
+
+def _description(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip() or None
 
 class BusinessModelService:
     def __init__(self, session: Session) -> None:
@@ -57,7 +64,7 @@ class BusinessModelService:
         if self.layers.by_name(name):
             raise BusinessModelConflictError()
         layer = DataLayer(
-            name=name, description=values.get("description"), color=_color(values.get("color")),
+            name=name, description=_description(values.get("description")), color=_color(values.get("color")),
             level=values.get("level", 0), sort_order=values.get("sort_order", 0),
         )
         try:
@@ -73,7 +80,8 @@ class BusinessModelService:
             raise BusinessModelConflictError()
         try:
             return self.layers.update(layer, {
-                "name": name, "description": values.get("description"), "color": _color(values.get("color")),
+                "name": name, "description": _description(values.get("description")),
+                "color": _color(values.get("color")),
                 "level": values.get("level", 0), "sort_order": values.get("sort_order", 0),
             })
         except IntegrityError:
@@ -116,9 +124,14 @@ class BusinessModelService:
         name = _name(values["name"])
         if self.domains.by_name(name):
             raise BusinessModelConflictError()
-        dataset_ids = self._valid_dataset_ids(values.get("dataset_ids", []))
+        requested_ids = values.get("dataset_ids", [])
+        if len(requested_ids) != len(set(requested_ids)):
+            raise BusinessModelValidationError("A dataset can only appear once in a business domain.")
+        dataset_ids = self._valid_dataset_ids(requested_ids)
         dictionary_ids = self._dictionary_ids(dataset_ids)
-        domain = BusinessDomain(name=name, description=values.get("description"), color=_color(values.get("color")))
+        domain = BusinessDomain(
+            name=name, description=_description(values.get("description")), color=_color(values.get("color"))
+        )
         try:
             self.domains.create(domain)
         except IntegrityError:
@@ -135,11 +148,15 @@ class BusinessModelService:
         other = self.domains.by_name(name)
         if other and other.id != domain_id:
             raise BusinessModelConflictError()
-        dataset_ids = self._valid_dataset_ids(values.get("dataset_ids", []))
+        requested_ids = values.get("dataset_ids", [])
+        if len(requested_ids) != len(set(requested_ids)):
+            raise BusinessModelValidationError("A dataset can only appear once in a business domain.")
+        dataset_ids = self._valid_dataset_ids(requested_ids)
         dictionary_ids = self._dictionary_ids(dataset_ids)
         try:
             self.domains.update(domain, {
-                "name": name, "description": values.get("description"), "color": _color(values.get("color")),
+                "name": name, "description": _description(values.get("description")),
+                "color": _color(values.get("color")),
             })
         except IntegrityError:
             raise BusinessModelConflictError() from None
@@ -204,7 +221,12 @@ class BusinessModelService:
         if self.databases.read_by_id(database_id) is None:
             raise BusinessModelNotFoundError("Database not found.")
         row = self.canvases.by_database(database_id)
-        encoded = json.dumps(layout, separators=(",", ":"))
+        try:
+            encoded = json.dumps(layout, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError) as error:
+            raise BusinessModelValidationError("Canvas layout must be valid JSON.") from error
+        if len(encoded.encode("utf-8")) > MAX_LAYOUT_BYTES:
+            raise BusinessModelValidationError("Canvas layout cannot exceed 1 MB.")
         if row is None:
             return self.canvases.create(BusinessCanvas(database_id=database_id, layout=encoded))
         return self.canvases.update(row, {"layout": encoded})

@@ -2,8 +2,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped
 
 from text_to_bi.superset_text_to_bi.common.base_model import AuditedModel, schema_table_args
-
-from ...data_dictionary.models import SupersetDatabase
+from text_to_bi.superset_text_to_bi.modules.data_dictionary.models import SupersetDatabase
 
 
 class LineageCanvas(AuditedModel):

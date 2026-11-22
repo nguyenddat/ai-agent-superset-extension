@@ -1,20 +1,24 @@
-# Business model API
+# API Business Model
 
-The API is registered at `/api/v1/business-model/`. Read operations require Semantic Layer viewer access. Writes require administrator access and an `X-CSRFToken` header, except dataset layer assignment, which requires dataset edit access and the caller?s dataset ACL. Domain memberships are filtered by the caller?s Superset dataset access. All dataset IDs are Superset dataset IDs.
+API được đăng ký tại `/api/v1/business-model/`. Các thao tác đọc yêu cầu quyền Semantic Layer Viewer (hoặc Admin). Tạo, sửa, xóa layer/domain và lưu canvas yêu cầu Admin cùng header `X-CSRFToken`. Gán layer cho dataset yêu cầu quyền sửa dataset trong Superset. API chỉ trả membership của dataset mà người gọi được truy cập. `dataset_id` và `database_id` là ID trong Superset.
 
-| Method | Path | Purpose |
+| Method | Path | Mô tả |
 | --- | --- | --- |
-| GET | `/layers/` | List layers ordered by level, sort order, and name. |
-| POST | `/layers/` | Create layer with `name`, optional `description`, `color`, `level`, and `sort_order`. |
-| PUT | `/layers/order` | Set layer order with `levels`, a list of lists of layer UUIDs. Every layer must appear exactly once. |
-| PUT | `/layers/{layer_id}` | Update layer fields. |
-| DELETE | `/layers/{layer_id}` | Delete a layer; dataset assignments become unassigned. |
-| GET | `/domains/` | List domains with accessible dataset memberships. |
-| POST | `/domains/` | Create domain with `name`, optional `description`, `color`, and `dataset_ids`. |
-| PUT | `/domains/{domain_id}` | Update domain fields and replace its full `dataset_ids` membership. |
-| DELETE | `/domains/{domain_id}` | Delete a domain and its memberships. |
-| PUT | `/datasets/{dataset_id}/layer` | Assign `layer_id`, or `null` to remove the assignment. |
-| GET | `/databases/{database_id}` | Read the combined business model for a Superset database. |
-| PUT | `/databases/{database_id}/canvas` | Save the business canvas JSON `layout`. |
+| GET | `/layers/` | Liệt kê layer theo level, thứ tự và tên. |
+| POST | `/layers/` | Tạo layer với `name`, `description`, `color`, `level`, `sort_order`. |
+| PUT | `/layers/order` | Sắp xếp lại layer bằng `levels`: danh sách các nhóm UUID; mỗi layer phải xuất hiện đúng một lần. |
+| PUT | `/layers/{layer_id}` | Cập nhật các trường layer. |
+| DELETE | `/layers/{layer_id}` | Xóa layer; dataset đã gán trở thành chưa phân loại. |
+| GET | `/domains/` | Liệt kê domain và các dataset membership người gọi được phép xem. |
+| POST | `/domains/` | Tạo domain với `name`, `description`, `color`, `dataset_ids`. |
+| PUT | `/domains/{domain_id}` | Cập nhật domain; `dataset_ids` thay thế toàn bộ membership hiện tại. |
+| DELETE | `/domains/{domain_id}` | Xóa domain và các membership. |
+| PUT | `/datasets/{dataset_id}/layer` | Gán `layer_id`; truyền `null` để gỡ gán. |
+| GET | `/databases/{database_id}` | Đọc business model tổng hợp cho database Superset. |
+| PUT | `/databases/{database_id}/canvas` | Lưu JSON `layout` của business canvas; tối đa 1 MB. |
 
-The combined read returns layers, domains, visible datasets, business canvas, and lineage. Lineage canvas, edge, and transformation data are read through the existing `data_lineage` service and remain owned by that module. Responses use the standard extension JSON envelope.
+`LayerIn` nhận `name` (1–255 ký tự), `description` (tối đa 2.000), `color` theo dạng `#RRGGBB`, `level` và `sort_order` không âm. Tên layer và domain là duy nhất. `DomainIn.dataset_ids` nhận tối đa 1.000 Superset dataset ID; mỗi ID phải tồn tại và người gọi phải có quyền sửa dataset đó. Dataset được thêm vào domain sẽ có bản ghi Data Dictionary nếu chưa có.
+
+`GET /databases/{database_id}` trả `database_id`, `layers`, `domains`, các `datasets` truy cập được, `business_canvas` và `lineage`. Mỗi dataset gồm schema, tên bảng, tên hiển thị, loại bảng, layer và trạng thái đã phân loại. Phần lineage được đọc qua service của module `data_lineage`; module đó tiếp tục sở hữu lineage canvas, edges và transformations. API trả response theo JSON envelope chuẩn của extension.
+
+Layer/domain/canvas do module `business_model` sở hữu. Mapping layer dùng Superset dataset ID; membership domain liên kết tới model `TableDictionary` do `data_dictionary` sở hữu. Migration nội bộ tạo các bảng cần thiết và không thay đổi bảng metadata lõi của Superset.

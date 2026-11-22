@@ -145,6 +145,11 @@ def ensure_text_to_bi_roles() -> None:
     _role_service().ensure_text_to_bi_roles()
 
 
+def declare_text_to_bi_admin_only() -> None:
+    declare_admin_only_view_menu(TEXT_TO_BI_VIEW_MENU)
+    declare_admin_only_view_menu(API_CLASS_PERMISSION)
+
+
 def text_to_bi_role_options() -> list[dict[str, str]]:
     return _role_service().text_to_bi_role_options()
 

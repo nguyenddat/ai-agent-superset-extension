@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from text_to_bi.superset_text_to_bi.common.base_repository import BaseRepository
+from text_to_bi.superset_text_to_bi.modules.data_dictionary.models import SupersetMetric
 
-from ...data_dictionary.models import SupersetMetric
 from ..models import Metric
 
 

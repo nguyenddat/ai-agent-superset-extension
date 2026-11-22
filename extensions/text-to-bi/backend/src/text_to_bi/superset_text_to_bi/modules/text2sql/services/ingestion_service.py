@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from text_to_bi.superset_text_to_bi.agent_package.get_embedding_models import OpenRouterEmbedding
+from text_to_bi.superset_text_to_bi.modules.data_dictionary.models import SupersetDatabase
 
-from ...data_dictionary.models import SupersetDatabase
 from ..repositories.qdrant_repository import QdrantRepository
 from ..utils.exceptions import Text2SqlConnectionNotFound
 from ..utils.topics import TOPICS

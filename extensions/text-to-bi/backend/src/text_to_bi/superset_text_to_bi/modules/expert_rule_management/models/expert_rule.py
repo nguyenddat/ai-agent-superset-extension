@@ -13,9 +13,8 @@ from text_to_bi.superset_text_to_bi.common.base_model import (
     schema_column,
     schema_table_args,
 )
-
-from ...data_dictionary.models import SupersetDataset
-from ...glossary_management.models import GlossaryRevision, GlossaryTerm
+from text_to_bi.superset_text_to_bi.modules.data_dictionary.models import SupersetDataset
+from text_to_bi.superset_text_to_bi.modules.glossary_management.models import GlossaryRevision, GlossaryTerm
 
 
 class ExpertRule(AuditedModel):
