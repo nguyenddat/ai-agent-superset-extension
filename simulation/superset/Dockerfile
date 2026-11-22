@@ -9,5 +9,9 @@ RUN uv pip install --python /app/.venv/bin/python \
     'langchain>=1.1,<2' \
     'langchain-openai>=1.1,<2' \
     'langgraph>=1.1,<2' \
+    'presidio-analyzer>=2.2,<3' \
+    'presidio-anonymizer>=2.2,<3' \
+    'redis>=5,<6' \
+    'spacy>=3.7,<4' \
     'fastmcp>=2.13,<3'
 USER superset

@@ -34,6 +34,23 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.1
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
   superset-init:
     image: text-to-bi-superset:6.1.0
     build:
@@ -52,6 +69,7 @@ services:
       SUPERSET_DB: ${SUPERSET_DB:-superset}
       SUPERSET_DB_USER: ${SUPERSET_DB_USER:-superset}
       SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:-superset_dev_password}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
       SUPERSET_ADMIN_FIRST_NAME: ${SUPERSET_ADMIN_FIRST_NAME:-Superset}
@@ -94,6 +112,7 @@ services:
       SUPERSET_DB: ${SUPERSET_DB:-superset}
       SUPERSET_DB_USER: ${SUPERSET_DB_USER:-superset}
       SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:-superset_dev_password}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
     ports:
       - "${SUPERSET_PORT:-8089}:8088"
     volumes:
@@ -106,6 +125,35 @@ services:
         condition: service_completed_successfully
       warehouse-db:
         condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+  superset-worker:
+    image: text-to-bi-superset:6.1.0
+    build:
+      context: ./simulation/superset
+      dockerfile: Dockerfile
+    command: ["celery", "--app=superset.tasks.celery_app:app", "worker", "--pool=prefork", "-O", "fair", "-c", "2"]
+    env_file:
+      - ./.env
+    environment:
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-local-development-secret-change-me}
+      SUPERSET_DB: ${SUPERSET_DB:-superset}
+      SUPERSET_DB_USER: ${SUPERSET_DB_USER:-superset}
+      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:-superset_dev_password}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+    volumes:
+      - ./simulation/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - superset_extensions:/app/superset_home/extensions
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
     restart: unless-stopped
 
   airflow:
@@ -146,4 +194,5 @@ volumes:
   warehouse_db_data:
   superset_db_data:
   superset_extensions:
+  qdrant_data:
   airflow_home:

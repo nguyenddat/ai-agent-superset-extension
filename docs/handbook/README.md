@@ -1,6 +1,7 @@
 # Handbook
 
-Tài liệu module: [Data Lineage trong Text to BI](text-to-bi-data-lineage.md),
+Tài liệu module: [Text2SQL trong Text to BI](text-to-bi-text2sql.md),
+[Data Lineage trong Text to BI](text-to-bi-data-lineage.md),
 [Metric Management trong Text to BI](text-to-bi-metric-management.md),
 [Glossary Management trong Text to BI](text-to-bi-glossary-management.md),
 [Expert Rule Management trong Text to BI](text-to-bi-expert-rule-management.md),

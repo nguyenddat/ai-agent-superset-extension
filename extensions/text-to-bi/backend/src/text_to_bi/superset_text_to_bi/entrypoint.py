@@ -9,6 +9,8 @@ from .modules.expert_rule_management.routes.route_expert_rule import TextToBIExp
 from .modules.glossary_management.routes.route_glossary import TextToBIGlossaryAPI  # noqa: F401
 from .modules.metric_management.routes.route_metric import TextToBIMetricAPI  # noqa: F401
 from .modules.own_knowledge.routes import OwnKnowledgeAPI  # noqa: F401
+from .modules.text2sql.routes import Text2SqlAPI  # noqa: F401
+from .modules.text2sql.worker import process_ingestion_job  # noqa: F401
 
 # Superset's role synchronization must not grant these extension permissions to default roles.
 declare_text_to_bi_admin_only()
