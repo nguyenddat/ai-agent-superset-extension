@@ -70,4 +70,3 @@ class OwnKnowledgeRepository:
         self.clarifications = OwnClarificationRepository(session)
         self.proposals = OwnProposalRepository(session)
         self.entries = OwnKnowledgeEntryRepository(session)
-
