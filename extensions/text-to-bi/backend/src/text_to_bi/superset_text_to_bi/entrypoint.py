@@ -2,6 +2,7 @@
 
 from .modules.auth.routes.route_auth import AuthAPI  # noqa: F401
 from .modules.auth.services.srv_roles import declare_text_to_bi_admin_only
+from .modules.business_model.routes.route_business_model import BusinessModelAPI  # noqa: F401
 from .modules.conversation.routes import ConversationAPI  # noqa: F401
 from .modules.data_dictionary.routes.route_data_dictionary import DataDictionaryAPI  # noqa: F401
 from .modules.data_lineage.routes.route_data_lineage import DataLineageAPI  # noqa: F401

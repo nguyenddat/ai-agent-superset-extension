@@ -4,13 +4,13 @@ Các route dưới đây thuộc resource `data-lineage` của Text to BI. URL �
 
 | Method và path | Quyền bổ sung | Request và kết quả |
 | --- | --- | --- |
-| `GET /graph?database_id=<id>` | `require_view`; quyền đọc từng dataset | Trả `{database_id, datasets, edges, canvas}`. Cạnh quan hệ được suy ra từ tham chiếu trong Data Dictionary; cạnh thủ công/ẩn/màu và layout được áp dụng. |
-| `GET /transformations?database_id=<id>` | `require_view`; chỉ lộ dataset người gọi được xem | Trả `transformations`, mỗi mục có dataset đích, các `source_dataset_ids` và `dependencies`. |
+| `GET /graph?database_id=<id>` | `require_view`; quyền đọc từng dataset | Trả `{database_id, datasets, edges, canvas}`. Trả các dataset người gọi được xem, edges suy ra từ tham chiếu Data Dictionary và phép biến đổi, cạnh thủ công/ẩn/màu cùng layout đã lưu. Mỗi edge có source, target, kind, origin, label, color và columns. |
+| `GET /transformations?database_id=<id>` | `require_view`; chỉ lộ dataset người gọi được xem | Trả `transformations`; mỗi mục có `id`, `target_dataset_id`, `name`, `description`, `sql_text`, `origin`, `source_dataset_ids`, `dependencies` và thời điểm audit. Mỗi dependency có `source_dataset_id`, `source_column_name`, `target_column_name`, `role`. |
 | `GET /transformations/<uuid>?database_id=<id>` | `require_view`; phải xem được dataset đích và mọi nguồn | Trả `{transformation}`; UUID sai là lỗi validation, bản ghi hoặc nguồn ngoài phạm vi trả 404. |
 | `POST /transformations?database_id=<id>` | Quyền sửa dataset đích và mọi nguồn | Body theo `TransformationIn`; tạo phép biến đổi, trả `{transformation}` với 201. |
 | `PUT /transformations/<uuid>?database_id=<id>` | Quyền sửa dataset đích và mọi nguồn | Cùng body như POST; thay toàn bộ tập nguồn và dependency, trả `{transformation}`. |
 | `DELETE /transformations/<uuid>?database_id=<id>` | Quyền sửa dataset đích | Xóa phép biến đổi; trả thông báo xác nhận. |
-| `POST /preview?database_id=<id>` | `require_view`; quyền đọc dataset đích | Body `{target_dataset_id, sql_text}`; trả gợi ý nguồn/cột và lỗi phân tích. SQL được phân tích, không thực thi. |
+| `POST /preview?database_id=<id>` | `require_view`; quyền đọc dataset đích | Body `{target_dataset_id, sql_text}`; trả `target_dataset_id`, `source_dataset_ids`, `dependencies`, `warnings` và `complete` (đây chỉ là gợi ý). SQL được phân tích, không thực thi. |
 | `GET /datasets/<dataset_id>/view-sql?database_id=<id>` | `require_view`; quyền truy cập dataset | Đọc SQL định nghĩa view từ Superset Database Inspector; dataset phải thuộc database đã nêu. |
 | `PUT /canvas?database_id=<id>` | Chỉ Admin Superset | Body `{nodes, edges}`; lưu layout; trả `{database_id}`. Tối đa 5.000 node/cạnh, tọa độ hữu hạn trong ±100.000. |
 | `POST /edges` | Quyền sửa cả hai dataset | Body `{source, target, kind}`; tạo cạnh thủ công hoặc hiện lại cạnh suy ra. Hai ID phải là dataset dương, khác nhau và cùng database; `kind` là `flow`, `relation` hoặc `transform`. |

@@ -1,14 +1,14 @@
 # Handbook
 
 Tài liệu module: [Auth](text-to-bi-auth.md), [Data Dictionary](text-to-bi-data-dictionary.md),
-[Data Lineage](text-to-bi-data-lineage.md), [Metric Management](text-to-bi-metric-management.md),
+[Data Lineage](text-to-bi-data-lineage.md), [Business Model](text-to-bi-business-model.md), [Metric Management](text-to-bi-metric-management.md),
 [Glossary Management](text-to-bi-glossary-management.md), [Expert Rule Management](text-to-bi-expert-rule-management.md),
 [Own Knowledge](text-to-bi-own-knowledge.md), [Conversation](text-to-bi-conversation.md),
 [Text2SQL](text-to-bi-text2sql.md).
 
 Tài liệu API theo module:
 [Auth](text-to-bi-auth-api.md), [Data Dictionary](text-to-bi-data-dictionary-api.md),
-[Data Lineage](text-to-bi-data-lineage-api.md), [Metric Management](text-to-bi-metric-management-api.md),
+[Data Lineage](text-to-bi-data-lineage-api.md), [Business Model](text-to-bi-business-model-api.md), [Metric Management](text-to-bi-metric-management-api.md),
 [Glossary Management](text-to-bi-glossary-management-api.md),
 [Expert Rule Management](text-to-bi-expert-rule-management-api.md),
 [Own Knowledge](text-to-bi-own-knowledge-api.md), [Conversation](text-to-bi-conversation-api.md),

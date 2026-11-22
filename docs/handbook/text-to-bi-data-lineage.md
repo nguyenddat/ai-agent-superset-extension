@@ -19,7 +19,7 @@ Các bảng extension nằm trong schema `text_to_bi`: `lineage_edges`, `lineage
 - `services/sql_preview.py`: chỉ phân tích một câu SELECT bằng SQLGlot để gợi ý nguồn và phụ thuộc cột; không chạy SQL do client gửi.
 - `dependencies.py`: tạo service/repository trên `superset.extensions.db.session`.
 - `routes/route_data_lineage.py`: xác thực payload, gọi service, kiểm tra quyền, commit/rollback.
-- `migrations.py`: tạo riêng hai bảng lineage, dùng schema `text_to_bi`, advisory lock và `checkfirst` để an toàn khi nhiều worker khởi động.
+- `migrations.py`: tạo năm bảng lineage (cạnh, canvas, phép biến đổi, input và phụ thuộc cột), dùng schema `text_to_bi`, advisory lock và `checkfirst` để an toàn khi nhiều worker khởi động.
 
 ## API và quyền
 
