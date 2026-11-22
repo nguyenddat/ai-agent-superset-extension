@@ -34,6 +34,17 @@ def get_datasets(dataset_ids: Iterable[int]) -> list[Any]:
     return [dataset for dataset in daos.DatasetDAO.find_all() if dataset.id in wanted]
 
 
+def datasets_on_database(database_id: int) -> list[Any]:
+    return sorted(
+        (dataset for dataset in daos.DatasetDAO.find_all() if dataset.database_id == database_id),
+        key=dataset_sort_key,
+    )
+
+
+def get_database(database_id: int) -> Any | None:
+    return daos.DatabaseDAO.find_one_or_none(id=database_id)
+
+
 def is_internal_dataset(dataset: Any) -> bool:
     try:
         extra = json.loads(getattr(getattr(dataset, "database", None), "extra", None) or "{}")

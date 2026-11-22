@@ -87,6 +87,21 @@ modules/<module>/
   `SemanticLayerAPI` ghép các mixin, nhưng không mixin nào được dựa vào method của mixin khác.
 - **Gọi giữa các module** đi qua service, repository factory, model hoặc exception của module kia, không đi qua route.
 
+## Luồng hoàn thiện module
+
+Áp dụng quy trình này khi chuyển một module từ standalone sang extension:
+
+1. **Khảo sát nguồn và đích.** Đọc model, repository, service, route, dependency, migration và docs của module standalone; đối chiếu với scaffold extension, các module đã chuyển và convention đang có. Liệt kê tính năng cần giữ, phụ thuộc và API Superset sẵn có trước khi sửa code.
+2. **Chọn đúng chủ sở hữu model.** Model của database, dataset, cột, user và role thuộc Superset: import model chuẩn, không định nghĩa lại và không đưa vào migration tạo bảng. Nếu module cần một model nghiệp vụ đã được module khác khai báo, import trực tiếp model từ module sở hữu; không tạo model trùng, bảng trùng hay migration trùng. Chỉ khai báo model mới cho dữ liệu mà extension thật sự sở hữu.
+3. **Thiết kế liên kết dữ liệu.** FK metadata của extension trỏ tới khóa chuẩn Superset hoặc tới model nghiệp vụ do module sở hữu. Với catalog có đồng bộ/xóa tạo lại bản ghi, chọn khóa tham chiếu ổn định; không dựa vào ID phụ thuộc vòng đời đồng bộ nếu có khóa nghiệp vụ ổn định hơn.
+4. **Tách lớp theo convention.** Repository giữ truy vấn; service giữ quy tắc nghiệp vụ và không đọc request; route xác thực input, gọi service, áp quyền và quản lý transaction; dependency tạo service/repository với `superset.extensions.db.session`. Module khác gọi model/service public của module sở hữu, không truy cập route của nhau.
+5. **Dùng API Superset khi đã có chức năng chuẩn.** Chỉ thêm route extension khi module cần nghiệp vụ riêng chưa được Superset cung cấp. Không thêm route để quản lý model/bảng Superset đã có API chuẩn.
+6. **Migration chỉ quản lý dữ liệu extension.** Chỉ tạo/nâng cấp bảng extension thuộc module theo convention migration của package. Không tạo, sửa schema hay xóa bảng Superset. Khai báo alias model Superset để FK resolve metadata nhưng không đưa alias vào danh sách tạo bảng. Migration phải idempotent và an toàn khi nhiều worker khởi động.
+7. **Viết docs cùng module.** Mô tả trách nhiệm, model và chủ sở hữu, bảng/FK, repository/service, API/quyền, dependency và migration; cập nhật handbook index hoặc kiến trúc khi convention thay đổi.
+8. **Rà soát và giao hàng có phạm vi.** Chạy lint và kiểm tra cú pháp phù hợp; không chạy tests nếu chưa được yêu cầu. Stage module hiện tại, docs và dependency dùng chung thật sự cần thiết; để scaffold chưa hoàn tất của module khác ngoài commit. Commit và push thẳng lên `main` theo quy ước hiện hành.
+
+Trước khi tạo model, luôn tìm trong tất cả module đã có. Khi model đã có chủ sở hữu, import đầy đủ class đó qua package/model public tương ứng và dùng class đó trong relationship/FK/query; không copy class vào module mới để tiện truy cập.
+
 ## Backend AI Agent
 
 Cùng các lớp `common`, `core`, `modules` và cùng cấu trúc một module. Khác Semantic Layer ở mấy điểm:
