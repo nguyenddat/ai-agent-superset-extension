@@ -1,7 +1,9 @@
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from text_to_bi.superset_text_to_bi.common.utils.type_formatters import utc_now
 from text_to_bi.superset_text_to_bi.modules.auth.services.srv_access import (
     require_dataset_access,
@@ -14,30 +16,32 @@ from text_to_bi.superset_text_to_bi.modules.superset.services.srv_dataset import
 
 from ..exceptions import GlossaryConflictError, GlossaryNotFoundError, GlossaryValidationError
 from ..models import GlossaryLink, GlossaryRevision, GlossaryTerm, glossary_term_domains
-from ..repositories import GlossaryRepository
+from ..repositories import GlossaryLinkRepository, GlossaryRevisionRepository, GlossaryTermRepository
 
 
 class GlossaryService:
     def __init__(self, session: Session) -> None:
         self.session = session
-        self.repository = GlossaryRepository(session)
+        self.terms = GlossaryTermRepository(session)
+        self.revisions = GlossaryRevisionRepository(session)
+        self.links = GlossaryLinkRepository(session)
         self.metrics = MetricService(session)
         self.domains = DomainAssignment(session, glossary_term_domains, "term_id")
 
     def list_terms(self, dataset_id: int) -> list[dict[str, Any]]:
         require_dataset_access(require_dataset(dataset_id))
-        return [self._serialize(row) for row in self.repository.list(dataset_id)]
+        return [self._serialize(row) for row in self.terms.list(dataset_id)]
 
     def get_term(self, term_id: UUID) -> dict[str, Any]:
         return self._serialize(self._term(term_id))
 
     def list_revisions(self, term_id: UUID) -> list[dict[str, Any]]:
         row = self._term(term_id)
-        return [self._revision(revision) for revision in self.repository.revisions(row.id)]
+        return [self._revision(revision) for revision in self.revisions.list_by_term(row.id)]
 
     def serving_revision(self, term_id: UUID) -> GlossaryRevision | None:
         row = self._term(term_id)
-        return self._serving(self.repository.revisions(row.id))
+        return self._serving(self.revisions.list_by_term(row.id))
 
     def live_links(self, dataset_id: int, revision_id: UUID) -> list[dict[str, str]]:
         return [link for link in self._links(revision_id) if self._link_live(dataset_id, link)]
@@ -46,13 +50,15 @@ class GlossaryService:
         dataset = require_dataset(values["dataset_id"])
         require_edit(dataset)
         name = " ".join(values["canonical_name"].split())
-        if not name or self.repository.find_name(dataset.id, name.casefold()):
+        if not name or self.terms.find_name(dataset.id, name.casefold()):
             raise GlossaryConflictError("Tên thuật ngữ đã tồn tại trên dataset này.")
         content = self._content(values, dataset.id, name)
         domain_ids = self._domain_ids(values.get("business_domain_ids") or [])
         row = GlossaryTerm(dataset_id=dataset.id, canonical_name=name, normalized_name=name.casefold())
-        self.session.add(row)
-        self.session.flush()
+        try:
+            self.terms.create(row)
+        except IntegrityError as error:
+            raise GlossaryConflictError("Tên thuật ngữ đã tồn tại trên dataset này.") from error
         self.domains.replace(row.id, domain_ids)
         self._add_revision(row.id, 1, content)
         return self._serialize(row)
@@ -60,7 +66,7 @@ class GlossaryService:
     def update_term(self, term_id: UUID, values: dict[str, Any]) -> dict[str, Any]:
         row = self._term(term_id, lock=True)
         require_edit(require_dataset(row.dataset_id))
-        current = self.repository.revisions(row.id)[0]
+        current = self.revisions.list_by_term(row.id)[0]
         self._expected(current, values["expected_revision"])
         content = self._content(values, row.dataset_id, row.canonical_name)
         domain_ids = self._domain_ids(values.get("business_domain_ids") or [])
@@ -78,7 +84,7 @@ class GlossaryService:
     def approve(self, term_id: UUID, expected_revision: int) -> dict[str, Any]:
         require_review()
         row = self._term(term_id, lock=True)
-        current = self.repository.revisions(row.id)[0]
+        current = self.revisions.list_by_term(row.id)[0]
         self._expected(current, expected_revision)
         if current.status != "draft":
             raise GlossaryConflictError("Chỉ có thể duyệt bản nháp hiện tại.")
@@ -90,7 +96,7 @@ class GlossaryService:
     def revoke(self, term_id: UUID, expected_revision: int) -> dict[str, Any]:
         require_review()
         row = self._term(term_id, lock=True)
-        revisions = self.repository.revisions(row.id)
+        revisions = self.revisions.list_by_term(row.id)
         self._expected(revisions[0], expected_revision)
         serving = self._serving(revisions)
         if serving is None:
@@ -104,16 +110,15 @@ class GlossaryService:
     def delete_term(self, term_id: UUID) -> None:
         row = self._term(term_id, lock=True)
         require_edit(require_dataset(row.dataset_id))
-        if self._serving(self.repository.revisions(row.id)) is not None:
+        if self._serving(self.revisions.list_by_term(row.id)) is not None:
             require_review()
-        self.session.delete(row)
-        self.session.flush()
+        self.terms.delete(row)
 
     def discovery(self, dataset_id: int) -> list[dict[str, Any]]:
         require_dataset_access(require_dataset(dataset_id))
         result = []
-        for row in self.repository.list(dataset_id):
-            serving = self._serving(self.repository.revisions(row.id))
+        for row in self.terms.list(dataset_id):
+            serving = self._serving(self.revisions.list_by_term(row.id))
             if serving is not None:
                 result.append({
                     "id": row.id, "name": row.canonical_name, "definition": serving.definition,
@@ -158,16 +163,20 @@ class GlossaryService:
     def _add_revision(self, term_id: UUID, number: int, content: dict[str, Any], status: str = "draft") -> None:
         revision = GlossaryRevision(term_id=term_id, number=number, definition=content["definition"],
                                     synonyms=content["synonyms"], status=status)
-        self.session.add(revision)
-        self.session.flush()
-        self.session.add_all([GlossaryLink(revision_id=revision.id, **link) for link in content["links"]])
-        self.session.flush()
+        try:
+            self.revisions.create(revision)
+            self.links.create_many(
+                [GlossaryLink(revision_id=revision.id, **link) for link in content["links"]], flush=False
+            )
+            self.session.flush()
+        except IntegrityError as error:
+            raise GlossaryConflictError() from error
 
     def _links(self, revision_id: UUID) -> list[dict[str, str]]:
-        return [{"kind": row.kind, "target_key": row.target_key} for row in self.repository.links(revision_id)]
+        return [{"kind": row.kind, "target_key": row.target_key} for row in self.links.list_by_revision(revision_id)]
 
     def _term(self, term_id: UUID, lock: bool = False) -> GlossaryTerm:
-        row = self.repository.get(term_id, lock)
+        row = self.terms.get(term_id, lock)
         if row is None:
             raise GlossaryNotFoundError()
         require_dataset_access(require_dataset(row.dataset_id))
@@ -197,7 +206,7 @@ class GlossaryService:
                 "synonyms": row.synonyms, "links": self._links(row.id), "created_at": row.created_at}
 
     def _serialize(self, row: GlossaryTerm) -> dict[str, Any]:
-        revisions = self.repository.revisions(row.id)
+        revisions = self.revisions.list_by_term(row.id)
         serving = self._serving(revisions)
         return {
             "id": row.id, "dataset_id": row.dataset_id, "canonical_name": row.canonical_name,
