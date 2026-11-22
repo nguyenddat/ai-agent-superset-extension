@@ -1,6 +1,7 @@
 from typing import Any
 
 from superset.extensions import security_manager
+
 from text_to_bi.superset_text_to_bi.common.utils.request_user import request_user
 from text_to_bi.superset_text_to_bi.modules.superset.services.srv_dataset import can_access_dataset
 

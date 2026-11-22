@@ -1,6 +1,7 @@
 import json
 import re
 from typing import Any
+from uuid import UUID
 
 from flask import request
 from flask_appbuilder.api import expose, permission_name, protect, safe
@@ -11,12 +12,14 @@ from superset_core.rest_api.decorators import api
 from text_to_bi.superset_text_to_bi.core.database import handle_errors, rollback_on_error
 from text_to_bi.superset_text_to_bi.core.routing import API_CLASS_PERMISSION, OPENAPI_TAG
 from text_to_bi.superset_text_to_bi.core.security import csrf_protected
+from text_to_bi.superset_text_to_bi.core.validation import request_body
 from text_to_bi.superset_text_to_bi.modules.auth.services.srv_access import (
     require_admin,
     require_edit,
     require_view,
 )
 from text_to_bi.superset_text_to_bi.modules.data_dictionary.migrations import ensure_data_dictionary_tables
+from text_to_bi.superset_text_to_bi.modules.management_payload import json_payload
 from text_to_bi.superset_text_to_bi.modules.superset.services.srv_dataset import (
     datasets_on_database,
     get_database,
@@ -26,6 +29,7 @@ from text_to_bi.superset_text_to_bi.modules.superset.services.srv_dataset import
 from ..dependencies import data_lineage_service
 from ..exceptions import DataLineageValidationError, LineageDatabaseNotFoundError
 from ..migrations import ensure_data_lineage_tables
+from ..schemas import PreviewIn, TransformationIn
 from ..services.srv_data_lineage import EDGE_KINDS
 
 _NODE_KEY = re.compile(r"^(table|metric)-\d+$")
@@ -106,10 +110,17 @@ def _canvas_layout(payload: Any) -> dict[str, Any]:
     return clean
 
 
+def _transformation_id(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError as error:
+        raise DataLineageValidationError("ID phép biến đổi không hợp lệ.") from error
+
+
 @api(
     id="text_to_bi_data_lineage_api",
     name="Text to BI data lineage API",
-    description="Reads inferred dataset relationships and manages lineage edge overrides and canvas layouts.",
+    description="Manages dataset lineage transformations, inferred relationships and canvas layouts.",
     resource_name="data-lineage",
 )
 class DataLineageAPI(RestApi):
@@ -128,6 +139,109 @@ class DataLineageAPI(RestApi):
         ensure_data_lineage_tables()
         database_id = _database_id()
         return self.response(200, **data_lineage_service().graph(database_id, datasets_on_database(database_id)))
+
+    @expose("/transformations", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def list_transformations(self):
+        require_view()
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        rows = data_lineage_service().list_transformations(database_id, datasets_on_database(database_id))
+        return self.response(200, transformations=json_payload(rows))
+
+    @expose("/transformations/<transformation_id>", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def get_transformation(self, transformation_id: str):
+        require_view()
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        result = data_lineage_service().get_transformation(
+            database_id, _transformation_id(transformation_id), datasets_on_database(database_id),
+        )
+        return self.response(200, transformation=json_payload(result))
+
+    @expose("/transformations", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def create_transformation(self):
+        body = request_body(TransformationIn)
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        result = data_lineage_service().save_transformation(
+            body.model_dump(), datasets_on_database(database_id),
+        )
+        db.session.commit()
+        return self.response(201, transformation=json_payload(result))
+
+    @expose("/transformations/<transformation_id>", methods=("PUT",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def update_transformation(self, transformation_id: str):
+        body = request_body(TransformationIn)
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        result = data_lineage_service().save_transformation(
+            body.model_dump(), datasets_on_database(database_id), _transformation_id(transformation_id),
+        )
+        db.session.commit()
+        return self.response(200, transformation=json_payload(result))
+
+    @expose("/transformations/<transformation_id>", methods=("DELETE",))
+    @protect()
+    @safe
+    @permission_name("write")
+    @csrf_protected
+    @rollback_on_error
+    @handle_errors
+    def delete_transformation(self, transformation_id: str):
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        data_lineage_service().delete_transformation(
+            _transformation_id(transformation_id), datasets_on_database(database_id),
+        )
+        db.session.commit()
+        return self.response(200, message="Đã xóa phép biến đổi.")
+
+    @expose("/preview", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def preview_transformation(self):
+        require_view()
+        body = request_body(PreviewIn)
+        database_id = _database_id()
+        result = data_lineage_service().preview(
+            body.target_dataset_id, body.sql_text, datasets_on_database(database_id),
+        )
+        return self.response(200, **json_payload(result))
+
+    @expose("/datasets/<int:dataset_id>/view-sql", methods=("GET",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @handle_errors
+    def read_view_sql(self, dataset_id: int):
+        require_view()
+        ensure_data_lineage_tables()
+        database_id = _database_id()
+        return self.response(
+            200, **json_payload(data_lineage_service().read_view_sql(dataset_id, database_id)),
+        )
 
     # -------------------------CREATE/UPDATE-----------------
     @expose("/canvas", methods=("PUT",))
@@ -193,7 +307,9 @@ class DataLineageAPI(RestApi):
         ensure_data_lineage_tables()
         datasets = _editable_edge_datasets(source_id, target_id)
         service = data_lineage_service()
-        inferred = service.is_inferred(source_id, target_id, datasets)
+        inferred = service.is_inferred(source_id, target_id, datasets) or (
+            kind == "transform" and service.has_transformation(source_id, target_id)
+        )
         service.remove_edge(source_id, target_id, kind, inferred)
         db.session.commit()
         return self.response(200, source=source_id, target=target_id, kind=kind)

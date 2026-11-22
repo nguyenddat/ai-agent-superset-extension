@@ -277,4 +277,4 @@ class DataDictionaryAutofillService:
             return
         self.dictionary.column_roles.create(
             TableColumnRole(table_dictionary_id=dictionary.id, role="created_at", column_name=column.column_name)
-        )\n
+        )

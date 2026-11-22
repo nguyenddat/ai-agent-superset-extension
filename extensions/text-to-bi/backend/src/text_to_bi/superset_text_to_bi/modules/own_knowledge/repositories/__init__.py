@@ -1,3 +1,13 @@
-from .repo_user_definition import UserDefinitionRepository
+from .own_knowledge_repository import (
+    OwnClarificationRepository,
+    OwnKnowledgeEntryRepository,
+    OwnKnowledgeRepository,
+    OwnProposalRepository,
+)
 
-__all__ = ["UserDefinitionRepository"]
+__all__ = [
+    "OwnClarificationRepository",
+    "OwnKnowledgeEntryRepository",
+    "OwnKnowledgeRepository",
+    "OwnProposalRepository",
+]

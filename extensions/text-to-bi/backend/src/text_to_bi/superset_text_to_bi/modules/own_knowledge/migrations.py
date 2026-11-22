@@ -5,16 +5,18 @@ from sqlalchemy import text
 from superset.extensions import db
 
 from text_to_bi.superset_text_to_bi.common.base_model import TEXT_TO_BI_SCHEMA
+from text_to_bi.superset_text_to_bi.modules.expert_rule_management.migrations import ensure_expert_rule_tables
 
-from .models import UserDefinition
+from .models import OwnClarification, OwnKnowledgeEntry, OwnProposal
 
-MIGRATION_LOCK_KEY = 74_116_309
+MIGRATION_LOCK_KEY = 74_116_311
 _ready = False
 _lock = threading.Lock()
 
 
 def ensure_own_knowledge_tables() -> None:
     global _ready
+    ensure_expert_rule_tables()
     if _ready:
         return
     with _lock:
@@ -36,4 +38,8 @@ def _migrate() -> None:
     with db.engine.begin() as connection:
         if connection.dialect.name == "postgresql":
             connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {TEXT_TO_BI_SCHEMA}"))
-        Model.metadata.create_all(bind=connection, tables=[UserDefinition.__table__], checkfirst=True)
+        Model.metadata.create_all(
+            bind=connection,
+            tables=[OwnClarification.__table__, OwnProposal.__table__, OwnKnowledgeEntry.__table__],
+            checkfirst=True,
+        )

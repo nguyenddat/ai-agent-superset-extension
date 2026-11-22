@@ -6,9 +6,17 @@ from superset.extensions import db
 
 from text_to_bi.superset_text_to_bi.common.base_model import TEXT_TO_BI_SCHEMA
 
-from .models import LineageCanvas, LineageEdge
+from .models import (
+    LineageCanvas,
+    LineageColumnDependency,
+    LineageEdge,
+    LineageTransformation,
+    LineageTransformationInput,
+)
 
-DATA_LINEAGE_MODELS = (LineageEdge, LineageCanvas)
+DATA_LINEAGE_MODELS = (
+    LineageEdge, LineageCanvas, LineageTransformation, LineageTransformationInput, LineageColumnDependency,
+)
 MIGRATION_LOCK_KEY = 74_116_301
 _ready = False
 _lock = threading.Lock()

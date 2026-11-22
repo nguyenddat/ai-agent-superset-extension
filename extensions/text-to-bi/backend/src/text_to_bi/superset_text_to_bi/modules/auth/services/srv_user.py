@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+
 from text_to_bi.superset_text_to_bi.modules.superset.exceptions import UserNotFoundError
 
 from ..models import User

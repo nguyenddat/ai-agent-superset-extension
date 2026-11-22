@@ -1,24 +1,32 @@
 # Own Knowledge
 
-`own_knowledge` lưu những cách hiểu nghiệp vụ do từng người dùng xác nhận trong ngữ cảnh một dashboard. Đây là bản chuyển đổi từ module `definitions` của AI Agent standalone. Mỗi bản ghi chỉ thuộc người dùng lấy từ phiên Superset; API không nhận `user_id` từ client.
+`own_knowledge` ghi nhận khái niệm nghiệp vụ còn thiếu dưới dạng câu hỏi làm rõ, cho người dùng xác nhận định nghĩa gợi ý, lưu thành tri thức cá nhân và cho Admin giữ riêng hoặc chuyển thành glossary, metric hay expert rule dùng chung. Module được đối chiếu với `ai-agent-superset-standalone/backend/modules/own_knowledge`.
 
-## Model và quyền sở hữu
+## Ánh xạ sang Superset và quyền sở hữu model
 
-- `UserDefinition` là model của module này, bảng `text_to_bi.user_definitions`.
-- `user_id` và `reviewed_by` tham chiếu model `User` import từ `modules.auth.models` (bảng Superset `ab_user`).
-- `dashboard_id` tham chiếu `dashboards.id` do Superset quản lý. Service yêu cầu Superset kiểm tra quyền truy cập dashboard trước khi liệt kê hoặc lưu định nghĩa.
-- `source_question_id` và `source_session_id` là ID tùy chọn. Chúng chưa có FK vì module question/conversation chưa được chuyển; khi các module đó có model owner, cần import model đầy đủ và bổ sung FK.
-- `kind` nhận `glossary` hoặc `expert_rule`. Định nghĩa cá nhân là tín hiệu từ người dùng; nó không tự tạo hoặc duyệt thuật ngữ chung hay quy tắc chuyên gia.
-- `review_status` nhận `pending`, `promoted` hoặc `ignored`. Nội dung được sửa hoặc xác nhận lại sẽ quay về `pending`.
+- Extension sở hữu ba model `OwnClarification`, `OwnProposal` và `OwnKnowledgeEntry` trong schema `text_to_bi`.
+- Phạm vi `connection_id`/`table_id` của standalone được ánh xạ sang `dataset_id` Superset. FK dùng model `SupersetDataset` import từ `modules.data_dictionary.models`.
+- User ID dạng chuỗi của standalone được ánh xạ sang `User.id` trong phiên Superset, import từ `modules.auth.models`. Request không được tự chọn chủ sở hữu hoặc người duyệt.
+- `source_session_id` và `source_question_id` là ID tùy chọn dạng chuỗi cho đến khi module tương ứng được chuyển.
+- Khi promote, module gọi schema và service sở hữu trong `glossary_management`, `metric_management`, `expert_rule_management`; không khai báo bản sao các model dùng chung.
 
-## Lớp module
+## Model và vòng đời
 
-- `models/user_definition.py`: model và ràng buộc tên trong phạm vi user/dashboard/loại.
-- `repositories/repo_user_definition.py`: truy vấn theo chủ sở hữu, dashboard và danh sách review.
-- `services/own_knowledge_service.py`: kiểm tra nội dung, dashboard access, lưu và review; không đọc request hoặc commit transaction.
-- `dependencies.py`: tạo service/repository trên `superset.extensions.db.session`.
-- `routes/route_own_knowledge.py`: xác thực body, quyền, CSRF và transaction.
-- `migrations.py`: tạo riêng bảng của module trong schema `text_to_bi`, dùng advisory lock và `checkfirst`; không tạo bảng Superset.
+- Clarification duy nhất theo `(dataset_id, user_id, idempotency_key)`. Request fingerprint cho phép retry cùng nội dung và từ chối dùng lại key với nội dung khác.
+- Trạng thái clarification: `pending`, `confirmed`, `dismissed`. Người dùng chọn một đáp án gợi ý hoặc nhập định nghĩa riêng. Gửi lại câu trả lời giống hệt là idempotent; gửi nội dung khác sau khi đã trả lời sẽ bị từ chối.
+- Proposal giữ loại tri thức còn thiếu, tên/khái niệm gợi ý, câu hỏi, các phương án và dataset tùy chọn. Loại phải thuộc nội dung thiếu; dataset phải trùng với clarification.
+- Entry duy nhất theo `(dataset_id, user_id, kind, normalized_name)`. Cập nhật dùng `version` để phát hiện ghi đè từ màn hình cũ.
+- Trạng thái review entry: `pending`, `kept_own`, `promoted`. Mở lại, cập nhật hoặc xác nhận lại sẽ xóa metadata review/promotion cũ.
+- Promote tạo bản nháp thông qua service của module đích và ghi lại loại cùng UUID. Entry cá nhân chỉ tạm ngừng đưa cho agent khi bản ghi đích còn hiệu lực; nếu bản ghi chung bị xóa, thu hồi hoặc ngừng hoạt động thì tri thức cá nhân được bật lại.
+
+## Các lớp
+
+- `models/own_knowledge.py`: ba model clarification, proposal, entry và FK sang model Superset.
+- `repositories/own_knowledge_repository.py`: truy vấn, khóa hàng, idempotency, quyền sở hữu và cập nhật theo version.
+- `services/own_knowledge_service.py`: validation, xử lý câu trả lời, review, promote và kiểm tra hiệu lực; không đọc request hoặc commit.
+- `dependencies.py`: nối repository/service với session của Superset.
+- `routes/route_own_knowledge.py`: xác thực body, quyền Text to BI, CSRF và transaction.
+- `migrations.py`: đảm bảo bảng Metric, Glossary, Expert Rule trước khi tạo ba bảng riêng của Own Knowledge, dùng advisory lock chung.
 
 ## API
 
@@ -26,14 +34,19 @@ Resource: `/extensions/text-to-bi/superset-text-to-bi/own-knowledge`.
 
 | Method | Path | Mục đích |
 | --- | --- | --- |
-| GET | `/` với `dashboard_id` | Liệt kê định nghĩa của user đăng nhập; yêu cầu quyền xem Text to BI và quyền truy cập dashboard Superset |
-| PUT | `/<definition_id>` | Sửa định nghĩa của chính user; trạng thái review trở về `pending` |
-| DELETE | `/<definition_id>` | Xóa định nghĩa của chính user |
-| GET | `/review` | Liệt kê định nghĩa cho Admin review |
-| PUT | `/review` | Đặt trạng thái nhiều định nghĩa thành `pending`, `promoted` hoặc `ignored`; chỉ Admin |
+| POST | `/clarifications` | Tạo clarification idempotent cho user hiện tại và dataset được phép xem |
+| GET | `/clarifications/<id>` | Xem clarification của chính user |
+| POST | `/clarifications/<id>/answer` | Xác nhận hoặc bỏ qua clarification |
+| GET | `/agent/entries?dataset_id=...` | Lấy tri thức cá nhân đang hoạt động của user hiện tại |
+| PUT | `/agent/entries/<id>` | Sửa entry sở hữu, yêu cầu `expected_version` |
+| DELETE | `/agent/entries/<id>` | Xóa entry sở hữu |
+| GET | `/admin/entries` | Danh sách review Admin; lọc tùy chọn theo dataset, trạng thái, user |
+| GET | `/admin/entries/<id>` | Xem entry cần review |
+| POST | `/admin/entries/<id>/review` | Giữ riêng hoặc mở lại entry, yêu cầu `expected_version` |
+| POST | `/admin/entries/<id>/promote` | Promote qua service module đích, yêu cầu `expected_version` |
 
-Ghi dữ liệu cần CSRF. Tất cả endpoint cá nhân lọc bằng `current_user_id()`; ID không thuộc người gọi được trả về như không tìm thấy. Module cung cấp `OwnKnowledgeService.save_confirmed()` để conversation/session gọi khi tích hợp; caller cần truyền user ID lấy từ phiên đăng nhập và dữ liệu xác nhận đã được validate.
+API lấy user/reviewer từ phiên Superset. Route của user cần quyền xem Text to BI; route review/promote yêu cầu Admin. Quyền truy cập dataset của Superset vẫn được áp dụng. Request ghi cần CSRF. Các API key agent/admin riêng của standalone được thay bằng xác thực Superset và role Text to BI.
 
-## Migration và tích hợp
+## Migration
 
-`ensure_own_knowledge_tables()` chỉ tạo bảng `user_definitions`. Route gọi migration trước truy vấn. Khi chuyển conversation/session, cần gọi service `save_confirmed()` sau khi xác nhận định nghĩa; nếu muốn dựng lại thông tin review gồm người hỏi và tiêu đề dashboard, hãy import model/repository owner của các module đó thay vì khai báo lại model ở đây.
+`ensure_own_knowledge_tables()` đảm bảo các module Metric, Glossary, Expert Rule trước, rồi chỉ tạo ba bảng Own Knowledge; không tạo/sửa bảng Superset. Phiên bản extension trước đây dùng bảng `user_definitions` cho luồng cũ của AI Agent `definitions`; model đó đã được thay bằng hợp đồng Own Knowledge của standalone. Nếu môi trường đã lưu dữ liệu ở bảng cũ, cần chuyển đổi dữ liệu riêng trước khi xóa bảng; migration này không tự xóa hoặc diễn giải lại dữ liệu đó.

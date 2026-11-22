@@ -1,3 +1,3 @@
-from .user_definition import UserDefinition
+from .own_knowledge import OwnClarification, OwnKnowledgeEntry, OwnProposal
 
-__all__ = ["UserDefinition"]
+__all__ = ["OwnClarification", "OwnKnowledgeEntry", "OwnProposal"]

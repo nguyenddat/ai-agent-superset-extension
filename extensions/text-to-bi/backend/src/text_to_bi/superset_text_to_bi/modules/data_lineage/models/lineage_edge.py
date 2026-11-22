@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, UniqueConstraint, false, true
+from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Integer, String, UniqueConstraint, false, true
 from sqlalchemy.orm import Mapped
 
 from text_to_bi.superset_text_to_bi.common.base_model import AuditedModel, schema_table_args
@@ -9,7 +9,8 @@ from ...data_dictionary.models import SupersetDataset
 class LineageEdge(AuditedModel):
     __tablename__ = "lineage_edges"
     __table_args__ = schema_table_args(
-        UniqueConstraint("source_dataset_id", "target_dataset_id", "kind", name="uq_lineage_edges_key")
+        UniqueConstraint("source_dataset_id", "target_dataset_id", "kind", name="uq_lineage_edges_key"),
+        CheckConstraint("kind IN ('flow', 'relation', 'transform')", name="kind_valid"),
     )
 
     source_dataset_id: Mapped[int] = Column(
