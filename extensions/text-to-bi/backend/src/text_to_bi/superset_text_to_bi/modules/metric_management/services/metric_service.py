@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+
 from text_to_bi.superset_text_to_bi.common.utils.type_formatters import utc_now
 from text_to_bi.superset_text_to_bi.modules.auth.services.srv_access import (
     require_dataset_access,
@@ -100,7 +101,7 @@ class MetricService:
         if kind == "metric":
             try:
                 row = self.repository.get(UUID(target_key))
-            except ValueError:
+            except (TypeError, ValueError):
                 return None
             if row is None or row.dataset_id != dataset_id or not row.is_active or row.status != "approved":
                 return None
@@ -108,7 +109,7 @@ class MetricService:
         if kind == "superset_metric":
             try:
                 row = self.repository.native_by_id(int(target_key))
-            except ValueError:
+            except (TypeError, ValueError):
                 return None
             if row is None or row.table_id != dataset_id:
                 return None
