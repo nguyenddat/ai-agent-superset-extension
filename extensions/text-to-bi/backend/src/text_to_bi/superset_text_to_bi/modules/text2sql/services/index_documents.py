@@ -168,33 +168,32 @@ def _link_text(context: CatalogContext, kind: str, target_key: str, dataset_id: 
 
 def build_glossary_documents(session: Session, context: CatalogContext) -> list[IndexDocument]:
     documents: list[IndexDocument] = []
-    for term in [
-        term for dataset_id in context.tables
-        for term in GlossaryService(session).discovery(dataset_id)
-    ]:
-        dataset_id = term["dataset_id"]
-        links: dict[str, list[str]] = {"table": [], "column": [], "metric": [], "superset_metric": []}
-        link_texts: list[str] = []
-        for link in term["links"]:
-            target_id = str(link["target_key"])
-            text = _link_text(context, link["kind"], target_id, dataset_id)
-            if text is not None:
-                links[link["kind"]].append(target_id)
-                link_texts.append(text)
-        synonyms = term["synonyms"]
-        text = " | ".join(filter(None, [
-            f"Thuật ngữ: {term['name']}", f"Định nghĩa: {term['definition']}",
-            f"Miền nghiệp vụ: {', '.join(domain['name'] for domain in term['business_domains'])}"
-            if term["business_domains"] else None,
-            f"Đồng nghĩa: {', '.join(synonyms)}" if synonyms else None,
-            f"Liên quan: {'; '.join(link_texts)}" if link_texts else None,
-        ]))
-        documents.append(build_document(
-            GLOSSARY, term["id"], context.database_id, dataset_id, text, name=term["name"],
-            display_name=term["name"],
-            synonyms=list(synonyms), table_ids=sorted(links["table"]), column_ids=sorted(links["column"]),
-            metric_ids=sorted(links["metric"]), superset_metric_ids=sorted(links["superset_metric"]),
-        ))
+    # discovery() answers for one dataset and leaves the dataset id out of each term, so it comes from the loop.
+    glossary = GlossaryService(session)
+    for dataset_id in context.tables:
+        for term in glossary.discovery(dataset_id):
+            links: dict[str, list[str]] = {"table": [], "column": [], "metric": [], "superset_metric": []}
+            link_texts: list[str] = []
+            for link in term["links"]:
+                target_id = str(link["target_key"])
+                text = _link_text(context, link["kind"], target_id, dataset_id)
+                if text is not None:
+                    links[link["kind"]].append(target_id)
+                    link_texts.append(text)
+            synonyms = term["synonyms"]
+            text = " | ".join(filter(None, [
+                f"Thuật ngữ: {term['name']}", f"Định nghĩa: {term['definition']}",
+                f"Miền nghiệp vụ: {', '.join(domain['name'] for domain in term['business_domains'])}"
+                if term["business_domains"] else None,
+                f"Đồng nghĩa: {', '.join(synonyms)}" if synonyms else None,
+                f"Liên quan: {'; '.join(link_texts)}" if link_texts else None,
+            ]))
+            documents.append(build_document(
+                GLOSSARY, term["id"], context.database_id, dataset_id, text, name=term["name"],
+                display_name=term["name"],
+                synonyms=list(synonyms), table_ids=sorted(links["table"]), column_ids=sorted(links["column"]),
+                metric_ids=sorted(links["metric"]), superset_metric_ids=sorted(links["superset_metric"]),
+            ))
     return documents
 
 
