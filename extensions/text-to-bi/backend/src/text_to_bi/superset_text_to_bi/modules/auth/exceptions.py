@@ -27,8 +27,8 @@ class EditRequiredError(NotAuthorizedError):
 class ReviewRequiredError(NotAuthorizedError):
     code = "review_permission_required"
     message = (
-        "Báº¡n chÆ°a cÃ³ quyá»n duyá»‡t semantic layer. HÃ£y nhá» quáº£n trá»‹ viÃªn "
-        "gÃ¡n nhÃ³m quyá»n Text to BI Steward."
+        "Bạn chưa có quyền duyệt tri thức nghiệp vụ. Hãy nhờ quản trị viên "
+        "gán nhóm quyền Text to BI Steward."
     )
 
 

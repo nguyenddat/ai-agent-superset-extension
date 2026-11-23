@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 from text_to_bi.superset_text_to_bi.common.charts import ChartField, compatible_types, infer_fields
 from text_to_bi.superset_text_to_bi.core.config import settings

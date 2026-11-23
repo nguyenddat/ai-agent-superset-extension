@@ -1,4 +1,4 @@
-﻿import unicodedata
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
@@ -15,7 +15,7 @@ MAX_SUGGESTIONS = 8
 
 
 def normalized(value: str) -> str:
-    folded = unicodedata.normalize("NFD", value.casefold().replace("Ä‘", "d"))
+    folded = unicodedata.normalize("NFD", value.casefold().replace("đ", "d"))
     return " ".join("".join(char for char in folded if unicodedata.category(char) != "Mn").split())
 
 
@@ -59,8 +59,8 @@ class TableInfo:
                 return column
         names = ", ".join(column.name for column in self.columns)
         raise ToolError(
-            f"Cá»™t '{reference}' khÃ´ng thuá»™c báº£ng {self.qualified_name}. "
-            f"CÃ¡c cá»™t há»£p lá»‡: {names}."
+            f"Cột '{reference}' không thuộc bảng {self.qualified_name}. "
+            f"Các cột hợp lệ: {names}."
         )
 
 
@@ -125,7 +125,7 @@ class AgentCatalog:
     def table(self, reference: str) -> TableInfo:
         return _find(reference, self.tables.values(), lambda item: (
             str(item.id), item.qualified_name.lower(), item.name.lower(), normalized(item.label),
-        ), "báº£ng", lambda item: item.qualified_name)
+        ), "bảng", lambda item: item.qualified_name)
 
     def metric(self, reference: str) -> MetricInfo:
         return _find(reference, self.metrics.values(), lambda item: (
@@ -133,7 +133,7 @@ class AgentCatalog:
         ), "metric", lambda item: item.name)
 
     def rule(self, reference: str) -> RuleInfo:
-        return _find(reference, self.rules, lambda item: (str(item.id), normalized(item.name)), "quy táº¯c",
+        return _find(reference, self.rules, lambda item: (str(item.id), normalized(item.name)), "quy tắc",
                      lambda item: item.name)
 
     def metric_rules(self, metric_id: str) -> list[RuleInfo]:
@@ -153,11 +153,11 @@ def _find(reference: str, entries: Iterable[Entry], keys: Any, kind: str, label:
     if len(matches) == 1:
         return matches[0]
     if matches:
-        raise ToolError(f"'{reference}' khá»›p nhiá»u {kind}: {', '.join(label(item) for item in matches)}. DÃ¹ng id.")
+        raise ToolError(f"'{reference}' khớp nhiều {kind}: {', '.join(label(item) for item in matches)}. Dùng id.")
     query = normalized(wanted)
     similar = [label(entry) for entry in candidates if any(query in key or key in query for key in keys(entry) if key)]
-    hint = f" Gáº§n giá»‘ng: {', '.join(similar[:MAX_SUGGESTIONS])}." if similar else ""
-    raise ToolError(f"KhÃ´ng tÃ¬m tháº¥y {kind} '{reference}'.{hint}")
+    hint = f" Gần giống: {', '.join(similar[:MAX_SUGGESTIONS])}." if similar else ""
+    raise ToolError(f"Không tìm thấy {kind} '{reference}'.{hint}")
 
 
 def load_catalog(session: Session, database_id: int) -> AgentCatalog:
