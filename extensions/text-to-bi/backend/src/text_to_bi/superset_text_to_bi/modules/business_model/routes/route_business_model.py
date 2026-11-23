@@ -231,4 +231,6 @@ class BusinessModelAPI(RestApi):
             if can_access_dataset(dataset):
                 visible.append(dataset)
         result = business_model_service().get_model(database_id, visible)
+        # The service hands back DataLayer rows, which json_payload passes through unchanged and JSON cannot encode.
+        result["layers"] = [self._layer_out(row) for row in result["layers"]]
         return self.response(200, **json_payload(result))

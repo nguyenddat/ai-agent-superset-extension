@@ -7,6 +7,7 @@ from superset.extensions import db
 from text_to_bi.superset_text_to_bi.common.base_model import TEXT_TO_BI_SCHEMA
 from text_to_bi.superset_text_to_bi.modules.conversation.migrations import ensure_conversation_tables
 from text_to_bi.superset_text_to_bi.modules.conversation.models import Conversation, ConversationTurn
+from text_to_bi.superset_text_to_bi.modules.own_knowledge.migrations import ensure_own_knowledge_tables
 
 from .models import ChatCheckpoint, IngestionJob
 
@@ -17,6 +18,9 @@ _lock = threading.Lock()
 
 def ensure_text2sql_tables() -> None:
     global _ready
+    # The agent and its index read every knowledge table; own knowledge ensures the chain below it (rules, glossary,
+    # metrics, business model).
+    ensure_own_knowledge_tables()
     if _ready:
         return
     with _lock:

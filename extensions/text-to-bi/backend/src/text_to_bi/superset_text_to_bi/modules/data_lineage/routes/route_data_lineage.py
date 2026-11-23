@@ -138,7 +138,8 @@ class DataLineageAPI(RestApi):
         ensure_data_dictionary_tables()
         ensure_data_lineage_tables()
         database_id = _database_id()
-        return self.response(200, **data_lineage_service().graph(database_id, datasets_on_database(database_id)))
+        graph = data_lineage_service().graph(database_id, datasets_on_database(database_id))
+        return self.response(200, **json_payload(graph))
 
     @expose("/transformations", methods=("GET",))
     @protect()
