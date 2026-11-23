@@ -5,6 +5,7 @@ from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
 from .exceptions import CsrfTokenError
+from .routing import error_response
 
 
 def csrf_protected(method):
@@ -14,6 +15,6 @@ def csrf_protected(method):
             validate_csrf(request.headers.get("X-CSRFToken"))
         except ValidationError:
             error = CsrfTokenError()
-            return self.response(error.status, code=error.code, message=str(error))
+            return error_response(error.status, error.code, str(error))
         return method(self, *args, **kwargs)
     return wrapper

@@ -3,8 +3,10 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Connection, Select, event, func, inspect, select, update
+from sqlalchemy import event, func, inspect, select, update
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 from superset.connectors.sqla.models import TableColumn
 
 from text_to_bi.superset_text_to_bi.common.utils.request_user import request_user_id

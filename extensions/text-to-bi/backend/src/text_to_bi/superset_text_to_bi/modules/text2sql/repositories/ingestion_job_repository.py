@@ -2,7 +2,8 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import Connection, delete, select, text
+from sqlalchemy import delete, select, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session, aliased
 
 from text_to_bi.superset_text_to_bi.common.utils.type_formatters import utc_now

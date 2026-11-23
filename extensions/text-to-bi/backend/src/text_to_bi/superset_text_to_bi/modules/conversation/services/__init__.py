@@ -1,4 +1,4 @@
-from .conversation_service import ConversationService
+from .conversation_service import ConversationService, HistoryTurn
 from .result_views import normalize_results
 
-__all__ = ["ConversationService", "normalize_results"]
+__all__ = ["ConversationService", "HistoryTurn", "normalize_results"]
