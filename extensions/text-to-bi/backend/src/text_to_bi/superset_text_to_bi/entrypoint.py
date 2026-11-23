@@ -1,6 +1,7 @@
 """Register the Text to BI backend APIs with Superset."""
 
 from .modules.auth.routes.route_auth import AuthAPI  # noqa: F401
+from .modules.auth.routes.route_page import TextToBIView  # noqa: F401
 from .modules.auth.services.srv_roles import declare_text_to_bi_admin_only
 from .modules.business_model.routes.route_business_model import BusinessModelAPI  # noqa: F401
 from .modules.conversation.routes import ConversationAPI  # noqa: F401

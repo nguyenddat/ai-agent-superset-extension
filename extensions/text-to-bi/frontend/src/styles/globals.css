@@ -1,0 +1,447 @@
+/* Tailwind runs inside Superset's page, so preflight and global base rules are left out on purpose:
+   only theme tokens and the utilities used by shadcn components are emitted. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@source "../";
+
+@custom-variant dark (&:where([data-theme-mode='dark'], [data-theme-mode='dark'] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+/* The preflight rules shadcn components depend on, scoped to the extension roots instead of the whole Superset page:
+   border-box sizing (h-8 means 32px including padding and border) and form controls using the page font. */
+@layer base {
+  /* border-color matches shadcn's base layer: a bare `border` utility draws in the theme border colour
+     instead of currentColor (which turns white in dark mode). */
+  :where(.tb-page) *,
+  :where(.tb-page) ::before,
+  :where(.tb-page) ::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  /* Without these, controls keep the browser's own look (e.g. the grey "buttonface" fill that shows behind ghost
+     buttons in dark mode); component classes and the extension's own CSS still set what they need. */
+  :where(.tb-page) :where(button, input, select, textarea) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-width: 0;
+    border-style: solid;
+    border-radius: 0;
+    background-color: transparent;
+  }
+
+  :where(.tb-page) :where(button) {
+    padding: 0;
+  }
+
+  /* Standalone's base layer: anything clickable shows the hand (the chat's history rows, suggestion chips and
+     composer buttons count on it). */
+  :where(.tb-page) :where(button:not(:disabled), [role="button"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
+  /* Superset underlines and colours every link; section tabs and link buttons style themselves. */
+  :where(.tb-page) :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  /* Preflight's block resets, which the ported standalone pages assume: Superset's own margins on headings,
+     paragraphs and lists would otherwise push every stat card and detail pane apart. */
+  :where(.tb-page) :where(h1, h2, h3, h4, h5, h6, p, blockquote, figure, dl, dd, pre, hr, ol, ul, menu) {
+    margin: 0;
+  }
+
+  :where(.tb-page) :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    color: inherit;
+  }
+
+  :where(.tb-page) :where(ol, ul, menu) {
+    list-style: none;
+    padding: 0;
+  }
+
+  /* The editor wraps its form in a fieldset only to disable it as a whole; it draws nothing. */
+  :where(.tb-page) :where(fieldset) {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+}
+
+/* Superset colours links with an unlayered `a` rule, which outranks every layered utility such as a tab's colour;
+   revert-layer hands links back to the extension's own layers, the reset above included. */
+.tb-page a,
+.tb-page a:hover {
+  color: revert-layer;
+  text-decoration: revert-layer;
+}
+
+/* shadcn tokens follow the Superset theme through the extension's --tb-* variables, so they are scoped to the
+   extension roots (popups are portaled inside .tb-page) instead of :root. */
+.tb-page {
+  --tb-surface: #f7f9fc;
+  --tb-surface-raised: #fff;
+  --tb-surface-muted: #eef2f7;
+  --tb-text: #172434;
+  --tb-muted: #657589;
+  --tb-border: #dbe3ed;
+  --tb-accent: #1677c7;
+  --radius: 6px;
+  --background: var(--tb-surface);
+  --foreground: var(--tb-text);
+  --card: var(--tb-surface-raised);
+  --card-foreground: var(--tb-text);
+  --popover: var(--tb-surface-raised);
+  --popover-foreground: var(--tb-text);
+  --primary: var(--tb-accent);
+  --primary-foreground: #fff;
+  --secondary: var(--tb-surface-muted);
+  --secondary-foreground: var(--tb-text);
+  --muted: var(--tb-surface-muted);
+  --muted-foreground: var(--tb-muted);
+  --accent: color-mix(in srgb, var(--tb-accent) 10%, var(--tb-surface-raised));
+  --accent-foreground: var(--tb-text);
+  --destructive: #cf1322;
+  --border: var(--tb-border);
+  --input: var(--tb-border);
+  --ring: var(--tb-accent);
+  /* The standalone app's categorical chart palette (stat bars, share bars, rank lists). */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #6250d6;
+  --chart-8: #e34948;
+  --chart-muted: #c3c2b7;
+  /* Sequential and diverging ramps of the chat's charts (standalone app/globals.css). */
+  --chart-seq-100: #cde2fb;
+  --chart-seq-150: #b7d3f6;
+  --chart-seq-200: #9ec5f4;
+  --chart-seq-250: #86b6ef;
+  --chart-seq-300: #6da7ec;
+  --chart-seq-350: #5598e7;
+  --chart-seq-400: #3987e5;
+  --chart-seq-450: #2a78d6;
+  --chart-seq-500: #256abf;
+  --chart-seq-550: #1c5cab;
+  --chart-seq-600: #184f95;
+  --chart-seq-650: #104281;
+  --chart-seq-700: #0d366b;
+  --chart-div-neg: #e34948;
+  --chart-div-mid: #f0efec;
+  --chart-div-pos: #2a78d6;
+}
+
+[data-theme-mode='dark'] .tb-page {
+  --tb-surface: #111821;
+  --tb-surface-raised: #1b2633;
+  --tb-surface-muted: #263445;
+  --tb-text: #edf4fb;
+  --tb-muted: #adbac9;
+  --tb-border: #344458;
+  --tb-accent: #63adf3;
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
+  --chart-muted: #898781;
+  --chart-seq-100: #0d366b;
+  --chart-seq-150: #104281;
+  --chart-seq-200: #184f95;
+  --chart-seq-250: #1c5cab;
+  --chart-seq-300: #256abf;
+  --chart-seq-350: #2a78d6;
+  --chart-seq-400: #3987e5;
+  --chart-seq-450: #5598e7;
+  --chart-seq-500: #6da7ec;
+  --chart-seq-550: #86b6ef;
+  --chart-seq-600: #9ec5f4;
+  --chart-seq-650: #b7d3f6;
+  --chart-seq-700: #cde2fb;
+  --chart-div-neg: #e66767;
+  --chart-div-mid: #383835;
+  --chart-div-pos: #3987e5;
+}
+
+/* The navbar dropdown of section groups lives in Superset's own DOM, outside .tb-page, so it follows Superset's
+   theme variables instead of the extension palette. */
+.tb-nav-trigger { display: inline-flex; align-items: center; gap: 4px; }
+.tb-nav-trigger svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tb-nav-dropdown {
+  --tb-nav-surface: var(--superset-color-surface, #fff);
+  --tb-nav-muted-surface: var(--superset-color-surface-muted, #f5f5f5);
+  --tb-nav-text: var(--superset-color-text, #262626);
+  --tb-nav-muted: var(--superset-color-text-muted, #8c8c8c);
+  --tb-nav-border: var(--superset-color-border, #d9d9d9);
+  --tb-nav-accent: var(--superset-color-primary, #2893b3);
+  position: fixed;
+  z-index: 1050;
+  display: none;
+  min-width: 240px;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--tb-nav-border);
+  border-radius: 6px;
+  background: var(--tb-nav-surface);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 12%);
+}
+.tb-nav-dropdown[data-theme-mode='dark'] {
+  --tb-nav-surface: #1f1f1f;
+  --tb-nav-muted-surface: #262626;
+  --tb-nav-text: rgb(255 255 255 / 85%);
+  --tb-nav-muted: rgb(255 255 255 / 45%);
+  --tb-nav-border: #383838;
+  --tb-nav-accent: #4db6cc;
+}
+.tb-nav-dropdown.is-open { display: flex; }
+.tb-nav-dropdown a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--tb-nav-text);
+  text-decoration: none;
+}
+.tb-nav-dropdown a:hover,
+.tb-nav-dropdown a:focus-visible { outline: none; background: var(--tb-nav-muted-surface); }
+.tb-nav-dropdown a.is-active {
+  color: var(--tb-nav-accent);
+  background: color-mix(in srgb, var(--tb-nav-accent) 10%, var(--tb-nav-surface));
+}
+.tb-nav-dropdown strong { font-size: 13px; font-weight: 600; }
+.tb-nav-dropdown span { color: var(--tb-nav-muted); font-size: 11px; }
+
+/* The standalone app's canvas rules (app/globals.css), used by the Mô hình and Dòng dữ liệu sections.
+   React Flow's own stylesheet is imported by index.tsx; these come after it. */
+
+/* Table cards glide to their new place when the domain layout changes, but follow the pointer while dragged. */
+.tb-page .model-canvas .react-flow__node:not(.dragging) {
+  transition: transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Dots running along a highlighted lineage edge, in the direction the data flows. */
+.tb-page .lineage-flow {
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 14;
+  filter: brightness(1.6);
+  animation: lineage-flow 900ms linear infinite;
+}
+
+@keyframes lineage-flow {
+  to {
+    stroke-dashoffset: -14.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-page .lineage-flow {
+    display: none;
+  }
+}
+
+/* The standalone app's motion keyframes (app/globals.css declares them in @theme). The ported hairline components
+   (thinking trace, streaming answer, data table, code block, combobox...) animate with animate-[ui-*] arbitrary
+   values, which Tailwind does not tie back to @theme keyframes, so they are declared here, globally: keyframes cannot
+   be scoped, and the ui- prefix keeps them clear of Superset's own names. */
+@keyframes ui-col-in {
+  from {
+    max-width: 0;
+    opacity: 0;
+  }
+  to {
+    max-width: 1em;
+    opacity: 1;
+  }
+}
+
+@keyframes ui-col-out {
+  from {
+    max-width: 1em;
+    opacity: 1;
+  }
+  to {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes ui-scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes ui-sheen {
+  from {
+    mask-position: 150% 0;
+  }
+  to {
+    mask-position: -50% 0;
+  }
+}
+
+@keyframes ui-empty-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes ui-empty-out {
+  from {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+    filter: blur(4px);
+  }
+}
+
+@keyframes ui-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ui-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-ping {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes ui-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ui-breathe {
+  0%, 100% {
+    transform: scale(0.82);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ui-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ui-shimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
