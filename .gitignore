@@ -15,10 +15,8 @@ venv/
 # Node dependencies
 node_modules/
 **/node_modules/
-/extensions/ai-agents/dist/
-/extensions/ai-agents/frontend/dist/
-/extensions/semantic-layer/dist/
-/extensions/semantic-layer/frontend/dist/
+/extensions/text-to-bi/dist/
+/extensions/text-to-bi/frontend/dist/
 
 # Local browser/debug artifacts and editor settings
 .playwright-mcp/

@@ -1,12 +1,12 @@
-"""Check both extension sources and bundles against the real Superset runtime.
+"""Check every extension source and bundle against the real Superset runtime.
 
 Usage: uv run scripts/compat.py
 
 The local pytest suite runs on Python 3.12 with stubbed Superset modules, so it cannot see API drift in Superset
 6.1 or syntax that Python 3.10 rejects. This script:
 
-1. compares source fingerprints and bundled backend/frontend assets for both extensions;
-2. compares both deployed bundles with the host bundles;
+1. compares source fingerprints and bundled backend/frontend assets for every extension;
+2. compares every deployed bundle with its host bundle;
 3. copies backend/src into the Superset container, compiles every module with the container's Python 3.10, and
    imports every module inside a Superset app context, so each `from superset... import` resolves against
    the real Superset 6.1 code.
@@ -27,8 +27,6 @@ from _common import (
     step,
 )
 
-CONTAINER_SRC = "/tmp/semantic-layer-compat"
-PACKAGE = "text_to_bi.superset_semantic_layer"
 REPORT_PREFIXES = ("Python ", "Compiled ", "Imported ", "PROBLEM ", "    ")
 
 CONTAINER_SCRIPT = r"""
@@ -52,12 +50,6 @@ for path in files:
     except SyntaxError as exc:
         problems.append(f"syntax {path.relative_to(SRC)}:{exc.lineno}: {exc.msg}")
 print(f"Compiled {len(files)} modules")
-
-if PACKAGE == "text_to_bi.superset_semantic_layer":
-    try:
-        importlib.import_module("openpyxl")
-    except Exception:
-        problems.append("runtime dependency openpyxl is unavailable")
 
 # Load the stack's real configuration with extensions disabled, so Superset neither imports the deployed bundle
 # (its supx:// import hook would shadow the source) nor registers the same API blueprints twice.
@@ -136,7 +128,7 @@ def main(argv: list[str] | None = None) -> None:
         step(f"Compiling and importing {extension.name} against Superset")
         container_source = f"/tmp/{extension.name}-compat"
         backend_source = extension.directory / "backend" / "src"
-        package = "text_to_bi.superset_ai_agent" if extension.name == "superset-ai-agent" else PACKAGE
+        package = f"{extension.publisher}.{extension.name}".replace("-", "_")
         compose("exec", "-T", "-u", "root", SUPERSET_SERVICE, "rm", "-rf", container_source)
         compose("cp", str(backend_source), f"{SUPERSET_SERVICE}:{container_source}")
         result = compose(

@@ -1,4 +1,4 @@
-"""Run the Semantic Layer and release-script checks: Ruff, pytest, and the frontend typecheck.
+"""Run the Text to BI and release-script checks: Ruff, pytest, and the frontend typecheck.
 
 Usage: uv run scripts/check.py [--no-frontend]
 """

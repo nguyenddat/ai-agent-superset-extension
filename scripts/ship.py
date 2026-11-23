@@ -1,16 +1,14 @@
-"""Check, build, and deploy both extension bundles to the running Superset container.
+"""Check, build, and deploy the extension bundle to the running Superset container.
 
 Usage: uv run scripts/ship.py [--skip-check] [--smoke]
 """
 
 import argparse
-import sys
 
 import build
 import check
 import deploy
 import smoke
-from _common import ROOT, extensions, run, step
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -22,17 +20,6 @@ def main(argv: list[str] | None = None) -> None:
 
     if not args.skip_check:
         check.main([])
-        agent = extensions()[0]
-        for name, command, directory in (
-            ("AI Agent Ruff", [sys.executable, "-m", "ruff", "check", str(agent.directory / "backend")], ROOT),
-            (
-                "AI Agent pytest",
-                [sys.executable, "-m", "pytest", str(agent.directory / "backend" / "tests"), "-q"], ROOT,
-            ),
-            ("AI Agent TypeScript typecheck", ["npm", "run", "typecheck"], agent.directory / "frontend"),
-        ):
-            step(name)
-            run(command, cwd=directory)
     build.main([])
     deploy.main([])
     if args.smoke:

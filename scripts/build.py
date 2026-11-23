@@ -1,4 +1,4 @@
-"""Build both extension bundles and record the source hashes used for each build.
+"""Build every extension bundle and record the source hashes used for each build.
 
 Usage: uv run scripts/build.py
 """

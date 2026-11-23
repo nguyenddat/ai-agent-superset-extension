@@ -1,4 +1,4 @@
-"""Show Superset log lines about the Semantic Layer, extension loading, and errors.
+"""Show Superset log lines about Text to BI, extension loading, and errors.
 
 Usage: uv run scripts/logs.py [--since 10m] [--follow] [--all]
 """

@@ -1,8 +1,0 @@
-{
-  "publisher": "text-to-bi",
-  "name": "superset-ai-agent",
-  "displayName": "Superset AI Agent",
-  "version": "0.1.0",
-  "license": "Apache-2.0",
-  "permissions": []
-}

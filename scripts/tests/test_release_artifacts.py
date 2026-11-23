@@ -40,6 +40,33 @@ def test_provenance_detects_backend_and_frontend_changes(tmp_path, monkeypatch):
     assert any("App.tsx" in problem for problem in problems)
 
 
+def test_a_backend_only_extension_needs_no_frontend_assets(tmp_path, monkeypatch):
+    monkeypatch.setattr(_common, "ROOT", tmp_path)
+    directory = tmp_path / "extensions" / "text-to-bi"
+    (directory / "backend" / "src").mkdir(parents=True)
+    (directory / "extension.json").write_text('{}', encoding="utf-8")
+    backend = directory / "backend" / "src" / "entrypoint.py"
+    backend.write_text("value = 1", encoding="utf-8")
+    extension = _common.Extension(directory, "superset-text-to-bi", "text-to-bi", "0.1.0")
+    with zipfile.ZipFile(extension.bundle, "w") as bundle:
+        bundle.write(backend, "backend/src/entrypoint.py")
+    extension.provenance.write_text(
+        json.dumps({
+            "bundle_sha256": _common.sha256_file(extension.bundle),
+            "sources": _common.source_fingerprint(extension),
+        }),
+        encoding="utf-8",
+    )
+
+    assert _common.bundle_problems(extension) == []
+    (directory / "frontend").mkdir()
+    assert _common.bundle_problems(extension) == ["superset-text-to-bi: bundle has no frontend assets"]
+
+
+def test_text_to_bi_is_released_with_the_other_extensions():
+    assert [extension.name for extension in _common.extensions()][-1] == "superset-text-to-bi"
+
+
 def test_provenance_detects_replaced_bundle(tmp_path, monkeypatch):
     monkeypatch.setattr(_common, "ROOT", tmp_path)
     directory = tmp_path / "extensions" / "semantic-layer"

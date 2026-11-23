@@ -1,4 +1,4 @@
-"""Check the local tools and Docker setup the Semantic Layer workflow depends on.
+"""Check the local tools and Docker setup the Text to BI workflow depends on.
 
 Usage: uv run scripts/doctor.py
 """

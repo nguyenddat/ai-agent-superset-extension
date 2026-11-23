@@ -1,4 +1,4 @@
-"""Deploy both extension bundles to Superset, restoring prior bundles on failure.
+"""Deploy every extension bundle to Superset, restoring prior bundles on failure.
 
 Usage: uv run scripts/deploy.py
 
@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> None:
         previous[extension] = backup
 
     try:
-        step("Copying and verifying both bundles")
+        step("Copying and verifying the bundles")
         for extension in selected:
             _copy_checked(str(extension.bundle), f"superset:{extension.container_bundle}")
             if container_sha256(extension.container_bundle) != sha256_file(extension.bundle):
@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> None:
                 f"inspect backups at {backup_directory}"
             )
         fail(f"release failed ({error}); previous bundles restored")
-    print("Superset loaded both extensions.")
+    print("Superset loaded every extension.")
 
 
 if __name__ == "__main__":

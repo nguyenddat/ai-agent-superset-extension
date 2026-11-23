@@ -33,8 +33,7 @@ package = false
 
 [tool.pytest.ini_options]
 pythonpath = [
-    "extensions/ai-agents/backend/src",
-    "extensions/semantic-layer/backend/src",
+    "extensions/text-to-bi/backend/src",
 ]
 
 [tool.ruff]

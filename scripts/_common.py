@@ -16,7 +16,7 @@ for _stream in (sys.stdout, sys.stderr):
     _stream.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION_DIR = ROOT / "extensions" / "semantic-layer"
+EXTENSION_DIR = ROOT / "extensions" / "text-to-bi"
 BACKEND_DIR = EXTENSION_DIR / "backend"
 BACKEND_SRC = BACKEND_DIR / "src"
 FRONTEND_DIR = EXTENSION_DIR / "frontend"
@@ -58,7 +58,7 @@ class Extension:
 
 def extensions() -> tuple[Extension, ...]:
     result = []
-    for directory_name in ("ai-agents", "semantic-layer"):
+    for directory_name in ("text-to-bi",):
         directory = ROOT / "extensions" / directory_name
         manifest = json.loads((directory / "extension.json").read_text(encoding="utf-8"))
         result.append(Extension(directory, manifest["name"], manifest["publisher"], manifest["version"]))
@@ -115,7 +115,8 @@ def bundle_problems(extension: Extension) -> list[str]:
         frontend_names = [
             name for name in bundled_names if name.startswith("frontend/dist/") and not name.endswith("/")
         ]
-        if not frontend_names:
+        # Text to BI ships its backend first; an extension with a frontend must bundle its assets.
+        if not frontend_names and (extension.directory / "frontend").is_dir():
             problems.append(f"{extension.name}: bundle has no frontend assets")
         for name in frontend_names:
             staged = extension.directory / "dist" / name
