@@ -1,26 +1,48 @@
 # API tích hợp Superset
 
-`modules/superset` là lớp adapter nội bộ cho metadata và quyền Superset. Module không đăng ký route Text to BI, không sao chép model database, dataset, column, metric, user hay role. Các API REST native của Superset tiếp tục quản lý những tài nguyên đó; backend extension gọi DAO và security manager của Superset.
+`modules/superset` là lớp adapter nội bộ giữa các module nghiệp vụ và Superset. Module không đăng ký route HTTP, không
+có bảng hay migration, và không sao chép model database, dataset, cột, metric, user hay role. Superset vẫn quản lý các
+tài nguyên đó qua màn hình và API native của nó; extension đọc chúng qua DAO và security manager của Superset.
 
-## Hợp đồng service nội bộ
+## Hợp đồng nội bộ
 
-| Service | Hàm | Hành vi |
+| Tệp | Hàm | Hành vi |
 | --- | --- | --- |
-| `services/srv_dataset.py` | `get_dataset`, `require_dataset`, `get_datasets`, `datasets_on_database`, `get_database` | Đọc `SqlaTable` và `Database` qua DAO Superset. `require_dataset` báo lỗi không tìm thấy nếu DAO không trả dataset mà caller được phép thấy. |
-| `services/srv_dataset.py` | `can_access_dataset`, `readable_datasets` | Kiểm tra ACL datasource bằng `security_manager.raise_for_access`. Catalog đọc được cũng loại database được đánh dấu nội bộ cho Text to BI. |
-| `services/srv_dataset.py` | `dataset_columns`, `column_type`, `dataset_kind`, `database_name` | Chuẩn hóa metadata từ model dataset/column Superset cho các module nghiệp vụ. |
-| `services/srv_user.py` | `get_user`, `require_user`, `active_users`, `user_display_name` | Ủy quyền truy vấn user cho `modules/auth`; danh tính và lưu trữ user vẫn thuộc Superset. |
-| `services/srv_role.py` | `ensure_role`, `require_role`, `replace_user_roles`, `revoke_permissions`, `declare_admin_only_view_menu` | Dùng security manager và association role/permission của FAB. Module Auth sở hữu việc seed role Text to BI và các route gán quyền. |
+| `services/srv_dataset.py` | `get_dataset`, `require_dataset` | Đọc `SqlaTable` qua `DatasetDAO`, có bộ lọc datasource của Superset; dataset người gọi không thấy coi như không tồn tại, `require_dataset` khi đó báo `dataset_not_found` (404) |
+| `services/srv_dataset.py` | `get_datasets`, `datasets_on_database` | Lọc kết quả `DatasetDAO.find_all()` theo danh sách ID hoặc theo `database_id`; `datasets_on_database` sắp theo database, schema, tên bảng |
+| `services/srv_dataset.py` | `get_database` | Đọc `Database` qua `DatabaseDAO` |
+| `services/srv_dataset.py` | `can_access_dataset`, `readable_datasets` | Kiểm tra ACL datasource bằng `security_manager.raise_for_access`; `readable_datasets` trả mọi dataset người gọi truy cập được, trừ dataset của database nội bộ |
+| `services/srv_dataset.py` | `is_internal_dataset` | Database có `"text_to_bi_internal": true` trong `Database.extra` chứa view báo cáo của extension, không phải dữ liệu nghiệp vụ |
+| `services/srv_dataset.py` | `dataset_columns`, `column_type`, `dataset_kind`, `database_name`, `dataset_sort_key` | Chuẩn hóa metadata dataset và cột; `dataset_kind` là `virtual` khi dataset có SQL, còn lại `physical` |
+| `services/srv_user.py` | `get_user`, `require_user`, `active_users`, `user_display_name` | Ủy quyền cho `UserService` của module auth; `require_user` báo `user_not_found` (404) |
+| `services/srv_role.py` | `ensure_role`, `require_role`, `replace_user_roles`, `revoke_permissions`, `declare_admin_only_view_menu` | Bọc security manager của Flask-AppBuilder; `require_role` báo `role_not_found` (404). Module auth dùng chúng để seed và gán role Text to BI |
+| `dependencies.py` | `requires_dataset` | Decorator route: lấy `dataset_id` trên URL, gọi `require_dataset` và truyền `dataset` vào hàm route |
+| `exceptions.py` | `DatasetNotFoundError`, `UserNotFoundError`, `RoleNotFoundError` | Lỗi 404 dùng chung |
 
-Module khác gọi các helper này hoặc import alias model Superset chính thức từ model owner `data_dictionary` và `auth`. Không khai báo model trùng và không tạo bảng do Superset sở hữu trong migration của extension.
+Alias model Superset (`SupersetDatabase`, `SupersetDataset`, `SupersetDatasetColumn`, `SupersetMetric`) nằm ở
+`modules/data_dictionary/models`; alias model bảo mật (`User`, `Role`...) nằm ở `modules/auth/models`. Module khác
+import từ hai nơi đó, không khai báo model trùng và không tạo bảng của Superset.
 
 ## Ranh giới truy vấn và quyền
 
-- Truy vấn dataset đi qua helper chung và áp dụng ACL Superset của caller. `datasets_on_database` dùng DAO dataset có lọc quyền; dùng `readable_datasets` khi cần toàn bộ catalog nghiệp vụ mà caller được phép đọc.
-- `is_internal_dataset` nhận diện database báo cáo riêng của Text to BI bằng cờ `text_to_bi_internal` trong `Database.extra`; cờ này không chuyển quyền sở hữu database hoặc dataset khỏi Superset.
-- `modules/superset` không tự cấp quyền. Module nghiệp vụ kết hợp `can_view`, `can_edit`, `can_query` hoặc `can_review` của Auth với ACL dataset Superset.
-- Text2SQL thực thi truy vấn qua SQL Lab của Superset; xem [Text2SQL API](text-to-bi-text2sql-api.md).
+- Kết quả DAO đã qua bộ lọc datasource của Superset; module nghiệp vụ vẫn gọi `can_access_dataset` hoặc các hàm
+  `require_*` của auth trước khi trả dữ liệu. Ví dụ: `GET /data-lineage/graph` và `GET /business-model/databases/<id>`
+  lấy `datasets_on_database` rồi lọc bằng `can_access_dataset`; hội thoại kiểm tra `require_query` trên mọi dataset của
+  database khi một lượt có hàng mà không gắn dataset.
+- `modules/superset` không tự cấp quyền. Module nghiệp vụ kết hợp `can_view`, `can_edit`, `can_query`, `can_review`
+  của auth với ACL dataset Superset; xem [module auth](text-to-bi-auth.md).
+- Text2SQL chạy truy vấn qua lớp thực thi SQL Lab của Superset (`modules/text2sql/services/superset_query.py`); xem
+  [Text2SQL API](text-to-bi-text2sql-api.md).
 
 ## Routes
 
-`modules/superset` không có HTTP route riêng của extension. Dùng API native Superset để quản lý database, dataset, column và user. Hợp đồng API riêng của Text to BI được ghi ở trang module sở hữu, gồm [Auth](text-to-bi-auth-api.md) và [Data Dictionary](text-to-bi-data-dictionary-api.md).
+Module không có route riêng. Trang `/text-to-bi/` là `TextToBIView` của module auth. API của extension được ghi ở
+trang module sở hữu: [Auth](text-to-bi-auth-api.md), [Data Dictionary](text-to-bi-data-dictionary-api.md),
+[Business Model](text-to-bi-business-model-api.md), [Data Lineage](text-to-bi-data-lineage-api.md),
+[Conversation](text-to-bi-conversation-api.md).
+
+## Kiểm thử
+
+`superset.connectors` và `superset.models.core` không có bản giả trong `backend/tests/conftest.py`, nên các test nạp
+alias model Superset hiện lỗi: `test_data_dictionary_api.py`, `test_data_dictionary_autofill.py` và `test_migrations.py`
+lỗi ngay khi pytest nạp test, còn mọi test trong `test_auth.py` lỗi ở bước dựng fixture.

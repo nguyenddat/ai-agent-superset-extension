@@ -1,291 +1,184 @@
 # Text to BI
 
-Text to BI is a local Apache Superset 6.1.0 stack for exploring weather data
-with natural-language BI assistance. The repository contains a PostgreSQL
-analytics database, a separate PostgreSQL database for Superset metadata, and
-two independently packaged Superset extensions:
+Text to BI is a local Apache Superset 6.1.0 stack with one Superset extension, **Superset Text to BI**
+(`superset-text-to-bi`), that adds natural-language questions over data and the business knowledge the AI agent
+relies on: a data dictionary, business model, lineage, governed metrics, glossary terms and expert rules. It is a port
+of the standalone Next.js/FastAPI app into Superset: Flask-AppBuilder REST APIs plus a React page served at
+`/text-to-bi/`.
 
-1. **Superset AI Agent** — turns a dashboard question into a validated BI plan,
-   resolves it against the dashboard datasets, builds SQL, and streams the
-   result back to a dashboard drawer.
-2. **Superset Semantic Layer** — lets administrators maintain dataset and
-   column metadata and inspect relationships on a semantic canvas.
+The repository used to ship two more extensions (AI Agent and Semantic Layer); both were removed and their features
+now live in text-to-bi.
 
-The extensions are intentionally separated so either one can be built,
-packaged, installed, and evolved independently.
+## What it adds to Superset
 
-## Architecture
+Three menus in Superset's top navbar. Each section opens on the same page, `/text-to-bi/?section=<segment>`.
+
+| Menu | Section | `section` | Who can open it |
+| --- | --- | --- | --- |
+| AI Agent | Hỏi dữ liệu: ask in natural language, get an answer, table and chart | `chat` | query permission |
+| AI Agent | Tri thức riêng: review what users taught the agent, promote it to shared knowledge | `own-knowledge` | Admin |
+| Mô hình dữ liệu | Từ điển: describe tables and columns of Superset datasets | `dictionary` | view permission |
+| Mô hình dữ liệu | Mô hình: business domains and data layers | `model` | view permission |
+| Mô hình dữ liệu | Dòng dữ liệu: which table builds which, down to columns | `lineage` | view permission |
+| Quản trị dữ liệu | Tổng quan: how complete the business knowledge is | (empty) | view permission |
+| Quản trị dữ liệu | Metric | `metrics` | view permission |
+| Quản trị dữ liệu | Thuật ngữ | `glossary` | view permission |
+| Quản trị dữ liệu | Quy tắc | `rules` | view permission |
+
+Permissions live on the FAB view menu `Text to BI` (`can_view`, `can_edit`, `can_review`, `can_query`). The extension
+creates four roles that bundle them: `Text to BI Viewer`, `Text to BI Editor`, `Text to BI Steward` and
+`Text to BI Query`. Admin can open everything. Superset's own dataset access still applies on top of these roles.
+A menu only appears when the user can open at least one of its sections.
+
+The API is mounted below `/extensions/text-to-bi/superset-text-to-bi/<resource>`, for example `auth/me`,
+`data-dictionary/summary` or `text2sql/chat/stream`.
+
+## Repository layout
 
 ```text
-Text to BI
-├── simulation/                  Simulated environment the extensions run against
-│   ├── data_wh/                 Weather warehouse schema and seed dimensions
-│   ├── airflow/                 Open-Meteo warehouse ingestion DAG
-│   └── superset/                Superset image, local configuration and bootstrap scripts
+.
 ├── extensions/
-│   ├── ai-agents/               Superset AI Agent extension
-│   │   ├── backend/             Python REST API and BI agents
-│   │   └── frontend/            React dashboard chat drawer
-│   └── semantic-layer/          Superset Semantic Layer extension
-│       ├── backend/             Python REST API and dictionary models
-│       └── frontend/            React dictionary and semantic canvas UI
+│   ├── text-to-bi/                       Superset Text to BI extension source
+│   │   ├── extension.json                Publisher, name and version of the bundle
+│   │   ├── backend/
+│   │   │   ├── pyproject.toml            Runtime dependencies and bundle file list (Python 3.10)
+│   │   │   ├── src/text_to_bi/superset_text_to_bi/
+│   │   │   │   ├── entrypoint.py         Registers every API, the page view and the ingestion task
+│   │   │   │   ├── migrations.py         Creates and upgrades the extension tables
+│   │   │   │   ├── common/  core/        Shared base classes and utilities; config, database, security, routing
+│   │   │   │   ├── agent_package/        Chat models, embeddings, prompts, tool agent
+│   │   │   │   └── modules/              auth, business_model, conversation, data_dictionary, data_lineage,
+│   │   │   │                             expert_rule_management, glossary_management, metric_management,
+│   │   │   │                             own_knowledge, superset, text2sql
+│   │   │   └── tests/
+│   │   └── frontend/                     React 17 page, see frontend/README.md
+│   ├── superset-text-to-bi-0.1.0.supx    Current bundle
+│   └── superset-text-to-bi-0.1.0.provenance.json
+├── scripts/                              Build, check, deploy and diagnostic scripts (tests/ inside)
+├── simulation/
+│   ├── data_wh/scripts/                  Warehouse schema and seed data
+│   ├── airflow/                          Open-Meteo ingestion DAG
+│   └── superset/                         Superset image, superset_config.py and bootstrap scripts
+├── docs/                                 handbook/, specs/, release.md, reviews/, reports/
 ├── docker-compose.yml
-└── README.md
+├── .env.example
+└── pyproject.toml                        Local uv environment for tests, Ruff and bundling
 ```
-
-At runtime, Superset reads the two root `.supx` bundles from the
-`superset_extensions` named volume at `/app/superset_home/extensions`. The
-bundles are copied into that volume with `docker compose cp` rather than
-bind-mounted, because bind mounts from the host drive served stale `.supx`
-content under Docker Desktop's Hyper-V file sharing. Extension source code is
-not mounted into the runtime container.
 
 ## Requirements
 
 - Docker Desktop with Docker Compose
-- [uv](https://docs.astral.sh/uv/) for the local Python environment
-- Node.js and npm for frontend development
-- An OpenRouter API key if AI planning or Semantic Layer AutoFill is enabled
-
-The Superset image installs the backend dependencies needed by the extensions.
-The local uv environment (`.venv`, defined by `pyproject.toml` and `uv.lock`)
-is used for tests, linting, and `superset-extensions bundle`. Create or update
-it from the repository root:
-
-```sh
-uv sync
-```
+- [uv](https://docs.astral.sh/uv/) for the local Python 3.12 environment
+- Node.js and npm, used to build the frontend
+- An OpenRouter API key for the chat, embeddings and dictionary AutoFill
 
 ## Quick start
 
 From the repository root:
 
 ```sh
+cp .env.example .env          # then set OPENROUTER_API_KEY
+uv sync
 docker compose up --build -d
-docker compose cp extensions/superset-ai-agent-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose cp extensions/superset-semantic-layer-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose restart superset
-docker compose ps
+uv run scripts/build.py
+uv run scripts/deploy.py
 ```
 
-A fresh `superset_extensions` volume is empty, so the two `docker compose cp`
-commands are needed after the first `docker compose up`.
+Then open <http://localhost:8089/text-to-bi/> and sign in as `admin` / `admin`.
 
-Superset is available at <http://localhost:8089> by default. Set
-`SUPERSET_PORT` to use another host port. The local default login is
-`admin` / `admin`.
+- `build.py` bundles the extension with `superset-extensions bundle` (which runs `npm ci` when `node_modules` is
+  missing and `npm run build`), writes `extensions/superset-text-to-bi-0.1.0.supx` and records source hashes in the
+  `.provenance.json` next to it.
+- `deploy.py` copies the bundle into the `superset_extensions` volume at `/app/superset_home/extensions/` and restarts
+  `superset`. A fresh volume is empty, so this step is needed after the first `docker compose up`. Bundles are copied
+  rather than bind-mounted because bind mounts from the host served stale `.supx` files under Docker Desktop's
+  Hyper-V file sharing.
+- `deploy.py` restarts only `superset`. `superset-worker` reads the same volume, so restart it too
+  (`docker compose restart superset-worker`) after deploying a change that affects background indexing.
 
-The Compose stack starts:
+Set `SUPERSET_PORT` in `.env` to use another host port.
 
-- `warehouse-db`: PostgreSQL 16 database named `data_wh` with normalized
-  `dm_*` catalog tables, `tb_*` business tables, and dashboard tables also
-  named with the `tb_*` convention.
-- `airflow`: loads weather data for 12 Vietnamese cities from the Open-Meteo
-  Forecast API every hour and refreshes the dashboard tables.
-- `superset-db`: PostgreSQL 16 database for Superset metadata.
-- `superset-init` and `superset`: Superset database initialization and web app.
+### What the stack runs
 
-On startup, `superset-init` automatically creates the `Weather Warehouse`
-connection and registers every table in the warehouse `public` schema as a
-dataset. The connection URI used by the bootstrap is:
+| Service | Purpose |
+| --- | --- |
+| `warehouse-db` | PostgreSQL 16 database `data_wh` (`dm_*`, `tb_*`, `dim_*`, `fact_*` tables), published on host port 5433 |
+| `superset-db` | PostgreSQL 16 for Superset metadata and the extension tables |
+| `redis` | Celery broker and result backend |
+| `qdrant` | Vector index for the chat, on `127.0.0.1:6333` |
+| `superset-init` | `superset db upgrade`, `superset init`, admin user and the bootstrap scripts, then exits |
+| `superset` | Superset web app (gunicorn) on <http://localhost:8089> |
+| `superset-worker` | Celery worker that runs the extension's index jobs |
+| `airflow` | Loads weather data for Vietnamese cities from Open-Meteo every hour (DAG `weather_warehouse_ingest`) |
 
-```text
-postgresql+psycopg2://bi:bi_dev_password@warehouse-db:5432/data_wh
-```
+`superset-init` creates the `Weather Warehouse` connection, registers every table in the warehouse `public` schema
+as a dataset, and builds the "Tổng quan thời tiết" and "Tổng quan AI Agent" dashboards. Rerun
+`docker compose run --rm superset-init` after the warehouse schema changes. The "Tổng quan AI Agent" dashboard reads
+`text_to_bi_agent_question`, which only the removed AI Agent extension wrote, so it stays empty.
 
-The generated datasets include the `dm_*`, `tb_*`, `dim_*`, and `fact_*`
-tables. If the warehouse schema changes, rerun `docker compose run --rm
-superset-init` to synchronize the connection and datasets.
-
-The warehouse is also published on host port `5433` by default for local tools:
+From the host, the warehouse is reachable at:
 
 ```text
 postgresql+psycopg2://bi:bi_dev_password@localhost:5433/data_wh
 ```
 
-Useful operational commands:
-
-```sh
-docker compose logs -f superset
-docker compose logs -f airflow
-docker compose exec airflow airflow dags trigger weather_warehouse_ingest
-docker compose down
-```
-
-`docker compose down -v` also removes both persistent database volumes.
-
 ## Configuration and secrets
 
-Local settings and credentials belong in one `.env` file at the repository
-root, next to `docker-compose.yml`; it is ignored by Git. Start from the
-template:
+All local settings live in one `.env` at the repository root (ignored by Git). Compose uses it to fill
+`docker-compose.yml` and loads it into the Superset containers. `.env.example` lists every variable; commented lines
+show the default Compose uses when a variable is unset. Before exposing the stack beyond a development machine, set
+at least `SUPERSET_SECRET_KEY`, `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_DB_PASSWORD`, `WAREHOUSE_DB_PASSWORD`,
+`TEXT_TO_BI_REPORTING_DB_PASSWORD`, `AIRFLOW_SECRET_KEY` and `AIRFLOW_ADMIN_PASSWORD`.
 
-```sh
-cp .env.example .env
-```
+Recreate the containers with `docker compose up -d` after changing `.env`. Never commit API keys, passwords or `.env`.
 
-Compose reads `.env` to fill the `${...}` values in `docker-compose.yml` and
-loads it into the Superset containers, where both extensions read
-`OPENROUTER_API_KEY`. Before exposing the stack outside a development machine,
-set at least:
+## AI chat: OpenRouter and the Qdrant index
 
-```dotenv
-OPENROUTER_API_KEY=replace-me
-SUPERSET_SECRET_KEY=replace-me
-SUPERSET_ADMIN_PASSWORD=replace-me
-SUPERSET_DB_PASSWORD=replace-me
-WAREHOUSE_DB_PASSWORD=replace-me
-TEXT_TO_BI_REPORTING_DB_PASSWORD=replace-me
-AIRFLOW_SECRET_KEY=replace-me
-AIRFLOW_ADMIN_PASSWORD=replace-me
-```
+The chat (Hỏi dữ liệu) needs two things:
 
-Recreate the containers with `docker compose up -d` after changing `.env`. Do
-not commit API keys, passwords, or local `.env` files.
+1. `OPENROUTER_API_KEY` in `.env`. `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL` and the `TEXT2SQL_EMBEDDING_*` variables
+   are optional.
+2. A Qdrant index for the database being asked about (collection `text2sql_semantics_v1` by default). Build or rebuild
+   it as an admin with `POST /extensions/text-to-bi/superset-text-to-bi/text2sql/ingestion/sync` and the body
+   `{"database_id": <id>}`. There is no UI for this yet. After that, changes to dictionary, metric, glossary, rule and
+   own-knowledge records queue index jobs that `superset-worker` processes.
 
-## Extension 1: Superset AI Agent
+Answers stream as Server-Sent Events from `POST .../text2sql/chat/stream`.
 
-Path: `extensions/ai-agents/`
+## Daily development loop
 
-The AI Agent adds an **AI Agent** button beside the dashboard actions menu. Its
-streaming workflow is:
+All scripts run from the repository root with `uv run scripts/<name>.py`; `--help` prints each one's usage.
 
-```text
-Question
-  → dashboard context and authorized datasets
-  → BI Planner
-  → Metadata Resolution
-  → Data Builder
-  → SQL / summary / chart link streamed to the drawer
-```
+| Script | What it does |
+| --- | --- |
+| `ship.py [--skip-check] [--smoke]` | Runs `check.py`, then `build.py` and `deploy.py`; `--smoke` runs `smoke.py` afterwards |
+| `check.py [--no-frontend]` | Ruff and pytest for the backend and for `scripts/`, plus the frontend `npm run typecheck` |
+| `build.py` | Builds the bundle and its provenance file |
+| `deploy.py` | Snapshots Superset metadata with `pg_dump`, backs up the installed bundle under `.release-backups/`, copies the new bundle, restarts Superset and checks its logs; restores the old bundle on failure (migrations are not rolled back) |
+| `smoke.py` | Logs in as the admin and checks that read-only endpoints answer 200 with JSON; changes no data |
+| `logs.py [--since 10m] [--follow] [--all]` | Superset log lines about the extension, extension loading and errors |
+| `compat.py` | Compares the source, the host bundle and the deployed bundle, then compiles and imports every backend module inside the Superset container (Python 3.10, real Superset 6.1) |
+| `doctor.py` | Checks local tools, the Docker engine, running services and Superset `/health` |
 
-The backend is organized into agents, prompts, tools, Superset client helpers,
-models, and repositories. The frontend is a React 17-compatible dashboard
-drawer that consumes Server-Sent Events (SSE).
+The usual loop is `uv run scripts/ship.py --smoke`, then `logs.py` if something fails. See
+[docs/release.md](docs/release.md) for backups and recovery.
 
-Streaming endpoint:
+Known gap: in `extensions/text-to-bi/backend/tests`, `test_data_dictionary_api.py`, `test_data_dictionary_autofill.py`
+and `test_migrations.py` fail at collection and every test in `test_auth.py` errors in its setup, because `tests/conftest.py` has no stubs for
+`superset.connectors` and `superset.models.core`. Until those stubs exist, the pytest step of `check.py` fails, so
+`ship.py` stops before building unless you pass `--skip-check`.
 
-```text
-POST /extensions/text-to-bi/superset-ai-agent/chat/stream
-```
+## Documentation
 
-The request must include a valid Superset CSRF token and a `dashboard_id` plus
-the natural-language `query`. Access is checked against the dashboard and its
-datasets. Grant `can read on text_to_bi_chat_api` to roles that should use the
-assistant.
-
-Build the extension from its directory:
-
-```sh
-cd extensions/ai-agents/frontend
-npm install
-npm run typecheck
-npm run build
-cd ..
-uv run superset-extensions bundle
-```
-
-The bundle is `superset-ai-agent-0.1.0.supx`. Copy it to the repository
-`extensions/` directory, copy it into the running container, and restart
-Superset:
-
-```sh
-cp superset-ai-agent-0.1.0.supx ..
-rm -f superset-ai-agent-0.1.0.supx
-cd ../..
-docker compose up -d --build superset
-docker compose cp extensions/superset-ai-agent-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose restart superset
-```
-
-On PowerShell, use `Copy-Item` instead of `cp` if needed.
-
-## Extension 2: Superset Semantic Layer
-
-Path: `extensions/semantic-layer/`
-
-The Semantic Layer is admin-only. It adds a dashboard action that opens a
-workspace with:
-
-- dashboard dataset selection;
-- dataset metadata: display name, description, grain, type, and create column;
-- column metadata: display name, data type, business term, unit, format,
-  nullability, keys, and references;
-- AI AutoFill for unfilled dictionary fields;
-- a semantic canvas for exploring columns, metrics, and dataset relationships.
-
-The backend owns these Superset metadata database tables:
-
-- `text_to_bi_dataset_dictionary`
-- `text_to_bi_column_dictionary`
-
-The dataset dictionary ID matches the Superset dataset ID. Column dictionary
-rows reference their dataset through `dataset_id`, and column relationships use
-`referenced_column`.
-
-The extension API is mounted below:
-
-```text
-/extensions/text-to-bi/superset-semantic-layer/
-```
-
-Important routes include `/access`, dashboard dataset GET/POST, dictionary
-GET/PUT, reference options, and dictionary suggestion streaming. The backend
-checks the authenticated user's admin role before exposing the UI or allowing
-dictionary writes. Opening the extension initializes or upgrades its metadata
-tables idempotently.
-
-Build the extension from its directory:
-
-```sh
-cd extensions/semantic-layer/frontend
-npm install
-npm run typecheck
-npm run build
-cd ..
-uv run superset-extensions bundle
-```
-
-The bundle is `superset-semantic-layer-0.1.0.supx`. Copy it to the repository
-`extensions/` directory, copy it into the running container, and restart
-Superset:
-
-```sh
-cp superset-semantic-layer-0.1.0.supx ..
-rm -f superset-semantic-layer-0.1.0.supx
-cd ../..
-docker compose up -d --build superset
-docker compose cp extensions/superset-semantic-layer-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose restart superset
-```
-
-## Development and validation
-
-Run backend tests with the project uv environment:
-
-```sh
-uv run pytest extensions/ai-agents/backend/tests
-```
-
-Run Ruff against the extension backend sources:
-
-```sh
-uv run ruff check extensions/ai-agents/backend/src extensions/semantic-layer/backend/src
-```
-
-After changing either extension, rebuild its bundle and recreate the Superset
-service. Check both the bundle name and service status before testing the UI:
-
-```sh
-docker compose ps
-docker compose logs --tail=200 superset
-```
+- [docs/handbook/](docs/handbook/README.md): code conventions (`quy-uoc-code.md`), backend architecture
+  (`kien-truc.md`), shared API behaviour (`hanh-vi.md`), and one guide plus one API reference per module
+  (`text-to-bi-<module>.md`, `text-to-bi-<module>-api.md`).
+- [docs/specs/](docs/specs/): feature specifications.
+- [extensions/text-to-bi/frontend/README.md](extensions/text-to-bi/frontend/README.md): frontend stack and folders.
 
 ## Project conventions
 
-- Keep the AI Agent and Semantic Layer source trees independent.
-- Keep one current `.supx` bundle per extension in `extensions/`.
-- Do not commit `.env` files, credentials, node modules, build output, or local
-  database files.
-- Keep Python formatting consistent with the repository Ruff configuration and
-  its 120-character line length.
+- Keep one current `.supx` bundle (and its provenance file) in `extensions/`.
+- Do not commit `.env`, credentials, `node_modules`, build output or local database files.
+- Python follows the repository Ruff configuration: 120-character lines, import sorting; the backend targets
+  Python 3.10 because Superset 6.1 runs it there.

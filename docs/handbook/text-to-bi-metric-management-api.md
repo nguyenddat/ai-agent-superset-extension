@@ -1,17 +1,19 @@
 # Metric Management API
 
-Resource `metrics` được phục vụ dưới `/api/v1/extensions/text-to-bi/superset-text-to-bi/metrics`. Route yêu cầu phiên đăng nhập và quyền `read`/`write` của resource; quyền dataset Superset cũng được kiểm tra trong service. Request ghi cần CSRF token.
+API class `TextToBIMetricAPI` (`resource_name="metrics"`), đường dẫn `/extensions/text-to-bi/superset-text-to-bi/metrics`. Mọi route cần phiên Superset đã đăng nhập và quyền chung `text_to_bi_api` (`can_read` cho GET, `can_write` cho thao tác ghi). Thao tác ghi cần header `X-CSRFToken`. Service kiểm tra thêm quyền Text to BI và quyền đọc dataset của Superset. Lỗi trả `{code, message}`.
 
 | Method và path | Quyền bổ sung | Request và kết quả |
 | --- | --- | --- |
-| `GET /datasets/<dataset_id>` | `require_view` và quyền đọc dataset | Trả `{metrics}` gồm metric thủ công cùng metric native Superset của dataset. |
-| `GET /<metric_uuid>` | `require_view` và quyền đọc dataset sở hữu metric | Trả `{metric}`; UUID không hợp lệ hoặc không tìm thấy trả lỗi tương ứng. |
-| `POST /` | Quyền sửa dataset | Body `MetricCreate`; tạo metric `draft`, trả `{metric}` với 201. |
-| `PATCH /<metric_uuid>` | Quyền sửa dataset | Body `MetricPatch`; chỉ cập nhật field gửi lên, trả `{metric}`. Thay nội dung nghiệp vụ đưa metric về `draft`. |
-| `POST /<metric_uuid>/approve` | Reviewer/Steward hoặc Admin (`require_review`) | Không cần body; duyệt metric `draft`, trả `{metric}`. |
-| `POST /<metric_uuid>/revoke` | Reviewer/Steward hoặc Admin (`require_review`) | Không cần body; thu hồi metric `approved`, trả `{metric}`. |
-| `DELETE /<metric_uuid>` | Quyền sửa dataset; metric đã duyệt cần `require_review` | Xóa metric; trả thông báo xác nhận. |
+| `GET /datasets/<dataset_id>` | Xem Text to BI (`require_view`), đọc dataset | `200 {metrics}`: metric tự tạo (`origin="manual"`) và metric Superset (`origin="superset"`) của dataset, sắp theo tên. |
+| `GET /<metric_uuid>` | Xem Text to BI, đọc dataset của metric | `200 {metric}`. UUID sai trả `422`, không thấy trả `404`. |
+| `POST /` | Sửa Text to BI (`require_edit`) trên dataset | Body `MetricCreate`; tạo metric `draft`, trả `201 {metric}`. Trùng tên trả `409`. |
+| `PATCH /<metric_uuid>` | Sửa Text to BI trên dataset | Body `MetricPatch`; chỉ cập nhật field có gửi, trả `200 {metric}`. Đổi nội dung đưa metric về `draft`. |
+| `POST /<metric_uuid>/approve` | Review (`require_review`: Steward hoặc Admin), đọc dataset | Không body; metric phải đang `draft`, trả `200 {metric}`. |
+| `POST /<metric_uuid>/revoke` | Review, đọc dataset | Không body; metric phải đang `approved`, trả `200 {metric}`. |
+| `DELETE /<metric_uuid>` | Sửa Text to BI trên dataset; metric `approved` cần thêm review | `200 {message}`. |
 
-`MetricCreate` yêu cầu `dataset_id` dương, `name` (1–255), `expression` (1–10.000); có thể gửi `label`, `description`, `format`, `currency`, `metric_type`, `warning_text`, và tối đa 50 `business_domain_ids` UUID. `MetricPatch` nhận các field tương ứng cùng `is_active`; `name`, `expression`, `is_active` không được gửi thành `null`. Service chuẩn hóa khoảng trắng ở tên/công thức, từ chối tên trống, công thức trống/quá dài hoặc có dấu chấm phẩy, và giữ tên duy nhất trong dataset.
+`MetricCreate`: `dataset_id` (> 0), `name` (1–255), `expression` (1–10.000); tùy chọn `label` (≤ 255), `description`, `format` (≤ 128), `currency` (≤ 16), `metric_type` (≤ 64), `warning_text`, `business_domain_ids` (≤ 50 UUID, phải tồn tại trong `business_domains`). `MetricPatch` nhận các field trên trừ `dataset_id`, thêm `is_active`; `name`, `expression`, `is_active` không được gửi `null`. Service bỏ khoảng trắng đầu/cuối của tên và biểu thức, từ chối biểu thức có dấu `;`.
 
-Metric thủ công thuộc bảng extension `text_to_bi.metrics`. Metric native được đọc trực tiếp từ Superset `sql_metrics` qua model chuẩn do module Superset/Data Dictionary cung cấp; không có bản sao extension. Module này quản lý metadata, không thực thi SQL metric hay đồng bộ database Superset. Metric resolver dùng chung có thể phân giải metric thủ công đã duyệt và metric native cho Glossary/Expert Rule.
+Metric trả về gồm `id`, `origin`, `dataset_id`, `name`, `label`, `expression`, `description`, `format`, `currency`, `metric_type`, `warning_text`, `is_active`, `status`, `business_domains` (`{id, name, color}`), `created_at`, `updated_at`. Metric Superset lấy `label` từ `verbose_name`, `format` từ `d3format`, luôn `status="approved"`, không sửa được qua API này.
+
+Mỗi lần ghi metric (và mỗi lần Superset ghi `sql_metrics`) tạo job lập chỉ mục Text2SQL cho database của dataset; xem [Text2SQL API](text-to-bi-text2sql-api.md).

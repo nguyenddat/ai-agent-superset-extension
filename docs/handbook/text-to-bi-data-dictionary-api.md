@@ -1,61 +1,107 @@
 # Data Dictionary API của Text to BI
 
-Module `data_dictionary` lưu phần mô tả nghiệp vụ do người dùng biên tập trong schema extension `text_to_bi`, đồng thời đọc danh mục dataset/cột từ Superset. Các route dưới đây thuộc API extension; module không proxy API REST dataset của Superset.
-
-Nguồn triển khai: [routes](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/routes/route_data_dictionary.py), [schemas](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/schemas/schema_data_dictionary.py), [models](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/models/__init__.py).
-
-## API native Superset và API extension
-
-Superset sở hữu database, dataset (`tables`) và dataset column (`table_columns`). API native Superset vẫn là nơi quản trị/sync dataset và metadata nguồn. Extension đọc những model chuẩn này, dùng Superset DAO/ACL để tìm dataset và lưu dictionary theo `dataset_id`; metadata kiểu dữ liệu, temporal và cột nguồn luôn lấy từ Superset. Dictionary tùy chỉnh lưu trong các bảng `text_to_bi.table_dictionaries`, `column_dictionaries` và bảng con do extension quản lý.
-
-API native Superset dành cho đọc/sửa dataset và đồng bộ cột vẫn có contract riêng của Superset; trang này không mô tả lại contract đó. Các endpoint sau chỉ quản lý business dictionary của extension.
-
 Base resource: `/extensions/text-to-bi/superset-text-to-bi/data-dictionary`.
+
+Nguồn: [routes](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/routes/route_data_dictionary.py),
+[schemas](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/schemas/schema_data_dictionary.py),
+[service](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/services/dictionary_service.py).
+
+API chỉ quản lý phần mô tả nghiệp vụ của extension; dataset, cột và việc đồng bộ cột vẫn qua API và màn hình của
+Superset. Mọi route cần phiên Superset và permission `can_read` (GET) hoặc `can_write` (ghi) trên `text_to_bi_api`;
+route ghi kiểm tra header `X-CSRFToken`. Quy tắc nghiệp vụ xem [module data_dictionary](text-to-bi-data-dictionary.md).
 
 ## Endpoint
 
-| Method | Path | Mục đích và quyền |
-| --- | --- | --- |
-| GET | `/summary` | Cây database → schema → dataset mà người gọi có quyền đọc; cần quyền xem Text to BI |
-| GET | `/stats?limit=5` | Thống kê dictionary và xếp hạng dataset; `limit` nguyên từ 1 đến 20; cần quyền xem |
-| GET | `/datasets/<dataset_id>` | Đọc dictionary cùng metadata dataset/cột của Superset; cần quyền xem và ACL đọc dataset |
-| PUT | `/datasets/<dataset_id>` | Lưu mô tả dataset, layout, vai trò cột, time grain, indicator metadata; cần quyền sửa và ACL đọc dataset |
-| PUT | `/datasets/<dataset_id>/columns` | Thay metadata cho các cột gửi lên; cần quyền sửa và ACL đọc dataset |
-| POST | `/datasets/<dataset_id>/autofill` | Gợi ý mô tả bằng mô hình ngôn ngữ và trả SSE; cần quyền sửa, ACL đọc dataset và CSRF |
+| Method | Path | Quyền | Response 200 |
+| --- | --- | --- | --- |
+| GET | `/summary` | `can_view` | Cây database → schema → dataset người gọi đọc được |
+| GET | `/stats?limit=5` | `can_view`; `limit` nguyên 1–20 | Thống kê độ phủ và xếp hạng dataset |
+| GET | `/datasets/<dataset_id>` | `can_view` + truy cập dataset | Từ điển của dataset (`TableDictionaryOut`) |
+| PUT | `/datasets/<dataset_id>` | `can_edit` + truy cập dataset | Lưu thông tin bảng; trả `TableDictionaryOut` |
+| PUT | `/datasets/<dataset_id>/columns` | `can_edit` + truy cập dataset | Lưu các cột gửi lên; trả `TableDictionaryOut` |
+| POST | `/datasets/<dataset_id>/autofill` | `can_edit` + truy cập dataset | `text/event-stream` (bên dưới); không có body |
 
-Text to BI Viewer được đọc; Editor và Steward có quyền sửa theo role service; Admin có quyền Text to BI nhưng vẫn chịu ACL dataset Superset. Mỗi thao tác kiểm tra dataset được yêu cầu qua Superset DAO, tránh lộ dataset không có quyền truy cập.
+`/summary` và `/stats` dùng `readable_datasets()`: bỏ dataset của database đánh dấu nội bộ (`text_to_bi_internal`
+trong `Database.extra`) và dataset người gọi không truy cập được.
 
-## Payload ghi dữ liệu
+## Payload
 
-`PUT /datasets/<dataset_id>` yêu cầu `display_name` không rỗng (tối đa 255 ký tự). Các thuộc tính tùy chọn gồm `description`, `grain_description`, `table_kind`, `layout` (mặc định `wide`), `indicator_catalog_dataset_id`, `contains_pii`, `column_roles`, `time_grains`, `indicator_aggregations`. Mỗi danh sách con tối đa 50 phần tử. Field không nằm trong schema bị từ chối.
-
-Ví dụ rút gọn:
+`PUT /datasets/<dataset_id>` (`TableDictionaryIn`): `display_name` bắt buộc (1–255); tùy chọn `description`,
+`grain_description`, `table_kind`, `layout` (mặc định `wide`), `indicator_catalog_dataset_id`, `contains_pii`,
+`column_roles` (`{role, qualifier?, column_name}`), `time_grains` (`{row_kind_value?, label?, time_grain}`),
+`indicator_aggregations` (`{source_code, aggregation}`). Mỗi danh sách tối đa 50 phần tử. Request thay toàn bộ thông
+tin bảng và ba danh sách con.
 
 ```json
 {
   "display_name": "Đơn hàng",
   "description": "Một dòng cho mỗi đơn hàng",
   "layout": "wide",
-  "column_roles": [],
-  "time_grains": [],
+  "column_roles": [{"role": "created_at", "column_name": "order_date"}],
+  "time_grains": [{"time_grain": "day"}],
   "indicator_aggregations": []
 }
 ```
 
-Service kiểm tra enum của `layout`, `table_kind`, role, qualifier, time grain và aggregation; column name phải thuộc dataset. Các role bắt buộc/phù hợp phụ thuộc layout. Indicator catalog phải là dataset khác, cùng database, đã được mô tả với layout `indicator_catalog`; danh sách indicator aggregation chỉ hợp lệ với layout catalog tương ứng. Mô tả và grain description tối đa 2.000 ký tự. Synonym được loại trùng và giới hạn tối đa 20 từ mỗi cột.
+`PUT /datasets/<dataset_id>/columns` (`ColumnDictionariesIn`): `{"columns": [...]}`, tối đa 1.000 phần tử. Mỗi phần tử
+có `column_name`, `display_name` (1–255) và tùy chọn `description`, `business_term`, `semantic_role`, `temporal_kind`,
+`unit`, `format`, `is_primary_key`, `is_unique`, `referenced_column` (`{dataset_id, column_name}`), `contains_pii`,
+`aggregations` (tối đa 10), `synonyms` (tối đa 50 theo schema, 20 sau khi loại trùng). Một request không được lặp
+`column_name`; cột không gửi giữ nguyên.
 
-`PUT /datasets/<dataset_id>/columns` nhận object `{ "columns": [...] }`, tối đa 1.000 item. Mỗi item có `column_name`, `display_name` và trường tùy chọn `description`, `business_term`, `semantic_role`, `temporal_kind`, `unit`, `format`, `is_primary_key`, `is_unique`, `referenced_column`, `contains_pii`, `aggregations`, `synonyms`. `referenced_column` có dạng `{ "dataset_id": 42, "column_name": "customer_id" }`; dataset đích phải đọc được và cột phải tồn tại. Một request không được lặp `column_name`; các cột không có trong request giữ nguyên. Schema giới hạn aggregation tối đa 10 và synonym tối đa 50 mỗi cột; service áp dụng kiểm tra ngữ nghĩa bổ sung.
+Mọi body cấm field ngoài schema. Giá trị enum, vai trò bắt buộc theo layout, danh mục chỉ số, cột tham chiếu và giới
+hạn độ dài do service kiểm tra; lỗi trả `message` chỉ rõ phần tử, ví dụ `columns[3].referenced_column ...`.
 
-Response dataset gồm `dataset_id`, database/schema/table, loại dataset, `can_edit`, `is_saved`, nội dung dictionary, `column_roles`, `time_grains`, `indicator_aggregations` và `columns`. Mỗi cột cho biết metadata nguồn Superset (`data_type`, `is_dttm`, calculated) cùng giá trị dictionary và cờ `is_saved`/`semantic_role_is_default`. Endpoint summary trả `table_count`, `described_table_count` và nhóm database/schema; stats thêm số cột, số cột mô tả, schema và top dataset nhiều cột/được tham chiếu.
+## Response
 
-## Autofill dạng Server-Sent Events
+`TableDictionaryOut`: `dataset_id`, `database_id`, `database_name`, `schema_name`, `table_name`, `dataset_kind`
+(`physical`/`virtual`), `can_edit`, `is_saved`, `display_name`, `description`, `grain_description`, `table_kind`,
+`layout`, `indicator_catalog` (`{dataset_id, schema_name, table_name, display_name}` hoặc `null`), `contains_pii`,
+`updated_at`, `column_roles`, `time_grains`, `indicator_aggregations`, `columns`.
 
-`POST /datasets/<dataset_id>/autofill` trả `text/event-stream`. Event chuẩn gồm `status`, `columns`, `table`, `done`; lỗi trong lúc stream trả event `error` với `code` và `message`. Event/batch đã gửi được commit trước khi phát ra; lỗi sau khi bắt đầu stream không đổi HTTP status ban đầu mà thể hiện trong event `error`. Client nên đọc response theo SSE, không parse như JSON thông thường.
+Mỗi phần tử `columns`: `column_name`, `verbose_name`, `data_type`, `is_dttm`, `is_calculated` (lấy từ Superset),
+`is_saved`, `display_name`, `description`, `business_term`, `semantic_role`, `semantic_role_is_default`,
+`temporal_kind`, `unit`, `format`, `is_primary_key`, `is_unique`, `referenced_column`
+(`{dataset_id, schema_name, table_name, column_name}` hoặc `null`), `contains_pii`, `aggregations`, `synonyms`,
+`updated_at`.
 
-Autofill cần cấu hình nhà cung cấp LLM. Dataset đang được autofill sẽ nhận conflict thay vì chạy song song; giới hạn tối đa 300 cột. Lỗi trước khi stream được xử lý qua response API thông thường; lỗi trong stream dùng event `error`.
+`/summary`: `{table_count, described_table_count, databases: [{database_id, database_name, schemas: [{schema_name,
+tables: [{dataset_id, table_name, dataset_kind, is_saved, display_name, layout, column_count,
+described_column_count}]}]}]}`.
 
-## CSRF, validation và status
+`/stats`: `table_count`, `described_table_count`, `column_count`, `described_column_count`, `schemas` (số bảng và số
+bảng đã mô tả theo database/schema), `most_columns` và `most_referenced` (tối đa `limit` dataset; `most_referenced`
+đếm số bảng khác tham chiếu tới dataset).
 
-Mọi request ghi cần CSRF của Superset; gửi cookie phiên và `X-CSRFToken`. Payload dùng Pydantic, cấm field ngoài schema. `limit` ngoài khoảng 1–20 hoặc body sai trả `422` (code `invalid_request` hoặc `invalid_query_parameter`); lỗi nghiệp vụ dictionary trả `422 invalid_data_dictionary`. CSRF sai trả `403 csrf_token_invalid`. Dataset không tồn tại trả `404 dataset_not_found`; thiếu quyền xem/sửa hoặc ACL dataset trả `403`. Autofill chưa sẵn sàng trả `503 dictionary_autofill_unavailable`, đang chạy trả `409 dictionary_autofill_in_progress`, không tạo được gợi ý hợp lệ trả `502 dictionary_autofill_failed`. Lỗi không dự kiến trước khi stream trả `500`; lỗi sau khi stream bắt đầu được mã hóa trong SSE `error`.
+## Tự động điền qua SSE
 
-Route gọi migration idempotent để tạo riêng bảng extension trước khi đọc/ghi; migration không tạo hoặc sửa bảng Superset. Superset tiếp tục là nguồn chuẩn cho dataset và column metadata.
+`POST /datasets/<dataset_id>/autofill` kiểm tra trước khi mở stream: dataset phải có cột, tối đa 300 cột, mô hình ngôn
+ngữ đã cấu hình, dataset không đang được tự động điền. Lỗi ở bước này trả JSON `{code, message}` như mọi route.
+
+Khi stream đã mở, sự kiện lần lượt là:
+
+| Event | Data |
+| --- | --- |
+| `status` | `{processed, total, message}` |
+| `columns` | `{columns: ColumnDictionaryOut[], processed, total}` cho mỗi lô cột đã lưu |
+| `table` | `TableDictionaryOut` sau khi điền thông tin bảng |
+| `done` | `{processed, total, failed_columns, table_filled}` |
+| `error` | `{code, message}`; stream kết thúc, các lô đã gửi vẫn được lưu |
+
+Mỗi lô được commit trước khi phát sự kiện. Client ngắt kết nối giữa chừng thì lock của dataset vẫn được nhả. Client
+đọc response theo SSE, không parse như JSON.
+
+## Lỗi
+
+| Status | `code` | Khi nào |
+| --- | --- | --- |
+| 403 | `view_permission_required`, `edit_permission_required`, `dataset_access_required` | Thiếu quyền |
+| 403 | `csrf_token_invalid` | Thiếu hoặc sai CSRF token |
+| 404 | `dataset_not_found` | Dataset không tồn tại hoặc người gọi không thấy |
+| 409 | `dictionary_autofill_in_progress` | Dataset đang được tự động điền |
+| 422 | `invalid_request` | Body sai schema |
+| 422 | `invalid_query_parameter` | `limit` không phải số nguyên 1–20 |
+| 422 | `invalid_data_dictionary` | Lỗi nghiệp vụ từ điển; dataset chưa có cột hoặc quá 300 cột khi tự động điền |
+| 502 | `dictionary_autofill_failed` | Mô hình không trả gợi ý hợp lệ nào (thường gặp dưới dạng event `error`) |
+| 503 | `dictionary_autofill_unavailable` | Chưa cấu hình `OPENROUTER_API_KEY`, hoặc nhà cung cấp từ chối key/hết hạn mức |
+| 500 | `internal_error` | Lỗi không dự kiến trước khi stream; sau khi stream mở là event `error` |

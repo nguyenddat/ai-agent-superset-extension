@@ -1,24 +1,65 @@
 # API Business Model
 
-API được đăng ký tại `/api/v1/business-model/`. Các thao tác đọc yêu cầu quyền Semantic Layer Viewer (hoặc Admin). Tạo, sửa, xóa layer/domain và lưu canvas yêu cầu Admin cùng header `X-CSRFToken`. Gán layer cho dataset yêu cầu quyền sửa dataset trong Superset. API chỉ trả membership của dataset mà người gọi được truy cập. `dataset_id` và `database_id` là ID trong Superset.
+Base resource: `/extensions/text-to-bi/superset-text-to-bi/business-model`.
 
-| Method | Path | Mô tả |
+Nguồn: [routes](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/business_model/routes/route_business_model.py),
+[schemas](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/business_model/schemas/schema_business_model.py),
+[service](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/business_model/services/srv_business_model.py).
+
+Mọi route cần phiên Superset và permission `can_read` (GET) hoặc `can_write` (ghi) trên `text_to_bi_api`; route ghi
+kiểm tra header `X-CSRFToken`. `dataset_id` và `database_id` là ID Superset; `layer_id`, `domain_id` là UUID. Quy tắc
+nghiệp vụ và màn hình dùng API xem [Business model](text-to-bi-business-model.md).
+
+## Endpoint
+
+| Method | Path | Quyền | Mô tả và response |
+| --- | --- | --- | --- |
+| GET | `/layers/` | `can_view` | `{layers}`, sắp theo `level`, `sort_order`, tên |
+| POST | `/layers/` | Admin | Tạo layer từ `LayerIn`; 201 `{layer}` |
+| PUT | `/layers/order` | Admin | Body `{levels: [[uuid, ...], ...]}` (tối đa 100 nhóm), mỗi layer đúng một lần; `{layers}` |
+| PUT | `/layers/<layer_id>` | Admin | Thay mọi trường từ `LayerIn`; `{layer}` |
+| DELETE | `/layers/<layer_id>` | Admin | Xóa layer, dataset đã gán thành chưa có layer; `{message}` |
+| GET | `/domains/` | `can_view` | `{domains}`; mỗi domain chỉ kèm `dataset_ids` mà người gọi truy cập được |
+| POST | `/domains/` | Admin + quyền sửa mọi dataset trong `dataset_ids` | Tạo từ `DomainIn`; 201 `{domain}` |
+| PUT | `/domains/<domain_id>` | Admin + quyền sửa mọi dataset trong `dataset_ids` | `dataset_ids` thay toàn bộ thành viên; `{domain}` |
+| DELETE | `/domains/<domain_id>` | Admin | Xóa domain và thành viên; `{message}` |
+| PUT | `/datasets/<dataset_id>/layer` | Quyền sửa dataset | Body `{layer_id: uuid \| null}`; `null` gỡ gán; `{assignment: {dataset_id, layer_id}}` |
+| GET | `/databases/<database_id>` | `can_view` | Mô hình tổng hợp của một database (bên dưới) |
+| PUT | `/databases/<database_id>/canvas` | Admin | Body `{layout: object}`, JSON tối đa 1 MB; `{canvas: {database_id, layout}}` |
+
+"Quyền sửa dataset" là `can_edit` của Text to BI cộng quyền truy cập dataset trong Superset (`require_edit`).
+
+## Schema
+
+- `LayerIn`: `name` (1–255), `description` (tối đa 2.000), `color` (`#RRGGBB`), `level` và `sort_order` nguyên không
+  âm, mặc định 0. Response layer: `{id, name, description, color, level, sort_order}`.
+- `DomainIn`: `name` (1–255), `description` (tối đa 2.000), `color` (`#RRGGBB`), `dataset_ids` (tối đa 1.000, không
+  trùng, mọi ID phải tồn tại). Dataset chưa có dòng từ điển được tạo dòng `TableDictionary` mới. Response domain:
+  `{id, name, description, color, dataset_ids}`.
+- Mọi body cấm field ngoài schema. Tên bị cắt khoảng trắng hai đầu; mô tả rỗng thành `null`.
+
+`GET /databases/<database_id>` trả:
+
+- `database_id`, `layers`, `domains` (chỉ thành viên thuộc database này mà người gọi truy cập được).
+- `datasets`: các dataset của database mà người gọi truy cập được, mỗi mục
+  `{dataset_id, schema, table_name, display_name, table_kind, layer_id, is_classified}`; `display_name` lấy từ từ điển,
+  nếu chưa có thì là tên bảng; `is_classified` cho biết dataset đã có dòng từ điển.
+- `business_canvas`: layout đã lưu, `{}` nếu chưa có.
+- `lineage`: đồ thị dòng dữ liệu, cùng cấu trúc với `GET /data-lineage/graph`
+  (xem [Data Lineage API](text-to-bi-data-lineage-api.md)).
+
+Trang Mô hình hiện chỉ gọi `GET /databases/<id>`, `GET /domains/` và các route ghi domain. Route layer, gán layer và
+canvas chưa có màn hình.
+
+## Lỗi
+
+| Status | `code` | Khi nào |
 | --- | --- | --- |
-| GET | `/layers/` | Liệt kê layer theo level, thứ tự và tên. |
-| POST | `/layers/` | Tạo layer với `name`, `description`, `color`, `level`, `sort_order`. |
-| PUT | `/layers/order` | Sắp xếp lại layer bằng `levels`: danh sách các nhóm UUID; mỗi layer phải xuất hiện đúng một lần. |
-| PUT | `/layers/{layer_id}` | Cập nhật các trường layer. |
-| DELETE | `/layers/{layer_id}` | Xóa layer; dataset đã gán trở thành chưa phân loại. |
-| GET | `/domains/` | Liệt kê domain và các dataset membership người gọi được phép xem. |
-| POST | `/domains/` | Tạo domain với `name`, `description`, `color`, `dataset_ids`. |
-| PUT | `/domains/{domain_id}` | Cập nhật domain; `dataset_ids` thay thế toàn bộ membership hiện tại. |
-| DELETE | `/domains/{domain_id}` | Xóa domain và các membership. |
-| PUT | `/datasets/{dataset_id}/layer` | Gán `layer_id`; truyền `null` để gỡ gán. |
-| GET | `/databases/{database_id}` | Đọc business model tổng hợp cho database Superset. |
-| PUT | `/databases/{database_id}/canvas` | Lưu JSON `layout` của business canvas; tối đa 1 MB. |
-
-`LayerIn` nhận `name` (1–255 ký tự), `description` (tối đa 2.000), `color` theo dạng `#RRGGBB`, `level` và `sort_order` không âm. Tên layer và domain là duy nhất. `DomainIn.dataset_ids` nhận tối đa 1.000 Superset dataset ID; mỗi ID phải tồn tại và người gọi phải có quyền sửa dataset đó. Dataset được thêm vào domain sẽ có bản ghi Data Dictionary nếu chưa có.
-
-`GET /databases/{database_id}` trả `database_id`, `layers`, `domains`, các `datasets` truy cập được, `business_canvas` và `lineage`. Mỗi dataset gồm schema, tên bảng, tên hiển thị, loại bảng, layer và trạng thái đã phân loại. Phần lineage được đọc qua service của module `data_lineage`; module đó tiếp tục sở hữu lineage canvas, edges và transformations. API trả response theo JSON envelope chuẩn của extension.
-
-Layer/domain/canvas do module `business_model` sở hữu. Mapping layer dùng Superset dataset ID; membership domain liên kết tới model `TableDictionary` do `data_dictionary` sở hữu. Migration nội bộ tạo các bảng cần thiết và không thay đổi bảng metadata lõi của Superset.
+| 403 | `view_permission_required`, `admin_required`, `edit_permission_required`, `dataset_access_required` | Thiếu quyền |
+| 403 | `csrf_token_invalid` | Thiếu hoặc sai CSRF token |
+| 404 | `business_model_not_found` | Layer, domain hoặc database không tồn tại |
+| 404 | `dataset_not_found` | Dataset không tồn tại hoặc người gọi không thấy |
+| 409 | `business_model_conflict` | Trùng tên layer hoặc domain |
+| 422 | `business_model_invalid` | Màu sai, tên rỗng, dataset trùng hoặc không tồn tại, thứ tự layer thiếu/thừa, canvas quá 1 MB |
+| 422 | `invalid_request` | Body sai schema |
+| 500 | `internal_error` | Lỗi không dự kiến, kể cả UUID sai dạng ở đường dẫn, trong `levels` hoặc `layer_id` |

@@ -2,82 +2,78 @@
 
 ## Project overview
 
-This repository runs a local Text to BI stack around Apache Superset 6.1.0. It
-contains a PostgreSQL analytics database with sample weather data, a Superset
-metadata database, and two Superset extensions: an AI Agent and a Semantic Layer.
+This repository runs a local Text to BI stack around Apache Superset 6.1.0 and ships one Superset extension,
+`superset-text-to-bi` (`extensions/text-to-bi/`). The extension ports the standalone Next.js/FastAPI app (sibling repo
+`ai-agent-superset-standalone`) into Superset: Flask-AppBuilder REST APIs on the backend and a React 17 page at
+`/text-to-bi/` on the frontend. The stack also has a PostgreSQL warehouse with sample weather data, a Superset
+metadata database, Redis, a Celery worker and Qdrant. The two older extensions (AI Agent and Semantic Layer) were
+removed; their code is only in git history.
 
 ## Read the handbook first
 
-`docs/handbook/` holds what the team agreed on for writing code here. Read it
-before changing code, and follow it over habits from other projects:
+`docs/handbook/` holds what the team agreed on for writing code here. Read it before changing code, and follow it over
+habits from other projects:
 
-- `docs/handbook/quy-uoc-code.md`: code conventions (120-character lines,
-  naming, imports, no docstrings, tests) and Conventional Commits messages,
-  `<type>(<scope>): <description>`.
-- `docs/handbook/kien-truc.md`: the backend layers (`common`, `core`,
-  `modules`), modules split by business area, the `superset` module for
-  Superset's own datasets and users, and the layout inside a module.
-- `docs/handbook/hanh-vi.md`: exceptions and status codes, route decorator
-  order, transactions, admin checks and CSRF.
+- `docs/handbook/quy-uoc-code.md`: code conventions (120-character lines, naming, imports, no docstrings, tests) and
+  Conventional Commits messages, `<type>(<scope>): <description>`.
+- `docs/handbook/kien-truc.md`: the backend layers (`common`, `core`, `modules`), modules split by business area, the
+  `superset` module for Superset's own datasets and users, and the layout inside a module.
+- `docs/handbook/hanh-vi.md`: exceptions and status codes, route decorator order, transactions, permissions and CSRF.
+- `docs/handbook/text-to-bi-<module>.md` and `text-to-bi-<module>-api.md`: behaviour and endpoints of each module.
 
 When a change alters one of these rules, update the handbook in the same commit.
 
 ## Main directories
 
-- `simulation/` holds the simulated environment the extensions run against; the
-  repository's own product is the extensions. It contains:
-  - `simulation/data_wh/` defines the warehouse schema.
-    `001_init_bang_co_so.sql` creates the `dm_*` and normalized `tb_*` tables;
-    `002_init_bang_dashboard.sql` creates dashboard tables from that business
-    layer.
-  - `simulation/airflow/` contains the Open-Meteo ingestion DAG and its runtime
-    files.
-  - `simulation/superset/` contains the Superset image definition, local
-    configuration, and admin, warehouse and governance bootstrap scripts.
-    `bootstrap_governance.py` builds the "Tổng quan AI Agent" dashboard on
-    read-only views of the AI Agent question log.
-- `extensions/ai-agents/` contains the AI Agent frontend and backend. Its
-  `/ai-agent/` chat page keeps each user's conversations and streams each step
-  as a tool call; see its own `AGENTS.md`.
-- `extensions/semantic-layer/` contains the semantic metadata UI and backend. Its
-  metadata tables live in Superset's metadata database. Administrators edit it; the
-  Superset roles "Semantic Layer Viewer" (read-only pages) and "Semantic Layer Query"
-  (consumer reads, metric runs, AI Agent chat) open it to others, assigned in
-  "Quản trị nghiệp vụ" → "Phân quyền".
-- `extensions/*.supx` contains the bundles copied into the running Superset
-  container. Keep one current bundle per extension here.
-- `docs/handbook/` holds the agreed conventions, architecture and API behaviour;
-  `docs/specs/` holds the specification of each feature; `docs/reports/` holds
-  the reports written for the client (Word and PDF).
+- `extensions/text-to-bi/` is the product:
+  - `extension.json`: publisher `text-to-bi`, name `superset-text-to-bi`, version `0.1.0`.
+  - `backend/src/text_to_bi/superset_text_to_bi/`: `entrypoint.py` registers every API class and the page view;
+    `common/` (base models, exceptions, charts, utils), `core/` (config, error handling, routing, CSRF, validation),
+    `agent_package/` (LLM calls, tool agent, prompts) and `modules/` (`auth`, `business_model`, `conversation`,
+    `data_dictionary`, `data_lineage`, `expert_rule_management`, `glossary_management`, `metric_management`,
+    `own_knowledge`, `superset`, `text2sql`). `backend/tests/` holds the pytest suite.
+  - `frontend/src/`: `index.tsx` (Module Federation entry; adds the navbar menus and mounts the page), `app.tsx`,
+    `components/` (shadcn `base-nova` on Base UI; `components/ui/` are the primitives), `lib/` (`navigation`, `api`,
+    `access`, `theme`, `sse`, `react-compat`), `features/<module>/` and `styles/globals.css`.
+- `extensions/superset-text-to-bi-0.1.0.supx` and its `.provenance.json` are the current bundle and the source hashes it
+  was built from. Keep only the current bundle here.
+- `scripts/` holds the build, deploy and check workflow (see below).
+- `simulation/` holds the simulated environment the extension runs against:
+  - `simulation/data_wh/scripts/` defines the warehouse schema: `001_init_bang_co_so.sql` creates the `dm_*` and
+    normalized `tb_*` tables; `002_init_bang_dashboard.sql` creates dashboard tables from that business layer.
+  - `simulation/airflow/` contains the Open-Meteo ingestion DAG and its runtime files.
+  - `simulation/superset/` contains the Superset image, `superset_config.py`, and the admin, warehouse, metric,
+    dashboard and governance bootstrap scripts that `superset-init` runs.
+- `docs/handbook/` holds conventions, architecture and module behaviour; `docs/specs/` holds feature specifications;
+  `docs/reports/` holds the reports written for the client (Word and PDF).
 
 ## Python environment
 
-Use the uv-managed virtual environment `.venv` at the repository root for local
-Python commands and extension tooling. The root `pyproject.toml` and `uv.lock`
-define it: Python 3.12, the extension backend dependencies, and the `dev` group
-with `apache-superset-extensions-cli` (`superset-extensions`), `pytest`, and
-`ruff`.
+Use the uv-managed virtual environment `.venv` at the repository root for local Python commands and tooling. The root
+`pyproject.toml` and `uv.lock` define it: Python 3.12, the backend's AI dependencies (LangChain, LangGraph, pydantic),
+and the `dev` group with `apache-superset-extensions-cli` (`superset-extensions`), `pytest`, `ruff` and `playwright`.
+Pytest's `pythonpath` points at `extensions/text-to-bi/backend/src`.
 
 ```sh
 uv sync
-uv run python --version
+uv run pytest extensions/text-to-bi/backend/tests
+uv run ruff check extensions/text-to-bi/backend scripts
 ```
 
-Run Python tools through `uv run` (for example `uv run pytest` or
-`uv run ruff check`) from the repository root, for example
-`uv run pytest extensions/ai-agents/backend/tests`. `uv run` uses the nearest
-`pyproject.toml`, and each `extensions/*/backend/` has its own one for bundling
-and for Ruff's Python 3.10 target, so running it inside a backend directory
-creates a separate, empty `.venv` there; from anywhere else, or with
-`--project <repository root>`, it finds the root project. Add or change
+Run Python tools through `uv run` from the repository root. `extensions/text-to-bi/backend/` has its own
+`pyproject.toml` for bundling and for Ruff's Python 3.10 target, so running `uv run` inside it creates a separate,
+empty `.venv` there; from the root, or with `--project <repository root>`, it finds the root project. Add or change
 dependencies with `uv add` / `uv add --dev` so `uv.lock` stays current.
 
-Superset's application runtime runs inside the Docker image. The local uv
-environment is for development commands and extension packaging.
+The frontend uses npm in `extensions/text-to-bi/frontend/`: `npm ci`, `npm run typecheck`, `npm run build` (webpack;
+the bundle step runs it for you).
+
+Superset's runtime runs inside the Docker image on Python 3.10. The local environment is for development commands and
+packaging.
 
 ## Stack commands
 
-Run these commands from the repository root:
+Run these from the repository root:
 
 ```sh
 docker compose up --build -d
@@ -85,64 +81,62 @@ docker compose ps
 docker compose logs -f superset
 ```
 
-Superset is available at `http://localhost:8089` by default. The analytics
-database is `warehouse-db` (`data_wh`); Superset metadata is stored separately
-in `superset-db`. Both databases use persistent Compose volumes.
+Superset is at `http://localhost:8089` (`SUPERSET_PORT`), admin `admin`/`admin` by default. Services:
 
-## Build, install, and restart extensions
+- `superset`: gunicorn, one `gthread` worker with 16 threads.
+- `superset-worker`: Celery; runs the Text2SQL ingestion task `text_to_bi.text2sql.process_ingestion_job`
+  (`superset_config.py` adds `modules.text2sql.worker` to the Celery imports). `redis` is its broker.
+- `superset-init`: `superset db upgrade`, `superset init`, then the bootstrap scripts.
+- `superset-db` (Superset metadata, which also holds the extension's `text_to_bi` schema) and `warehouse-db`
+  (`data_wh`, host port 5433), both on persistent volumes.
+- `qdrant` on `127.0.0.1:6333`: the Text2SQL semantic index, collection `text2sql_semantics_v1`.
+- `airflow` on port 8080.
 
-After changing extension source or extension build configuration, rebuild both
-bundles, copy them into the `superset_extensions` volume, and restart the
-Superset service:
+## Build, install and restart the extension
+
+Use the scripts:
 
 ```sh
-uv sync
-
-cd extensions/ai-agents
-uv run superset-extensions bundle
-cp superset-ai-agent-0.1.0.supx ..
-rm -f superset-ai-agent-0.1.0.supx
-
-cd ../semantic-layer
-uv run superset-extensions bundle
-cp superset-semantic-layer-0.1.0.supx ..
-rm -f superset-semantic-layer-0.1.0.supx
-
-cd ../..
-docker compose up -d --build superset
-docker compose cp extensions/superset-ai-agent-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose cp extensions/superset-semantic-layer-0.1.0.supx superset:/app/superset_home/extensions/
-docker compose restart superset
-docker compose ps
+uv run scripts/ship.py --smoke
 ```
 
-The source directories hold editable code. The two root `.supx` files are the
-current bundles; Superset reads them from the `superset_extensions` named
-volume at `/app/superset_home/extensions`, shared by `superset-init` and
-`superset`. The bundles are copied in with `docker compose cp` instead of
-bind-mounted, because bind mounts from the host drive served stale `.supx`
-content under Docker Desktop's Hyper-V file sharing. A fresh volume is empty, so
-run the two `docker compose cp` commands after the first `docker compose up`.
-Bundle output created inside an extension source directory is temporary and can
-be regenerated with the build command.
+`ship.py` runs `check.py`, `build.py` and `deploy.py` (and `smoke.py` with `--smoke`). `build.py` runs
+`superset-extensions bundle --output extensions/superset-text-to-bi-0.1.0.supx` inside `extensions/text-to-bi` (which
+builds the frontend with webpack) and writes `superset-text-to-bi-0.1.0.provenance.json`. `deploy.py` refuses a bundle
+whose provenance no longer matches the sources, so always bundle through `build.py`.
 
-## Semantic Layer development scripts
+Superset reads the bundle from the `superset_extensions` named volume at `/app/superset_home/extensions`, shared by
+`superset-init`, `superset` and `superset-worker`. The bundle is copied in with `docker compose cp` instead of
+bind-mounted, because bind mounts from the host drive served stale `.supx` content under Docker Desktop's Hyper-V file
+sharing. A fresh volume is empty, so deploy once after the first `docker compose up`. The manual equivalent of
+`deploy.py` is:
 
-`scripts/` holds the day-to-day workflow for the Semantic Layer. Run each script
-from the repository root with `uv run`; `--help` prints its options.
+```sh
+docker compose cp extensions/superset-text-to-bi-0.1.0.supx superset:/app/superset_home/extensions/
+docker compose restart superset
+```
+
+`deploy.py` restarts only `superset`. After changing code the Celery task runs (Text2SQL ingestion), also run
+`docker compose restart superset-worker`. Rebuild the image (`docker compose up -d --build superset`) after changing
+`simulation/superset/`; `deploy.py` stops early when the image lacks `openpyxl`.
+
+## Development scripts
+
+Run each script from the repository root with `uv run`; `--help` prints its options. Every script targets
+`extensions/text-to-bi` (`scripts/_common.py`).
 
 | Script | What it does |
 | --- | --- |
-| `scripts/doctor.py` | Checks uv, node, npm, docker, frontend `node_modules`, the Docker engine (must be Hyper-V `linuxkit`, not WSL2), the running services, and Superset `/health`. |
-| `scripts/check.py` | Runs Ruff and pytest on the backend and `npm run typecheck` on the frontend. `--no-frontend` skips the typecheck. |
-| `scripts/build.py` | Bundles `extensions/superset-semantic-layer-<version>.supx` with `superset-extensions bundle`. |
-| `scripts/deploy.py` | Copies the bundle into the `superset_extensions` volume, verifies its sha256 against the host file, restarts Superset, waits for `/health`, and checks the startup log for the extension load line. |
-| `scripts/ship.py` | Runs `build.py` then `deploy.py`. `--check` runs `check.py` first; `--smoke` runs `smoke.py` last. |
+| `scripts/doctor.py` | Checks uv, node, npm, docker, frontend `node_modules`, the Docker engine (must be Hyper-V, not WSL2), the `superset-db`, `warehouse-db` and `superset` services, and Superset `/health`. |
+| `scripts/check.py` | Runs Ruff and pytest on the backend, Ruff and pytest on `scripts/`, and `npm run typecheck` on the frontend. `--no-frontend` skips the typecheck. |
+| `scripts/build.py` | Bundles `extensions/superset-text-to-bi-0.1.0.supx` and records the bundle hash and source hashes in its `.provenance.json`. |
+| `scripts/deploy.py` | Checks the bundle's provenance, snapshots the metadata database with `pg_dump` into `.release-backups/<timestamp>/`, backs up the installed bundle, copies the new one and verifies its sha256, restarts Superset, and checks the log for `Loaded extension 'text-to-bi.superset-text-to-bi'`. On failure it restores the previous bundle; migrations are not rolled back. |
+| `scripts/ship.py` | Runs `check.py`, `build.py` and `deploy.py`. `--skip-check` skips the checks; `--smoke` runs `smoke.py` last. |
 | `scripts/compat.py` | Checks the source against the real Superset 6.1 runtime: flags a stale host or deployed bundle, then compiles every backend module with the container's Python 3.10 and imports it inside a Superset app context. |
-| `scripts/smoke.py` | Logs in through the Superset login form as the admin and calls the read-only Semantic Layer endpoints, expecting 200 with JSON. It changes no data. |
-| `scripts/logs.py` | Prints Superset log lines about the extension, the Semantic Layer, and errors. `--since 10m`, `--follow`, and `--all` adjust it. |
+| `scripts/smoke.py` | Logs in through the Superset login form as the admin and calls read-only endpoints (`auth/me`, `data-dictionary/summary` and `stats`, `business-model/layers/` and `domains/`, `conversations/`, `own-knowledge/admin/entries`, `text2sql/chart-types`, plus the dataset and database reads of `data-dictionary`, `business-model`, `data-lineage`, `metrics`, `glossary` and `expert-rules` for the first Superset dataset when one exists), expecting 200 with JSON. It changes no data. |
+| `scripts/logs.py` | Prints Superset log lines about the extension, `text_to_bi` and errors. `--since 10m`, `--follow` and `--all` adjust it. |
 
-Typical loop after changing Semantic Layer code:
+Typical loop after a change:
 
 ```sh
 uv run scripts/check.py
@@ -150,117 +144,141 @@ uv run scripts/compat.py
 uv run scripts/ship.py --smoke
 ```
 
-The local pytest suite runs on Python 3.12 against stubbed `superset` modules,
-so it cannot catch Superset API drift or Python 3.10 syntax; `compat.py` and
-`smoke.py` cover that against the running container. `compat.py` and
-`smoke.py` need the stack up (`docker compose up -d`).
+The local pytest suite runs on Python 3.12 against stubbed `superset` modules (`backend/tests/conftest.py`), so it
+cannot catch Superset API drift or Python 3.10 syntax; `compat.py` and `smoke.py` cover that and need the stack up.
 
-The scripts work around two Windows issues. `superset-extensions` starts npm
-with `subprocess.run(["npm", ...])`, which Windows cannot resolve because npm
-is `npm.cmd`, so `build.py` resolves each executable through `PATH` first. The
-scripts also force UTF-8 output, because the CLI's emoji messages fail on the
-cp1252 console encoding when output is redirected.
+`build.py` resolves each executable through `PATH` first, because `superset-extensions` starts npm with
+`subprocess.run(["npm", ...])` and Windows cannot resolve `npm.cmd` that way. The scripts force UTF-8 output because the
+CLI's emoji messages fail on the cp1252 console encoding. `smoke.py` logs in through `/login/` rather than the JWT API
+because the extension reads the user from the flask-login session. Set `SUPERSET_URL` or `SUPERSET_PORT` when Superset is
+not on `http://localhost:8089`, and `SUPERSET_ADMIN_USERNAME` / `SUPERSET_ADMIN_PASSWORD` when the admin is not
+`admin`/`admin`.
 
-`smoke.py` logs in through `/login/` rather than the JWT API because the
-extension reads the admin role from the flask-login session; with a JWT it
-answers `Admin access required.`. Set `SUPERSET_URL` or `SUPERSET_PORT` when
-Superset is not on `http://localhost:8089`, and `SUPERSET_ADMIN_USERNAME` /
-`SUPERSET_ADMIN_PASSWORD` when the admin is not `admin`/`admin`.
+## Page, APIs and access
 
-## Semantic metadata
+The page is `/text-to-bi/?section=<segment>` (`TextToBIView`, `modules/auth/routes/route_page.py`). The frontend adds
+three menus to Superset's navbar (`features/workspace/workspace-layout.tsx`, `src/index.tsx`):
 
-The Semantic Layer owns `text_to_bi_dataset_dictionary` and
-`text_to_bi_column_dictionary` in Superset's metadata database. A dataset
-dictionary `id` shares the corresponding Superset dataset ID through
-`tables.id`; each column dictionary row references its dataset dictionary with
-`dataset_id`. A dataset dictionary also names its `time_column` and, when one
-table mixes grains (hourly and daily forecasts in `fact_tong_hop_thoi_tiet`),
-the `row_kind_column` that tells them apart; `text_to_bi_dataset_grain` holds
-the grain of each kind of row, and each column dictionary row has a
-`temporal_kind` (`date` or `timestamp`). "Phát hiện grain" in the Data
-Dictionary reads a suggestion from the data; see
-`docs/specs/grain-va-ngu-nghia-thoi-gian.md`. `text_to_bi_relationship_contract`
-holds the relationships between base tables that the AI Agent's schema link may
-join on (`docs/specs/schema-link.md`): the Data Dictionary's "Quan hệ" tab
-suggests them from the database's foreign keys and from column names, checks
-the data (unique target, matching types, orphans) and approves only a passing
-check. Each column dictionary row also has a `semantic_role` (key, measure,
-dimension, label, time, row_kind, attribute), the `aggregations` that make
-sense on a measure, `synonyms` and a `description`.
-`text_to_bi_metric_definition` also keeps each metric's query defaults: its `grain`, `row_kind_value`, `time_column`,
-default `time_window` and `time_anchor` (`now` or `latest_data`), and `default_filters`. They are checked against the
-dataset's grains and filterable columns, hashed into the metric contract (changing them outdates an approval like a
-formula edit), listed in `/semantic-catalog` and applied by metric execution unless the caller overrides them; see
-`docs/specs/metric-grain-moc-thoi-gian-bo-loc.md`.
-The AI Agent extension owns `text_to_bi_dataset_proposal`, which holds the virtual datasets the AI
-Agent drafts over base (`dm_*`, `tb_*`) datasets when no aggregate dataset can
-answer a question; an administrator creates or rejects them in "Xử lý câu hỏi" →
-"Đề xuất dataset". A dataset dictionary and a column dictionary row each carry
-`contains_pii` (boolean, default false), ticked in the Data Dictionary for a table
-or column holding personal data and shown as `contains_pii` in the semantic
-catalog. A column can carry a transformation an administrator declares in the
-Data Dictionary (no inference, no AI): its input columns in other tables, picked
-explicitly, and a free-text expression that is never parsed, kept in
-`text_to_bi_column_transformation` and `text_to_bi_column_transformation_source`.
-The Semantic Model's lineage draws them as `transform` edges ("Biến đổi dữ
-liệu") next to the PK/FK reference edges, and each kind can be switched off.
-`text_to_bi_glossary_term_group` gathers glossary terms with
-the same meaning and `text_to_bi_expert_rule_group` similar expert rules; a
-term's or rule's `group_id` sits on the term or rule, not on a revision, so
-moving one needs no review, keeps it approved and is logged as a `moved` audit
-event, and deleting a group leaves its members ungrouped (see the extension
-README). "Gợi ý gom nhóm" suggests groups of similar ungrouped terms or rules
-from embeddings cached in `text_to_bi_text_embedding` (word TF-IDF without a
-key), for an administrator to apply, change or dismiss; dismissals stay in
-`text_to_bi_group_suggestion_dismissal` (`docs/specs/goi-y-gom-nhom.md`).
-`text_to_bi_contradiction` holds the contradictions "Mâu thuẫn" finds between
-terms, rules and linked metrics, with their dismissals, and
-`text_to_bi_contradiction_judgement` caches the chat model's verdict per pair
-content (`docs/specs/phat-hien-mau-thuan.md`). Opening the Semantic Layer as an
-administrator creates these tables
-and seeds dictionary rows from the existing Superset datasets.
+- "AI Agent": `chat` ("Hỏi dữ liệu"), `own-knowledge` ("Tri thức riêng").
+- "Mô hình dữ liệu": `dictionary` ("Từ điển"), `model` ("Mô hình"), `lineage` ("Dòng dữ liệu").
+- "Quản trị dữ liệu": the empty segment ("Tổng quan"), `metrics`, `glossary`, `rules`.
 
-The Semantic Model's business view groups both base and aggregate datasets by
-business domain; datasets not classified in the Data Dictionary stay out of it.
+The APIs live under `/extensions/text-to-bi/superset-text-to-bi/<resource>`, with resources `auth`, `business-model`,
+`conversations`, `data-dictionary`, `data-lineage`, `expert-rules`, `glossary`, `metrics`, `own-knowledge` and
+`text2sql`. All of them share the Flask-AppBuilder class permission `text_to_bi_api` (`can_read` for GET, `can_write`
+for the rest); what a caller may do inside is decided by `modules/auth/services/srv_access.py`.
 
-## Code style
+The auth module (`modules/auth/services/srv_roles.py`) seeds these roles on the view menu "Text to BI":
 
-The full rules are in `docs/handbook/quy-uoc-code.md`. In short, for Python and
-TypeScript alike:
+| Role | Permissions |
+| --- | --- |
+| `Text to BI Viewer` | `can_view`, API read |
+| `Text to BI Editor` | `can_view`, `can_edit`, API read and write |
+| `Text to BI Steward` | `can_view`, `can_edit`, `can_review`, API read and write |
+| `Text to BI Query` | `can_query`, API read and write |
 
-- Lines may be up to 120 characters. Wrap only past that limit, compactly inside
-  the outermost bracket; keep a call, import, object or JSX element that fits on
-  one line. Do not run `ruff format` or Prettier over existing code.
-- Name variables, functions and components for what they mean in the domain,
-  such as `metricContract`, `selectedDataset` or `approvedAt`. Do not abbreviate
-  (`ds`, `col`, `m`, `tmp`, `res`); single letters are only for short loop
-  indexes.
-- Write no docstrings in Python: not for modules, classes or functions. Names and
-  type hints carry the meaning; a short comment explains why. Scripts in
-  `scripts/` keep their module docstring because `argparse` shows `__doc__` as
-  their `--help` text.
-- Inside a module import relatively; put the relative imports after the
-  absolute ones (Ruff rule `I`).
+`Admin` gets all four permissions. The view menu and the API permission are declared admin-only, and the permissions are
+revoked from `Alpha`, `Gamma`, `Public` and `sql_lab`, so Superset's role sync never hands them out. Dataset-level
+checks also require Superset's own access to each dataset. In the frontend, `canOpenSection` lets `chat` open with
+`can_query`, `own-knowledge` only for admins, and every other section with `can_view`. There is no role-assignment
+screen in the page; admins use `PUT /auth/role-assignments/<user_id>` or Superset's user management.
+
+## Database tables
+
+Every extension table lives in the PostgreSQL schema `text_to_bi` of Superset's metadata database
+(`common/base_model.py`: `TEXT_TO_BI_SCHEMA`); Superset's own tables (`tables`, `ab_user`, `ab_role`, …) are only read
+or referenced. Each module creates its own tables in an idempotent `ensure_*` function in its `migrations.py`:
+
+| Module | `ensure_*` | Tables |
+| --- | --- | --- |
+| `data_dictionary` | `ensure_data_dictionary_tables` | `table_dictionaries`, `table_column_roles`, `table_time_grains`, `indicator_aggregations`, `column_dictionaries`, `column_aggregations`, `column_synonyms` |
+| `business_model` | `ensure_business_model_tables` | `business_domains`, `business_domain_tables`, `data_layers`, `dataset_layers`, `business_canvases` |
+| `data_lineage` | `ensure_data_lineage_tables` | `lineage_canvases`, `lineage_edges`, `lineage_transformations`, `lineage_transformation_inputs`, `lineage_column_dependencies` |
+| `metric_management` | `ensure_metric_tables` | `metrics`, `metric_domains` |
+| `glossary_management` | `ensure_glossary_tables` | `glossary_terms`, `glossary_revisions`, `glossary_links`, `glossary_term_domains` |
+| `expert_rule_management` | `ensure_expert_rule_tables` | `expert_rules`, `expert_rule_revisions`, `expert_rule_glossary_links`, `expert_rule_metric_links`, `expert_rule_domains` |
+| `own_knowledge` | `ensure_own_knowledge_tables` | `own_knowledge_clarifications`, `own_knowledge_proposals`, `own_knowledge_entries` |
+| `conversation` | `ensure_conversation_tables` | `conversations`, `conversation_turns`, `conversation_turn_feedback` |
+| `text2sql` | `ensure_text2sql_tables` | `text2sql_chat_checkpoints`, `text2sql_ingestion_jobs` |
+| `auth` | `ensure_auth_roles` | none; seeds the roles above in Superset's security tables |
+
+An `ensure_*` function runs once per process under a `pg_advisory_lock`, creates the schema if needed and calls
+`create_all(checkfirst=True)` for its tables; it first ensures the modules its foreign keys depend on.
+`ensure_text2sql_tables` ensures the own-knowledge chain (rules, glossary, metrics, business model) and the conversation
+tables. Routes call the `ensure_*` of the tables they touch before using them.
+
+## Backend conventions
+
+- Inside a module import relatively (`from ..models import Metric`); across modules and into `common`/`core` import
+  absolutely from `text_to_bi.superset_text_to_bi...`. Relative imports come after absolute ones (Ruff `I`).
+- Route classes use `@api(..., resource_name=...)` on `RestApi` with `class_permission_name = API_CLASS_PERMISSION`.
+  Decorator order on a writing route: `@expose`, `@protect()`, `@safe`, `@permission_name("write")`,
+  `@csrf_protected`, `@rollback_on_error`, `@handle_errors`. A GET route uses `@permission_name("read")` and drops
+  `csrf_protected` and `rollback_on_error` but keeps `handle_errors`. `handle_errors` turns an `AppError`
+  (`common/base_exceptions.py`) into its status with `{"code", "message"}` and rolls the session back.
+- Read shared environment variables through `settings` in `core/config.py`, never `os.getenv` in a module.
+- LangGraph runs graph nodes and agent tool steps on pool threads that never end an app context, so a `db.session`
+  opened there stays idle in transaction and holds locks (this hung `ensure_*` migrations). Wrap every function that
+  LangGraph runs on its threads and that may touch the database with `release_thread_session`
+  (`common/utils/thread_session.py`), as `chat_service.py` and `agent_tools.py` do.
+- A thread started from a request must keep the Superset user: use `with_request_user`
+  (`modules/text2sql/services/chat_stream.py`), which copies the request context and `g.user`. The chat streams SSE at
+  `POST /text2sql/chat/stream` this way.
+- Write no docstrings; a short comment explains why. Scripts in `scripts/` keep their module docstring because
+  `argparse` shows it as `--help`.
 - Store timezone-aware datetimes normalized to UTC.
-- Write commit messages as Conventional Commits:
-  `<type>(<scope>): <description>`, for example
-  `fix(semantic-layer): answer an expert rule name collision with 400`.
 
-Ruff configuration is in the root `pyproject.toml` and each extension backend's
-`pyproject.toml`, with the 120-character line length (`E501`) and import order
-(`I`) checked. The frontends have no formatter; follow the same limit by hand.
+## Frontend conventions
+
+- React 17 with Module Federation (`webpack.config.js`); React and ReactDOM come from Superset as shared singletons.
+  `lib/react-compat.ts` shims `useSyncExternalStore` and `useId`, which React 17 lacks.
+- Components are shadcn `base-nova` on Base UI, not Radix: compose with the `render` prop instead of `asChild`
+  (`<Button render={<Link href=... />} />`).
+- Under React 17 a trigger passed through another part's `render` loses its ref unless it uses `React.forwardRef`;
+  write custom triggers and inputs with `forwardRef`.
+- Pass `items` to a Base UI `Select` so the selected value shows its label instead of the raw value.
+- Tailwind v4 is scoped to the extension: `globals.css` imports only theme and utilities (no preflight), base rules are
+  written under `:where(.tb-page)`, and `AppShell` renders the `.tb-page` root that popups portal into. Do not add
+  global CSS that reaches Superset's own pages.
+- Call the APIs through `lib/api.ts` (`apiFetch`), which handles Superset's cookies and CSRF token; build links with
+  `pageHref` from `lib/navigation.tsx`.
+
+## Code style and commits
+
+The full rules are in `docs/handbook/quy-uoc-code.md`. For Python and TypeScript alike, lines may be up to 120
+characters; keep anything that fits on one line, and do not run `ruff format` or Prettier over existing code. Name things
+for what they mean in the domain and do not abbreviate. Ruff checks line length (`E501`) and import order (`I`) from the
+root `pyproject.toml` and `extensions/text-to-bi/backend/pyproject.toml`; the frontend has no formatter.
+
+Commit messages are Conventional Commits, `<type>(<scope>): <description>`, with scopes such as `text-to-bi`,
+`text2sql`, `scripts`, `simulation` and `docs`:
+
+```text
+feat(text-to-bi): add the lineage section to the data model menu
+fix(text2sql): release the LangGraph thread session after each tool step
+build(scripts): deploy only the text-to-bi bundle
+docs(handbook): describe the own-knowledge review flow
+```
+
+## Known gaps
+
+- `test_data_dictionary_api.py`, `test_data_dictionary_autofill.py` and `test_migrations.py` fail at collection and
+  every test in `test_auth.py` errors in its setup, because `backend/tests/conftest.py` has no stubs for
+  `superset.connectors` and `superset.models.core`. Only `test_common.py` runs.
+- The Qdrant index is rebuilt with `POST /text2sql/ingestion/sync {"database_id": ...}` (admin only); there is no UI for
+  it yet.
+- Own-knowledge entries are created only through the agent API (`POST /own-knowledge/clarifications`, then its
+  `/answer`), not by the chat; admins review them in "Tri thức riêng".
+- The metric-promotion form duplicates the metric editor.
+- `superset-init` still runs `bootstrap_governance.py`, which builds the "Tổng quan AI Agent" dashboard on the removed
+  AI Agent's question-log tables.
 
 ## Local configuration and secrets
 
-Local settings and secrets live in one `.env` at the repository root, next to
-`docker-compose.yml`; `.env.example` lists its variables. Compose reads it to
-fill the `${...}` values in `docker-compose.yml` and loads it into the
-`superset-init` and `superset` containers, where both extensions read
-`OPENROUTER_API_KEY`. Extensions keep no `.env` of their own. Each extension
-reads the environment variables its modules share through one `Settings` class
-in `core/config.py` (pydantic-settings, Python 3.10 compatible); add a new
-shared variable there instead of calling `os.getenv` in a module. The file is not
-source code: keep credentials and API keys out of commits, bundles, and
-documentation. The Compose defaults are for local development; set real secrets
-in `.env` before exposing the stack outside the development machine, then
-recreate the containers with `docker compose up -d`.
+Local settings and secrets live in one `.env` at the repository root, next to `docker-compose.yml`; `.env.example`
+lists its variables. Compose reads it to fill the `${...}` values in `docker-compose.yml` and loads it into
+`superset-init`, `superset` and `superset-worker`. The extension reads `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`,
+`OPENROUTER_MODEL`, `QDRANT_URL` and the `TEXT2SQL_*` variables through the `Settings` class in `core/config.py`
+(pydantic-settings); add a new shared variable there. Keep credentials and API keys out of commits, bundles and
+documentation. The Compose defaults are for local development; set real secrets in `.env` before exposing the stack,
+then recreate the containers with `docker compose up -d`.

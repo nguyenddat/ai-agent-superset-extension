@@ -1,67 +1,69 @@
 # Auth API của Text to BI
 
-Trang này mô tả API do extension cung cấp tại resource `auth`. API dùng phiên đăng nhập và các bảng bảo mật có sẵn của Superset; module không tạo bảng user, role hay association riêng.
-
-Nguồn triển khai: [routes](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/routes/route_auth.py), [schemas](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/schemas/schema_auth.py), [role permissions](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/services/srv_roles.py).
-
-## API native Superset và API extension
-
-Superset sở hữu user (`ab_user`), role (`ab_role`), permission (`ab_permission`, `ab_view_menu`, `ab_permission_view`) và các association user-role/role-permission. Model trong `modules/auth.models` chỉ import alias model Flask-AppBuilder của Superset. Module auth không thay thế API native Superset dùng để quản trị user hoặc role chung.
-
-Các endpoint `/auth/...` dưới đây là API extension. Chúng seed bốn role Text to BI vào bảng role có sẵn và gán quyền vào permission view `Text to BI`; các thao tác user-role ghi thẳng association `ab_user_role` thông qua Superset security manager. Endpoint gán nhóm role chung nhận ID role Superset, không tạo role mới thay thế hệ thống phân quyền Superset.
-
-API native Superset để quản trị user, role và dataset vẫn được phục vụ bởi Superset; extension không chuyển tiếp hay thay thế các endpoint đó. Các endpoint trong bảng tiếp theo chỉ quản lý role assignment theo nhu cầu Text to BI.
-
 Base resource: `/extensions/text-to-bi/superset-text-to-bi/auth`.
 
-## Role và quyền
+Nguồn: [routes](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/routes/route_auth.py),
+[schemas](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/schemas/schema_auth.py),
+[role](../../extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/auth/services/srv_roles.py).
 
-| Role Text to BI | Quyền extension |
-| --- | --- |
-| `Text to BI Viewer` | Xem API và metadata dataset mà user có quyền đọc trong Superset |
-| `Text to BI Editor` | Quyền Viewer và sửa metadata trên dataset user được phép truy cập |
-| `Text to BI Steward` | Quyền xem, sửa và review semantic metadata theo permission `can_review` |
-| `Text to BI Query` | Gọi khả năng query trên dataset user có quyền đọc |
-| `Admin` | Quyền quản trị; được xem/sửa mọi dataset theo permission Superset tương ứng |
-
-Permission route-level `can_read`/`can_write` chỉ mở API class. Service/route tiếp tục kiểm tra quyền Text to BI và quyền dataset Superset; quyền `Admin` không bỏ qua ACL dataset. Một số thao tác review trong các module nghiệp vụ có thể giới hạn Admin riêng.
+API dùng phiên đăng nhập và bảng bảo mật của Superset (`ab_user`, `ab_role`, `ab_user_role`...). API không tạo, sửa,
+khóa hay xóa user hoặc role Superset; quản trị chung vẫn qua màn hình và API của Superset. Cách role và permission được
+seed xem [module auth](text-to-bi-auth.md).
 
 ## Endpoint
 
-| Method | Path | Mục đích và quyền |
-| --- | --- | --- |
-| GET | `/me` | Trả user hiện tại và cờ `is_admin`, `can_view`, `can_edit`, `can_query`, `can_review`; cần đăng nhập và permission đọc API |
-| GET | `/role-assignments` | Trả danh sách role Text to BI và user Superset đang hoạt động cùng role hiện tại; chỉ Admin |
-| PUT | `/role-assignments/<user_id>` | Thay các role Text to BI của user theo tên; chỉ Admin |
-| GET | `/users/<user_id>/roles` | Đọc toàn bộ role Superset đang gán cho user; chỉ Admin |
-| PUT | `/users/<user_id>/roles` | Thay toàn bộ role của user bằng danh sách `role_ids`; chỉ Admin |
-| POST | `/users/<user_id>/roles/<role_id>` | Gán thêm role Superset cho user; chỉ Admin |
-| DELETE | `/users/<user_id>/roles/<role_id>` | Gỡ role Superset khỏi user; chỉ Admin |
+| Method | Path | Quyền | Response 200 |
+| --- | --- | --- | --- |
+| GET | `/me` | Đăng nhập, `can_read` | `{user_id, username, name, is_admin, can_view, can_edit, can_query, can_review}` |
+| GET | `/role-assignments` | Admin | `{roles: [{name, description}], users: [RoleAssignment]}` |
+| PUT | `/role-assignments/<user_id>` | Admin, CSRF | `RoleAssignment` |
+| GET | `/users/<user_id>/roles` | Admin | `UserRoles` |
+| PUT | `/users/<user_id>/roles` | Admin, CSRF | `UserRoles` |
+| POST | `/users/<user_id>/roles/<role_id>` | Admin, CSRF | `UserRoles` |
+| DELETE | `/users/<user_id>/roles/<role_id>` | Admin, CSRF | `UserRoles` |
 
-### Payload và response chính
+- `RoleAssignment`: `{user_id, username, name, is_admin, roles, other_roles}`; `roles` là các role Text to BI của user,
+  `other_roles` là mọi role khác. `GET /role-assignments` liệt kê mọi user đang hoạt động.
+- `UserRoles`: `{user_id, username, role_ids, roles}`, sắp theo tên role.
+- `/me` trả cờ quyền đã tính cả Admin (Admin có mọi cờ `can_*`). Frontend gọi nó khi tải trang để dựng menu; mục Tri
+  thức riêng gọi `GET /role-assignments` để hiển thị tên user.
 
-`PUT /role-assignments/<user_id>` nhận:
+## Payload
+
+`PUT /role-assignments/<user_id>`:
 
 ```json
 {"roles": ["Text to BI Viewer", "Text to BI Query"]}
 ```
 
-Tên role phải nằm trong bốn role Text to BI; danh sách tối đa 10 phần tử. Thay nhóm Text to BI giữ lại các role khác của user, gồm role Superset hiện có.
+Tối đa 10 tên, mỗi tên phải là một trong bốn role Text to BI; tên trùng bị bỏ. Lệnh chỉ thay nhóm role Text to BI,
+giữ nguyên mọi role khác của user.
 
-`PUT /users/<user_id>/roles` nhận:
+`PUT /users/<user_id>/roles`:
 
 ```json
 {"role_ids": [3, 8]}
 ```
 
-`role_ids` tối đa 100 phần tử. ID không tồn tại làm request thất bại; danh sách trùng được loại bỏ. Đây là thay toàn bộ danh sách role của user, nên client cần gửi mọi role muốn giữ lại. `POST`/`DELETE` thay đổi từng association và không xóa role khỏi Superset.
+Tối đa 100 ID; ID trùng bị bỏ; một ID không tồn tại làm cả request thất bại. Lệnh thay toàn bộ role Superset của user,
+kể cả role ngoài Text to BI, nên client phải gửi mọi role muốn giữ. `POST` và `DELETE` chỉ thêm hoặc gỡ một liên kết
+user-role, không xóa role.
 
-Response role assignment gồm `user_id`, `username`, `name`, `is_admin`, `roles`, `other_roles`. Response CRUD role chung gồm `user_id`, `username`, `role_ids`, `roles`. `/me` trả các trường quyền cùng `user_id`, `username`, `name`.
+## Bảo mật và lỗi
 
-## Bảo mật, CSRF và lỗi
+Mọi route có `@protect()` của Flask-AppBuilder: cần phiên Superset và permission `can_read` (GET) hoặc `can_write`
+(ghi) trên `text_to_bi_api`. Route ghi kiểm tra header `X-CSRFToken`. Các route ngoài `/me` còn yêu cầu role `Admin`.
+Mọi route gọi `ensure_auth_roles()` trước khi đọc hoặc ghi, riêng `/me` chỉ gọi khi user có ít nhất một quyền.
 
-Tất cả endpoint yêu cầu phiên Superset hợp lệ qua Flask-AppBuilder `@protect`. Thao tác ghi (`PUT`, `POST`, `DELETE`) cần CSRF token theo cơ chế Superset; gửi cookie phiên cùng header `X-CSRFToken`. Các endpoint gán role yêu cầu người gọi thuộc role `Admin`, kể cả khi người đó có quyền ghi API class.
+| Status | `code` | Khi nào |
+| --- | --- | --- |
+| 401 | `sign_in_required` | Chưa đăng nhập |
+| 403 | `admin_required` | Người gọi không phải Admin |
+| 403 | `csrf_token_invalid` | Thiếu hoặc sai CSRF token |
+| 404 | `user_not_found` | `user_id` không tồn tại |
+| 404 | `role_not_found` | Role Text to BI chưa có trong Superset khi gán theo tên |
+| 422 | `invalid_role_assignment` | Tên role ngoài bốn role Text to BI, hoặc `role_id` không tồn tại |
+| 422 | `invalid_request` | Body sai schema hoặc có field lạ |
+| 500 | `internal_error` | Lỗi không dự kiến; transaction được rollback |
 
-Các lỗi module trả JSON `{ "code", "message" }`: chưa đăng nhập `401`; không đủ quyền `403`; user hoặc role không tồn tại `404`; role/body không hợp lệ `422`; lỗi không dự kiến `500`. Body Pydantic cấm field ngoài schema; lỗi validation không trả chi tiết input lên client.
-
-Role Text to BI được tạo idempotent khi module bootstrap. Module dùng bảng Superset sẵn có; không có migration tạo bảng.
+Lỗi validation không trả lại chi tiết input. Flask-AppBuilder tự trả 401/403 dạng `{msg}` khi `@protect()` từ chối.

@@ -1,41 +1,24 @@
 # API Text2SQL
 
-API class: `Text2SqlAPI` (`resource_name="text2sql"`). Đường dẫn extension là
-`/extensions/text-to-bi/superset-text-to-bi/text2sql`. Mọi endpoint yêu cầu phiên Superset đã đăng nhập và quyền chung
-`text_to_bi_api`. Thao tác đọc cần `can_read`; thao tác ghi cần `can_write`; quản trị ingestion còn yêu cầu vai trò
-Superset Admin. Mọi thao tác ghi đều cần CSRF. Chat và retrieval yêu cầu vai trò Text to BI Query, quyền chạy SQL Lab và quyền truy cập
-Superset vào ít nhất một dataset thuộc database được chọn. API dùng ID database và dataset dạng số của Superset; user
-được xác định từ phiên hiện tại. Lỗi trả `{code, message}`, trừ endpoint phát SSE.
+API class `Text2SqlAPI` (`resource_name="text2sql"`), đường dẫn `/extensions/text-to-bi/superset-text-to-bi/text2sql`. Mọi endpoint cần phiên Superset đã đăng nhập và quyền chung `text_to_bi_api` (`can_read` cho `GET /chart-types`, `GET /ingestion/jobs`, `POST /retrieve`; `can_write` cho các POST còn lại). Endpoint ghi có CSRF cần header `X-CSRFToken`. User lấy từ phiên. Lỗi trả `{code, message}`; với `/chat/stream`, lỗi sau khi stream đã mở đến dưới dạng sự kiện `error`.
+
+"Query trên database" nghĩa là: database tồn tại, engine `postgresql`, có ít nhất một dataset, và người dùng qua `require_query` (role Text to BI Query hoặc Admin, cộng quyền đọc dataset Superset) trên mọi dataset của database. Truy vấn thật còn cần `can_execute_sql_query` trên `SQLLab` và quyền database của Superset.
 
 | Method và path | Quyền | Request/query | Phản hồi thành công |
 | --- | --- | --- | --- |
-| `POST /chat` | write + CSRF + Query | JSON `{database_id, question, conversation_id?, resume_id?, chat_history?: [{question, answer?}]}`; `question` 1–2000 ký tự, tối đa 50 lượt trong history | `200 {result: ChatOut}` |
-| `POST /chat/stream` | write + CSRF + Query | Cùng JSON `ChatIn` | `200 text/event-stream`; SSE có tên sự kiện cho nội dung/công cụ từng bước, kết quả cuối hoặc lỗi |
-| `GET /chart-types` | read | Không có body | `200 {result: danh mục loại biểu đồ}` |
-| `POST /charts/validate` | write + CSRF | JSON `{chart: object, fields: FieldOut[≤100], rows: array[≤1000], rows_complete?: boolean}` | `200 {chart, warnings, chart_types}` |
-| `POST /retrieve` | read + Query | JSON `{database_id, question: 1–2000 ký tự, k?: 1–10}`; mặc định `k=5` | `200 {candidates: CandidateOut[]}` |
-| `POST /ingestion/sync` | write + Admin + CSRF | JSON `{database_id, topics?: string[]}` | `200 {result: {database_id, topics, total, indexed, unchanged, deleted}}` |
-| `POST /ingestion/jobs` | write + Admin + CSRF | JSON `{database_id, topics?: string[]}` | `202 {database_id, topics}` |
-| `GET /ingestion/jobs` | read + Admin | Query tùy chọn: `database_id`, `status`; `limit=50` (1–200) | `200 {result: JobOut[]}` |
+| `POST /chat` | write + CSRF + query trên database | JSON `ChatIn` | `200 {result: ChatOut}` |
+| `POST /chat/stream` | write + CSRF + query trên database | JSON `ChatIn` | `200 text/event-stream`; sự kiện xem [Text2SQL](text-to-bi-text2sql.md#luồng-sse-post-text2sqlchatstream) |
+| `GET /chart-types` | read | Không body | `200 {result: {version, palette, enabled, types}}` |
+| `POST /charts/validate` | write + CSRF | JSON `{chart: object, fields: FieldOut[≤100], rows: array[≤1000], rows_complete?: boolean = true}` | `200 {chart, warnings, chart_types}`; spec sai trả `422 text2sql_chart_invalid`, `message` liệt kê từng lỗi |
+| `POST /retrieve` | read + query trên database | JSON `{database_id, question: 1–2000, k?: 1–10 = 5}` | `200 {candidates: [{metric_id, table_id, name, label, description, score, matched_topics}]}` |
+| `POST /ingestion/sync` | write + CSRF + Admin + query trên database | JSON `{database_id, topics?: string[]}` | `200 {result: {database_id, topics, total, indexed, unchanged, deleted}}` |
+| `POST /ingestion/jobs` | write + CSRF + Admin + query trên database | JSON `{database_id, topics?: string[]}` | `202 {database_id, topics}` |
+| `GET /ingestion/jobs` | read + Admin | Query tùy chọn `database_id` (kiểm tra như query trên database), `status`, `limit` (1–200, mặc định 50) | `200 {result: JobOut[]}`, mới nhất trước |
 
-`database_id` phải là ID dương của Superset database. Chat/retrieve hiện chỉ hỗ trợ database PostgreSQL trong Superset và
-yêu cầu ít nhất một dataset người dùng được phép đọc trên database đó. Hai endpoint kiểm tra quyền dataset và SQL Lab;
-SQL do agent tạo chạy qua Superset SQL Lab dưới dạng một câu `SELECT` chỉ đọc, có allowlist bảng và giới hạn số hàng.
-Quyền SQL Lab cụ thể và hành vi row-level security còn tùy cấu hình Superset.
+`ChatIn`: `database_id` (> 0), `question` (1–2000, không chỉ khoảng trắng), `conversation_id` (UUID, tùy chọn: thêm lượt vào hội thoại của user trên cùng database; bỏ trống thì tạo hội thoại mới), `resume_id` (UUID, tùy chọn: tiếp tục lượt đang chờ hỏi lại, khi đó `question` là câu trả lời), `chat_history` (≤ 50 mục `{question, answer?}`; bị bỏ qua vì backend đọc lịch sử từ hội thoại đã lưu).
 
-Các topic được hỗ trợ: `table`, `column`, `metric`, `glossary`, `expert_rule`, `own_knowledge`. Bỏ `topics` nghĩa là
-chọn tất cả. Sync trực tiếp chạy đồng bộ, dùng cho lần index đầu hoặc thao tác vận hành có kiểm soát. Enqueue job trả
-ngay sau khi ghi hàng đợi; Celery xử lý bất đồng bộ. Thay đổi Superset dataset/cột hoặc từ điển, metric, glossary,
-expert rule, own knowledge của Text to BI sẽ enqueue event job trong cùng transaction metadata. Thay đổi cấu trúc lên
-lịch mọi topic vì tài liệu ngữ nghĩa phụ thuộc cấu trúc dataset/cột. Extension chỉ gửi job tới
-`process_ingestion_job` sau commit. Việc gửi chỉ diễn ra khi user gây ra thay đổi truy cập được mọi dataset trong
-database: index một phần có thể xóa nhầm point của dataset khác trong index dùng chung. Nếu user không có đủ quyền,
-event job vẫn được lưu nhưng không gắn requester và giữ trạng thái chờ; thay đổi tương ứng sau đó từ user có quyền đầy
-đủ sẽ cập nhật requester và gửi job. Nếu gửi thất bại, job còn ở trạng thái chờ và sẽ được thử gửi lại khi có thay đổi
-metadata phù hợp tiếp theo. Listener bỏ qua enqueue nếu bảng queue chưa tồn tại; chat, chat stream và các endpoint
-ingestion sẽ tạo bảng module khi cần. Nếu thay đổi xảy ra trước khi queue được khởi tạo, sau khi queue đã được migrate,
-hãy gọi `POST /ingestion/sync` chỉ với `database_id` (bỏ `topics`) để chạy sync đầy đủ cho tất cả topic.
+`ChatOut`: `answer`, `status` (`answered` hoặc `needs_clarification`), `clarification_question`, `clarification_options`, `resume_id`, `resume_expires_at`, `conversation_id`, `turn_id`, `history_answer` (câu trả lời còn nhãn PII, dùng cho bước viết lại câu hỏi ở lượt sau), `preprocess` (câu hỏi viết lại, câu hỏi con, giai đoạn chạy, tri thức tìm được) và `answers` (mỗi câu hỏi con: `position`, `question`, `answer`, `exhausted`, `steps` gồm SQL, cột, dòng, giải thích, biểu đồ).
 
-`ChatOut` gồm answer/status, thông tin clarification và resume tùy chọn, ID conversation/turn, preprocessing và câu trả
-lời từng câu hỏi. `JobOut` gồm ID job, database, topic, source, status, số lần thử, thời điểm, lỗi và kết quả. Trạng
-thái job hợp lệ: `pending`, `running`, `succeeded`, `failed`, `superseded`; source gồm event, schedule, manual.
+Topic hợp lệ: `table`, `column`, `metric`, `glossary`, `expert_rule`, `own_knowledge`; bỏ `topics` là chọn tất cả, topic lạ trả `422`. `/ingestion/sync` chạy đồng bộ trong request; dùng nó để dựng lại toàn bộ chỉ mục Qdrant của một database (`{"database_id": <id>}`). `/ingestion/jobs` ghi job `manual` cho từng topic (gộp với job `pending` sẵn có của cùng database và topic), commit, rồi gửi mọi job `pending` của các topic đó tới Celery task `text_to_bi.text2sql.process_ingestion_job`.
+
+`JobOut`: `id`, `database_id`, `topic`, `source` (`event`, `schedule`, `manual`), `status` (`pending`, `running`, `succeeded`, `failed`, `superseded`), `attempts`, `run_after`, `started_at`, `finished_at`, `last_error`, `result`, `created_at`. Job `event` sinh tự động khi metadata thay đổi; quy tắc tạo và gửi job xem [Text2SQL](text-to-bi-text2sql.md#chỉ-mục-qdrant-và-ingestion). Hiện không có code nào tạo job `schedule`.

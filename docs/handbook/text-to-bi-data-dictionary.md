@@ -1,50 +1,92 @@
 # Module `data_dictionary` của Text to BI
 
-Module nằm tại `extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/`. Module đọc catalog database, dataset và cột do Superset quản lý, đồng thời lưu các chú giải nghiệp vụ riêng của Text to BI.
+Module nằm tại `extensions/text-to-bi/backend/src/text_to_bi/superset_text_to_bi/modules/data_dictionary/`. Module đọc
+database, dataset và cột do Superset quản lý, và lưu phần mô tả nghiệp vụ của Text to BI cho từng dataset. Đây là nguồn
+ngữ nghĩa chính cho agent Hỏi dữ liệu và cho các module mô hình, dòng dữ liệu, metric. Endpoint xem
+[Data Dictionary API](text-to-bi-data-dictionary-api.md).
 
 ## Catalog Superset
 
-`models/superset_catalog.py` export alias tới model Superset, không định nghĩa lại model và không tạo các bảng này:
+`models/superset_catalog.py` export alias tới model Superset, không định nghĩa lại và không tạo bảng:
 
-| Alias | Model Superset | Bảng Superset | Dữ liệu chính |
-| --- | --- | --- | --- |
-| `SupersetDatabase` | `Database` | `dbs` | Kết nối database đã đăng ký |
-| `SupersetDataset` | `SqlaTable` | `tables` | Dataset, database ID, tên bảng, schema, catalog |
-| `SupersetDatasetColumn` | `TableColumn` | `table_columns` | Tên, kiểu và metadata cột của dataset |
-
-`repositories/repo_superset_catalog.py` cung cấp truy vấn đọc cho ba model. `services/srv_superset_catalog.py` gom các truy vấn này thành `SupersetCatalogService`; dependency `superset_catalog_service()` dùng `superset.extensions.db.session` hiện hành.
-
-Metadata mở rộng nằm trong schema `text_to_bi`. `TableDictionary.dataset_id` và `ColumnDictionary.dataset_id` tham chiếu trực tiếp `tables.id`; `referenced_dataset_id` cũng tham chiếu dataset Superset. Metadata cột được định danh bằng `(dataset_id, column_name)`, không bằng `table_columns.id`, vì ID dòng cột thuộc vòng đời đồng bộ catalog. Kiểu dữ liệu và cờ thời gian được đọc từ `table_columns`.
-
-Các bảng metadata do extension sở hữu:
-
-| Model | Bảng | Mục đích |
+| Alias | Model Superset | Bảng |
 | --- | --- | --- |
-| `TableDictionary` | `text_to_bi.table_dictionaries` | Tên hiển thị, mô tả, grain, loại/layout dataset, PII và liên kết catalog chỉ số |
-| `ColumnDictionary` | `text_to_bi.column_dictionaries` | Thuật ngữ nghiệp vụ, semantic role, temporal kind, unit/format, key/reference và PII |
-| `TableColumnRole` | `text_to_bi.table_column_roles` | Gán vai trò cho cột theo dataset |
-| `TableTimeGrain` | `text_to_bi.table_time_grains` | Grain theo loại dòng |
-| `IndicatorAggregation` | `text_to_bi.indicator_aggregations` | Aggregation theo mã chỉ số của catalog |
-| `ColumnAggregation` | `text_to_bi.column_aggregations` | Aggregation được phép cho cột measure |
-| `ColumnSynonym` | `text_to_bi.column_synonyms` | Tên gọi khác của cột |
+| `SupersetDatabase` | `Database` | `dbs` |
+| `SupersetDataset` | `SqlaTable` | `tables` |
+| `SupersetDatasetColumn` | `TableColumn` | `table_columns` |
+| `SupersetMetric` | `SqlMetric` | `sql_metrics` |
 
-## Repository, service và route
+Các module khác import alias từ đây. `repositories/repo_superset_catalog.py` và `services/srv_superset_catalog.py` đọc
+catalog bằng session hiện hành; việc tìm dataset theo quyền người gọi đi qua `modules/superset`
+([Superset integration](text-to-bi-superset-api.md)).
 
-`repositories/` chứa repository cho dictionary cấp dataset, dictionary cấp cột, các bảng con và catalog Superset. `services/dictionary_service.py` kiểm tra và tổng hợp metadata nghiệp vụ; `services/autofill_service.py` tạo gợi ý bằng mô hình ngôn ngữ. `dependencies.py` khởi tạo các service bằng session Superset.
+## Dữ liệu của module
 
-`routes/route_data_dictionary.py` đăng ký API resource `data-dictionary`:
+Bảy bảng trong schema `text_to_bi`:
 
-| Method | Path | Mục đích |
+| Model | Bảng | Nội dung |
 | --- | --- | --- |
-| GET | `/summary` | Tổng hợp dataset có thể truy cập, theo database và schema |
-| GET | `/stats` | Thống kê dictionary và các dataset được tham chiếu |
-| GET | `/datasets/<dataset_id>` | Đọc dictionary cùng metadata Superset của dataset/cột |
-| PUT | `/datasets/<dataset_id>` | Tạo hoặc cập nhật metadata dataset |
-| PUT | `/datasets/<dataset_id>/columns` | Lưu metadata cho các cột |
-| POST | `/datasets/<dataset_id>/autofill` | Stream gợi ý qua Server-Sent Events |
+| `TableDictionary` | `table_dictionaries` | Tên hiển thị, mô tả, mô tả grain, `table_kind`, `layout`, danh mục chỉ số, PII |
+| `TableColumnRole` | `table_column_roles` | Vai trò cấu trúc của cột trong bảng (`time`, `created_at`, `row_kind`, vai trò chỉ số) |
+| `TableTimeGrain` | `table_time_grains` | Độ chi tiết thời gian, theo từng loại dòng nếu bảng có cột `row_kind` |
+| `IndicatorAggregation` | `indicator_aggregations` | Phép tổng hợp theo mã chỉ số của bảng danh mục |
+| `ColumnDictionary` | `column_dictionaries` | Tên hiển thị, mô tả, thuật ngữ, `semantic_role`, `temporal_kind`, đơn vị, định dạng, khóa, tham chiếu, PII |
+| `ColumnAggregation` | `column_aggregations` | Phép tổng hợp được phép cho cột `measure` |
+| `ColumnSynonym` | `column_synonyms` | Tên gọi khác của cột |
 
-Route kiểm tra quyền đọc/sửa dataset theo security manager Superset. Các route ghi yêu cầu CSRF và commit trong cùng metadata session; autofill commit theo từng sự kiện trước khi gửi sự kiện đó.
+`TableDictionary.dataset_id` và `ColumnDictionary.dataset_id` tham chiếu `tables.id` (xóa dataset thì xóa từ điển).
+Cột được định danh bằng `(dataset_id, column_name)`, không bằng `table_columns.id`, vì Superset có thể đổi ID cột khi
+đồng bộ. Kiểu dữ liệu, cờ thời gian và cột tính toán luôn đọc từ Superset. `ColumnDictionary.referenced_dataset_id` và
+`referenced_column_name` khai báo khóa ngoại nghiệp vụ; module `data_lineage` suy ra cạnh quan hệ từ chúng.
 
-## Migration
+`ensure_data_dictionary_tables()` (`migrations.py`) tạo riêng bảy bảng với `checkfirst` dưới advisory lock
+`74_116_301`, khóa dùng chung với migration tổng `migrations.py` và migration của `business_model`, `data_lineage`. Route gọi hàm này trước khi đọc hoặc ghi.
 
-`migrations.py` của module cung cấp `ensure_data_dictionary_tables()`. Hàm chỉ tạo bảy bảng extension trong schema `text_to_bi`, dùng `checkfirst` và PostgreSQL advisory lock để chạy an toàn giữa các worker. Model Superset được nạp vào SQLAlchemy metadata để khai báo FK, nhưng không được đưa vào danh sách tạo bảng. Các route gọi migration trước khi truy cập dữ liệu.
+## Quy tắc
+
+- Đọc cần `can_view` và quyền truy cập dataset trong Superset. Ghi và tự động điền cần `can_edit` cộng quyền truy cập
+  dataset. Dataset người gọi không thấy trả 404 như không tồn tại.
+- `layout` là `wide`, `indicator_values` hoặc `indicator_catalog`; mỗi layout có tập vai trò cột cho phép và bắt buộc
+  (`indicator_values` cần `indicator_key` và `value`; `indicator_catalog` cần `catalog_key`, `catalog_code`,
+  `catalog_name`). Bảng `indicator_values` có thể trỏ tới một danh mục chỉ số: dataset khác, cùng database, đọc được,
+  đã lưu với layout `indicator_catalog`. `indicator_aggregations` (tối đa 20 mã) chỉ dùng cho bảng danh mục có cột vai
+  trò `catalog_aggregation`.
+- `table_kind`: `base` hoặc `aggregate`. `semantic_role` của cột: `key`, `measure`, `dimension`, `label`, `time`,
+  `row_kind`, `attribute`; cột chưa lưu có vai trò mặc định suy từ kiểu và tên. `temporal_kind`: `date` hoặc
+  `timestamp`. Phép tổng hợp cột chỉ dành cho `measure`.
+- Cột tham chiếu phải thuộc dataset cùng database mà người gọi đọc được và cột đó phải tồn tại; không được trỏ vào
+  chính nó. Mô tả tối đa 2.000 ký tự; tối đa 20 từ đồng nghĩa mỗi cột, mỗi từ tối đa 100 ký tự, trùng bị loại.
+- Lưu cột chỉ thay các cột gửi lên; cột không gửi giữ nguyên.
+- Mọi thay đổi trên bảng từ điển (và trên dataset, cột Superset) xếp job đồng bộ chỉ mục Qdrant của Text2SQL cho
+  database liên quan (`modules/text2sql/services/ingestion_triggers.py`).
+
+## Tự động điền
+
+`services/autofill_service.py` gọi mô hình ngôn ngữ (cấu hình `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`,
+`OPENROUTER_MODEL` trong `core/config.py`) qua `services/dictionary_suggester.py`. Cột được gửi theo lô 8 cột, tối đa
+300 cột mỗi dataset. Gợi ý chỉ điền chỗ còn trống: tên hiển thị còn bằng tên cột hoặc trống, mô tả, thuật ngữ, đơn vị
+chưa có; dòng mới ưu tiên tên và mô tả Superset đã có. Sau các cột, mô hình gợi ý tên, mô tả, grain của bảng và cột
+`created_at` nếu bảng chưa có. Mỗi lô được commit trước khi gửi sự kiện SSE. `services/autofill_lock.py` giữ advisory
+lock theo dataset nên hai lượt tự động điền trên cùng dataset không chạy song song.
+
+## Giao diện
+
+Menu **Mô hình dữ liệu**, mục **Từ điển** (`/text-to-bi/?section=dictionary&dataset=<id>`), cần `can_view`; mã ở
+`frontend/src/features/data-dictionary/`.
+
+- Bộ chọn bảng liệt kê mọi dataset đọc được theo database và schema (từ `GET /summary`).
+- Tab **Thông tin bảng**: tên hiển thị, mô tả, grain, loại bảng, PII, cách tổ chức chỉ số (layout), vai trò cột, độ
+  chi tiết thời gian, danh mục chỉ số và phép tổng hợp theo mã.
+- Tab **Cột**: lọc cột; mỗi cột có tên hiển thị, vai trò, mô tả, khóa chính, duy nhất, PII, cột tham chiếu, từ đồng
+  nghĩa, phép tổng hợp.
+- **Lưu thay đổi** (hoặc Ctrl/Cmd+S) ghi thông tin bảng rồi các cột đã sửa. Chuyển bảng hoặc chuyển mục khi còn thay
+  đổi chưa lưu sẽ được hỏi lại.
+- **Tự động điền** chạy autofill qua SSE, chỉ bấm được khi không còn thay đổi chưa lưu; dừng giữa chừng vẫn giữ các lô
+  đã lưu.
+- Dataset người dùng không sửa được (`can_edit` false trong response) hiển thị chỉ đọc.
+- Mục **Tổng quan** dùng `GET /summary` và `GET /stats` cho thẻ độ phủ từ điển và các bảng xếp hạng.
+
+## Kiểm thử
+
+`backend/tests/test_data_dictionary_api.py` và `test_data_dictionary_autofill.py` hiện lỗi ngay khi pytest nạp test vì
+`tests/conftest.py` chưa có bản giả cho `superset.connectors` và `superset.models.core`.
