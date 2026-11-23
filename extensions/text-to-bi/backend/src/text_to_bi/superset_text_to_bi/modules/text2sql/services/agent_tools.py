@@ -22,6 +22,7 @@ from text_to_bi.superset_text_to_bi.common.charts import (
     type_names,
     validate_chart,
 )
+from text_to_bi.superset_text_to_bi.common.utils.thread_session import release_thread_session
 from text_to_bi.superset_text_to_bi.core.config import settings as config
 
 from ..schemas import AgentStepOut, ExplanationOut, FieldOut
@@ -211,7 +212,7 @@ class Text2SqlToolkit:
         self.enabled = enabled if enabled is not None else config.text2sql_chart_types
 
     def tools(self) -> list[BaseTool]:
-        return [
+        tools = [
             StructuredTool.from_function(
                 self.get_metric, name="get_metric", args_schema=MetricRef,
                 description="Xem định nghĩa metric: biểu thức, bảng, các cột của bảng, quy tắc chuyên gia gắn kèm.",
@@ -258,6 +259,10 @@ class Text2SqlToolkit:
                 ),
             ),
         ]
+        # The tool agent runs its steps on LangGraph's pool threads, where a tool's queries open a session to release.
+        for tool in tools:
+            tool.func = release_thread_session(tool.func)
+        return tools
 
     def ask_user(self, question: str, options: list[str] | None = None) -> dict[str, Any]:
         if sum(step.tool == "ask_user" for step in self.steps) >= MAX_CLARIFICATIONS:

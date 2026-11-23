@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractContextManager
 from typing import Any
 
-from flask import copy_current_request_context
+from flask import copy_current_request_context, g
 
 from text_to_bi.superset_text_to_bi.common.base_exceptions import AppError
 from text_to_bi.superset_text_to_bi.modules.data_dictionary.models import SupersetDatabase
@@ -25,6 +25,18 @@ Disconnected = Callable[[], Awaitable[bool]]
 
 READY = object()
 END = object()
+
+
+def with_request_user(func: Callable[[], None]) -> Callable[[], None]:
+    """copy_current_request_context for a thread, keeping Superset's g.user: the copy pushes a fresh app context whose g
+    is empty, and the security manager reads the user from g when the agent lists the datasets it may query."""
+    user = g.user
+
+    def run() -> None:
+        g.user = user
+        func()
+
+    return copy_current_request_context(run)
 
 
 def error_payload(error: Exception) -> dict[str, Any]:
@@ -47,7 +59,7 @@ class ChatStream:
 
     async def start(self) -> None:
         self.loop = asyncio.get_running_loop()
-        worker = copy_current_request_context(self._work)
+        worker = with_request_user(self._work)
         threading.Thread(target=worker, name="text2sql-chat", daemon=True).start()
         first = await self.queue.get()
         if isinstance(first, Exception):

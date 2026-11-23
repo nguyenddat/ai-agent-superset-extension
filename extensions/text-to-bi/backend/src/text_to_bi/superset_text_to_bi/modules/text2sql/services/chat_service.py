@@ -16,6 +16,7 @@ from text_to_bi.superset_text_to_bi.agent_package.get_chat_text import get_chat_
 from text_to_bi.superset_text_to_bi.agent_package.get_embedding_models import OpenRouterEmbedding
 from text_to_bi.superset_text_to_bi.agent_package.prompts.prompt_synthesize import synthesize_prompt
 from text_to_bi.superset_text_to_bi.common.base_exceptions import AppError
+from text_to_bi.superset_text_to_bi.common.utils.thread_session import release_thread_session
 from text_to_bi.superset_text_to_bi.common.utils.type_formatters import utc_now
 from text_to_bi.superset_text_to_bi.core.config import settings as config
 from text_to_bi.superset_text_to_bi.modules.conversation.models import Conversation, ConversationTurn
@@ -278,10 +279,14 @@ class ChatService:
             ) -> str:
                 return self._synthesize(preprocess, answers, on_text, today)
 
+            # The graph calls these on LangGraph's pool threads, each with a session of its own to release.
             result = run_chat_graph(
                 ChatGraphContext(
-                    preprocess=lambda: self.preprocess(database_id, prepared.question, prepared.history, user),
-                    answer_question=prepared.agent_run.answer, synthesize=synthesize,
+                    preprocess=release_thread_session(
+                        lambda: self.preprocess(database_id, prepared.question, prepared.history, user),
+                    ),
+                    answer_question=release_thread_session(prepared.agent_run.answer),
+                    synthesize=release_thread_session(synthesize),
                     should_stop=should_stop, streaming=emit is not None,
                 ),
                 str(thread_id), reply=prepared.question if paused is not None else None,

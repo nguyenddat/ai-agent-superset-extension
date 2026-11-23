@@ -1,13 +1,15 @@
 import asyncio
+import logging
 import queue
 import threading
 
-from flask import Response, copy_current_request_context, request, stream_with_context
+from flask import Response, request, stream_with_context
 from flask_appbuilder.api import expose, permission_name, protect, safe
 from superset.extensions import db
 from superset_core.rest_api.api import RestApi
 from superset_core.rest_api.decorators import api
 
+from text_to_bi.superset_text_to_bi.common.base_exceptions import AppError
 from text_to_bi.superset_text_to_bi.common.charts import (
     ChartField,
     ChartSpecError,
@@ -44,6 +46,8 @@ from ..utils.exceptions import Text2SqlChartInvalid, Text2SqlConnectionNotFound,
 from ..utils.topics import TOPICS
 
 JOB_STATUSES = (PENDING, RUNNING, SUCCEEDED, FAILED, SUPERSEDED)
+
+logger = logging.getLogger(__name__)
 
 
 async def _is_disconnected(disconnected: threading.Event) -> bool:
@@ -110,7 +114,7 @@ class Text2SqlAPI(RestApi):
     @handle_errors
     def chat_stream(self):
         from ..schemas import ChatIn
-        from ..services.chat_stream import ChatStream, error_payload, sse
+        from ..services.chat_stream import ChatStream, error_payload, sse, with_request_user
 
         body = request_body(ChatIn)
         _database_id(body)
@@ -131,7 +135,10 @@ class Text2SqlAPI(RestApi):
                     await stream.start()
                     async for event in stream.events():
                         events.put(event)
-                except Exception as error:  # noqa: BLE001 - stream failures must become an SSE error event.
+                except Exception as error:
+                    # The client only sees a generic message for an unexpected error, so keep its traceback here.
+                    if not isinstance(error, AppError):
+                        logger.exception("Text2SQL chat stream failed")
                     events.put(sse("error", error_payload(error)))
                 finally:
                     stream.stopped.set()
@@ -140,7 +147,7 @@ class Text2SqlAPI(RestApi):
             asyncio.run(stream_events())
 
         def response_events():
-            stream_worker = copy_current_request_context(produce)
+            stream_worker = with_request_user(produce)
             threading.Thread(target=stream_worker, name="text2sql-chat-stream", daemon=True).start()
             try:
                 while True:
