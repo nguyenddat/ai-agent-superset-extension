@@ -118,7 +118,7 @@ class ConversationService:
         turns = self.repository.turns(conversation.id, turns_limit, turns_offset)
         return {
             **self._conversation(conversation, self.repository.turn_count(conversation.id)),
-            "turns": self._turns(turns, conversation.user_id),
+            "turns": self._turns(turns, conversation),
         }
 
     def update(self, conversation_id: UUID, user_id: int, values: dict[str, Any]) -> dict[str, Any]:
@@ -141,11 +141,11 @@ class ConversationService:
     ) -> list[dict[str, Any]]:
         self._page(limit, offset)
         conversation = self.get_owned(conversation_id, user_id)
-        return self._turns(self.repository.turns(conversation.id, limit, offset), conversation.user_id)
+        return self._turns(self.repository.turns(conversation.id, limit, offset), conversation)
 
     def get_turn(self, conversation_id: UUID, turn_id: UUID, user_id: int) -> dict[str, Any]:
         conversation = self.get_owned(conversation_id, user_id)
-        return self._turns([self._owned_turn(conversation, turn_id)], conversation.user_id)[0]
+        return self._turns([self._owned_turn(conversation, turn_id)], conversation)[0]
 
     def delete_turn(self, conversation_id: UUID, turn_id: UUID, user_id: int) -> None:
         conversation = self.get_owned(conversation_id, user_id, lock=True)
@@ -279,14 +279,13 @@ class ConversationService:
             raise ConversationValidationError("Luồng xử lý không hợp lệ.")
         if results is not None and not isinstance(results, list):
             raise ConversationValidationError("Kết quả truy vấn phải là danh sách.")
-        if dataset_id is None and any(
-            isinstance(item, dict) and isinstance(item.get("rows"), list) and item["rows"]
-            for item in results or []
-        ):
-            raise ConversationValidationError("Kết quả có dữ liệu phải gắn với dataset Superset.")
         parent = self.session.get(Conversation, turn.conversation_id)
         if parent is None:
             raise ConversationNotFoundError()
+        # The agent queries the whole database, often joining several datasets, so a turn with rows but no single
+        # dataset is checked the way the chat route admits the question: query access to every dataset there.
+        if dataset_id is None and self._has_rows(results):
+            self._require_database_query(parent.database_id)
         if dataset_id is not None:
             dataset = require_dataset(dataset_id)
             require_query(dataset)
@@ -382,9 +381,26 @@ class ConversationService:
         turn = self.repository.turn(conversation.id, turn_id)
         if turn is None:
             raise ConversationTurnNotFoundError()
+        self._require_turn_access(turn, conversation.database_id)
+        return turn
+
+    @staticmethod
+    def _has_rows(results: list[Any] | None) -> bool:
+        return any(
+            isinstance(item, dict) and isinstance(item.get("rows"), list) and item["rows"] for item in results or []
+        )
+
+    @staticmethod
+    def _require_database_query(database_id: int) -> None:
+        for dataset in datasets_on_database(database_id):
+            require_query(dataset)
+
+    def _require_turn_access(self, turn: ConversationTurn, database_id: int) -> None:
+        """Rows are shown again only to a user who could still query what produced them."""
         if turn.dataset_id is not None:
             require_query(require_dataset(turn.dataset_id))
-        return turn
+        elif self._has_rows(turn.results):
+            self._require_database_query(database_id)
 
     @staticmethod
     def _page(limit: int, offset: int) -> None:
@@ -441,16 +457,15 @@ class ConversationService:
             return {"resume_id": None, "resume_expires_at": None}
         return {"resume_id": resume_id, "resume_expires_at": expires_at}
 
-    def _turns(self, turns: list[ConversationTurn], user_id: int) -> list[dict[str, Any]]:
-        feedbacks = self.repository.feedbacks([turn.id for turn in turns], user_id)
+    def _turns(self, turns: list[ConversationTurn], conversation: Conversation) -> list[dict[str, Any]]:
+        feedbacks = self.repository.feedbacks([turn.id for turn in turns], conversation.user_id)
         for turn in turns:
-            if turn.dataset_id is not None:
-                require_query(require_dataset(turn.dataset_id))
+            self._require_turn_access(turn, conversation.database_id)
         return [{
             "id": turn.id, "conversation_id": turn.conversation_id, "sequence": turn.sequence,
             "question": turn.question, "rewritten_question": turn.rewritten_question, "answer": turn.answer,
             "flow": turn.flow, "status": turn.status, "steps": turn.steps,
-            "results": normalize_results(turn.results) if turn.dataset_id is not None else None,
+            "results": normalize_results(turn.results),
             "rewrite": turn.rewrite, "assumptions": turn.assumptions,
             "pii": turn.pii, "dataset_id": turn.dataset_id, "retry_of": turn.retry_of,
             "continued_from": turn.continued_from, "clarification_question": turn.clarification_question,
@@ -458,6 +473,6 @@ class ConversationService:
             "error_code": turn.error_code, "error": FAILED_TURN_MESSAGE if turn.status == "error" else None,
             "duration_ms": turn.duration_ms, "model": turn.model,
             "feedback": self._feedback(feedbacks[turn.id]) if turn.id in feedbacks else None,
-            "views": turn.views if turn.dataset_id is not None else None,
+            "views": turn.views,
             "created_at": turn.created_at, "updated_at": turn.updated_at,
         } for turn in turns]
